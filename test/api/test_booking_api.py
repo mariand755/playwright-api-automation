@@ -1,9 +1,6 @@
 import pytest
 from jsonschema import validate
-from utils.helpers import get_schema, load_json
-
-
-BOOKING_IDS = load_json("data/test_data/booking_ids.json")
+from utils.helpers import get_schema
 
 
 @pytest.mark.api
@@ -15,8 +12,22 @@ def test_get_all_bookings(booking_api):
 
 
 @pytest.mark.api
-@pytest.mark.parametrize("booking_id", BOOKING_IDS)
-def test_get_booking_by_id(booking_api, booking_id):
+def test_get_booking_by_id(booking_api):
+    payload = {
+        "firstname": "Deterministic",
+        "lastname": "User",
+        "totalprice": 125,
+        "depositpaid": False,
+        "bookingdates": {
+            "checkin": "2024-05-01",
+            "checkout": "2024-05-03",
+        },
+        "additionalneeds": "Late Checkout",
+    }
+
+    create_response = booking_api.create_booking(payload)
+    assert create_response.status_code == 200
+    booking_id = create_response.json()["bookingid"]
 
     response = booking_api.get_booking_by_id(booking_id)
 

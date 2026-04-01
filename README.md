@@ -30,6 +30,8 @@ Smoke flow:
 - Add product to cart
 - Validate cart contents
 
+Primary journey selected for this assessment: login + add-to-cart (checkout completion is listed in Next Steps).
+
 ### API
 Endpoints covered:
 - GET /booking
@@ -48,7 +50,7 @@ Coverage types:
 - `test/api/`: API tests
 - `utils/`: Shared helpers — API client (`api_client.py`), timeout constants (`timeouts.py`), test helpers (`helpers.py`)
 - `data/schemas/`: JSON Schema contracts for API response validation
-- `data/test_data/`: External test data (`test_users.json`, `booking_ids.json`)
+- `data/test_data/`: External test data (`test_users.json`)
 - `artifacts/`: Local and Docker run outputs
 - `conftest.py`: Shared pytest fixtures (browser, credentials, API client, timeouts, failure hooks)
 - `artifacts/failures/`: failure diagnostics generated during test runs
@@ -117,7 +119,7 @@ docker run --rm aaa-life-sdet pytest test/api -v  #run only the API tests in the
 ```
 
 ## UI Smoke Coverage
-Implemented in `test/ui/test_login_checkout.py` using:
+Implemented in `test/ui/test_login_cart.py` using:
 - `pages/login_page.py`
 - `pages/inventory_page.py`
 - `pages/locators.py`

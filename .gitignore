@@ -56,3 +56,6 @@ artifacts/failures/
 # Environment variables
 .env
 .env.local
+
+# Private local notes
+.private/

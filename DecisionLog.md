@@ -23,6 +23,7 @@ This reflects a production approach where smoke tests run frequently while broad
 - Chose depth over breadth: implemented stable smoke-level coverage instead of broad regression coverage.
 - Chose static JSON test data for simplicity and reproducibility, while documenting CI-based extensibility as a next step.
 - Kept API scope to read/create plus key negatives; deferred update/delete and auth flows to preserve timebox.
+- Deferred a dedicated API error-handling suite (for malformed payloads and contract-edge negatives) to keep this submission focused and deterministic.
 - Added failure artifacts (screenshot + HTML) for diagnostics rather than building full reporting integrations in this iteration.
 
 ## Test Selection and Coverage Rationale
@@ -59,6 +60,7 @@ This reflects a production approach where smoke tests run frequently while broad
 ## Next Steps If Given More Time
 - Add richer reporting (JUnit XML / HTML report, eg Allure).
 - Expand API suite with update/delete and stronger negative-path coverage.
+- Add a dedicated API error-handling test module for malformed payloads, missing fields, and contract boundary checks.
 - Add test data factory/fixtures for multi-user and role-based scenarios.
 - Add retries only for known flaky external dependencies, with metrics.
 - Add CI workflow with parallel split for UI/API markers.

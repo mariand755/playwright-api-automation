@@ -1,24 +1,20 @@
 ============================= test session starts ==============================
-platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- /Library/Developer/CommandLineTools/usr/bin/python3
+platform darwin -- Python 3.13.7, pytest-9.0.2, pluggy-1.6.0 -- /Users/mdworklaptop/Documents/aaa-life-sdet-assessment/venv/bin/python
 cachedir: .pytest_cache
 rootdir: /Users/mdworklaptop/Documents/aaa-life-sdet-assessment
 configfile: pytest.ini
-plugins: base-url-2.1.0, playwright-0.7.1
+testpaths: test
+plugins: playwright-0.7.2, base-url-2.1.0
 collecting ... collected 8 items
 
 test/api/test_booking_api.py::test_get_all_bookings PASSED               [ 12%]
-test/api/test_booking_api.py::test_get_booking_by_id[1] PASSED           [ 25%]
+test/api/test_booking_api.py::test_get_booking_by_id[1] SKIPPED (Booking
+id 1 is no longer available)                                             [ 25%]
 test/api/test_booking_api.py::test_get_booking_by_id[2] PASSED           [ 37%]
 test/api/test_booking_api.py::test_get_booking_by_id[3] PASSED           [ 50%]
 test/api/test_booking_api.py::test_invalid_booking PASSED                [ 62%]
 test/api/test_booking_api.py::test_create_booking PASSED                 [ 75%]
-test/ui/test_login_checkout.py::test_user_can_login PASSED               [ 87%]
-test/ui/test_login_checkout.py::test_user_can_login_and_checkout PASSED  [100%]
+test/ui/test_login_cart.py::test_user_can_login[chromium] PASSED         [ 87%]
+test/ui/test_login_cart.py::test_user_can_login_and_add_to_cart[chromium] PASSED [100%]
 
-=============================== warnings summary ===============================
-test/api/test_booking_api.py::test_get_all_bookings
-  /Users/mdworklaptop/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-    warnings.warn(
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-========================= 8 passed, 1 warning in 3.82s =========================
+========================= 7 passed, 1 skipped in 3.49s =========================

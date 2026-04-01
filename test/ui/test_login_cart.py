@@ -15,9 +15,9 @@ def test_user_can_login(page, base_url, credentials):
     login.verify_login_success()
 
 
-# E2E happy path: login + add product to cart + verify checkout flow.
+# E2E happy path: login + add product to cart + verify cart contents.
 @pytest.mark.ui
-def test_user_can_login_and_checkout(page, base_url, credentials):
+def test_user_can_login_and_add_to_cart(page, base_url, credentials):
     login = LoginPage(page)
     inventory = InventoryPage(page)
 

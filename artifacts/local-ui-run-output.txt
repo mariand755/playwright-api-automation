@@ -6,7 +6,7 @@ configfile: pytest.ini
 plugins: playwright-0.7.2, base-url-2.1.0
 collecting ... collected 2 items
 
-test/ui/test_login_checkout.py::test_user_can_login[chromium] PASSED     [ 50%]
-test/ui/test_login_checkout.py::test_user_can_login_and_checkout[chromium] PASSED [100%]
+test/ui/test_login_cart.py::test_user_can_login[chromium] PASSED         [ 50%]
+test/ui/test_login_cart.py::test_user_can_login_and_add_to_cart[chromium] PASSED [100%]
 
-============================== 2 passed in 1.48s ===============================
+============================== 2 passed in 2.17s ===============================

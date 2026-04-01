@@ -7,10 +7,11 @@ plugins: base-url-2.1.0, playwright-0.7.2
 collecting ... collected 6 items
 
 test/api/test_booking_api.py::test_get_all_bookings PASSED               [ 16%]
-test/api/test_booking_api.py::test_get_booking_by_id[1] PASSED           [ 33%]
+test/api/test_booking_api.py::test_get_booking_by_id[1] SKIPPED (Booking
+id 1 is no longer available)                                             [ 33%]
 test/api/test_booking_api.py::test_get_booking_by_id[2] PASSED           [ 50%]
 test/api/test_booking_api.py::test_get_booking_by_id[3] PASSED           [ 66%]
 test/api/test_booking_api.py::test_invalid_booking PASSED                [ 83%]
 test/api/test_booking_api.py::test_create_booking PASSED                 [100%]
 
-============================== 6 passed in 1.45s ===============================
+========================= 5 passed, 1 skipped in 1.51s =========================

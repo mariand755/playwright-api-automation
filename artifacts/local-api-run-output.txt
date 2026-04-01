@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.7, pytest-9.0.2, pluggy-1.6.0 -- /Users/mdworklaptop/Documents/aaa-life-sdet-assessment/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/mdworklaptop/Documents/aaa-life-sdet-assessment
+configfile: pytest.ini
+plugins: playwright-0.7.2, base-url-2.1.0
+collecting ... collected 6 items
+
+test/api/test_booking_api.py::test_get_all_bookings PASSED               [ 16%]
+test/api/test_booking_api.py::test_get_booking_by_id[1] PASSED           [ 33%]
+test/api/test_booking_api.py::test_get_booking_by_id[2] PASSED           [ 50%]
+test/api/test_booking_api.py::test_get_booking_by_id[3] PASSED           [ 66%]
+test/api/test_booking_api.py::test_invalid_booking PASSED                [ 83%]
+test/api/test_booking_api.py::test_create_booking PASSED                 [100%]
+
+============================== 6 passed in 1.12s ===============================

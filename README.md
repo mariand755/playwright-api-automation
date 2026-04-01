@@ -1,4 +1,4 @@
-# AAA Life SDET Assessment
+# Playwright API Automation
 
 Production-style test automation framework using Python, pytest, and Playwright.
 
@@ -99,23 +99,23 @@ pytest test/api -v
 ## Run with Docker
 Build image:
 ```bash
-docker build -t aaa-life-sdet .  #build the Docker image with the tag "aaa-life-sdet"
+docker build -t playwright-api-automation .  #build the Docker image
 ```
 
 Run tests:
 ```bash
-docker run --rm aaa-life-sdet  #run the Docker container and execute tests, removing the container after completion
+docker run --rm playwright-api-automation  #run all tests, container removed after completion
 ```
 
 Run UI tests only in Docker:
 ```bash
-docker run --rm aaa-life-sdet pytest test/ui -v  #run only the UI tests in the Docker container
+docker run --rm playwright-api-automation pytest test/ui -v  #run only UI tests
 
 ```
 
 Run API tests only in Docker:
 ```bash
-docker run --rm aaa-life-sdet pytest test/api -v  #run only the API tests in the Docker container
+docker run --rm playwright-api-automation pytest test/api -v  #run only API tests
 ```
 
 ## UI Smoke Coverage

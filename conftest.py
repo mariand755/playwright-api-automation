@@ -13,28 +13,44 @@ from utils.timeouts import (
 
 
 @pytest.fixture(scope="session")
-def base_url():
-    return "https://www.saucedemo.com"
+def test_data():
+    data_file = Path(__file__).parent / "data" / "test_data" / "test_users.json"
+    with open(data_file, encoding="utf-8") as f:
+        return json.load(f)
 
 
 @pytest.fixture(scope="session")
-def credentials():
-    # Load from data/test_data/test_users.json.
-    data_file = Path(__file__).parent / "data" / "test_data" / "test_users.json"
-    with open(data_file) as f:
-        users = json.load(f)
+def base_url(test_data):
+    url = test_data.get("urls", {}).get("base_url")
+    if not url:
+        raise ValueError("Missing urls.base_url in data/test_data/test_users.json")
+    return url
 
+
+@pytest.fixture(scope="session")
+def credentials(test_data):
     # Use valid_user by default.
-    valid_user = users.get("valid_user", {})
+    valid_user = test_data.get("valid_user", {})
+    username = valid_user.get("username")
+    password = valid_user.get("password")
+
+    if not username or not password:
+        raise ValueError(
+            "Missing valid_user.username or valid_user.password in data/test_data/test_users.json"
+        )
+
     return {
-        "username": valid_user.get("username", "standard_user"),
-        "password": valid_user.get("password", "secret_sauce"),
+        "username": username,
+        "password": password,
     }
 
 
 @pytest.fixture(scope="session")
-def api_base_url():
-    return "https://restful-booker.herokuapp.com"
+def api_base_url(test_data):
+    url = test_data.get("urls", {}).get("api_base_url")
+    if not url:
+        raise ValueError("Missing urls.api_base_url in data/test_data/test_users.json")
+    return url
 
 
 @pytest.fixture(scope="session")

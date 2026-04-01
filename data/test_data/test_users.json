@@ -1,4 +1,8 @@
 {
+  "urls": {
+    "base_url": "https://www.saucedemo.com",
+    "api_base_url": "https://restful-booker.herokuapp.com"
+  },
   "valid_user": {
     "username": "standard_user",
     "password": "secret_sauce"

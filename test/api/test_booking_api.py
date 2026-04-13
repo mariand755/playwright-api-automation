@@ -8,6 +8,7 @@ def test_get_all_bookings(booking_api):
     response = booking_api.get_all_bookings()
 
     assert response.status_code == 200
+    # Validate that the response is a list of bookings, which should be the expected format for this endpoint.
     assert isinstance(response.json(), list)
 
 
@@ -27,13 +28,15 @@ def test_get_booking_by_id(booking_api):
 
     create_response = booking_api.create_booking(payload)
     assert create_response.status_code == 200
+    
+    # Extract the booking ID from the create response to use in the get request.
     booking_id = create_response.json()["bookingid"]
-
     response = booking_api.get_booking_by_id(booking_id)
 
     assert response.status_code == 200
     schema = get_schema("booking_details_schema.json")
-
+    
+    # Validate the response against the schema to ensure it has the expected structure and data types.
     validate(instance=response.json(), schema=schema)
 
 
@@ -42,7 +45,8 @@ def test_invalid_booking(booking_api):
     all_bookings = booking_api.get_all_bookings().json()
     existing_ids = [item["bookingid"] for item in all_bookings]
     invalid_id = max(existing_ids) + 999999
-
+    
+    # Attempt to retrieve a booking with an ID that is unlikely to exist, expecting a 404 Not Found or 400 Bad Request response.
     response = booking_api.get_booking_by_id(invalid_id)
 
     assert response.status_code in [404, 400]
@@ -70,4 +74,5 @@ def test_create_booking(booking_api):
     response_json = response.json()
 
     validate(instance=response_json, schema=schema)
+    # Verify that the created booking's firstname matches the payload.
     assert response_json["booking"]["firstname"] == payload["firstname"]

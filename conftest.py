@@ -1,8 +1,9 @@
-
 import json
-from pathlib import Path
 import pytest
+
+from pathlib import Path
 from playwright.sync_api import expect
+from utils.api_client import BookingApiClient
 
 from utils.timeouts import (
     API_REQUEST_TIMEOUT_SECONDS,
@@ -55,11 +56,10 @@ def api_base_url(test_data):
 
 @pytest.fixture(scope="session")
 def booking_api(api_base_url):
-    from utils.api_client import BookingApiClient
-
     return BookingApiClient(api_base_url, timeout=API_REQUEST_TIMEOUT_SECONDS)
 
 
+# UI test fixture to set consistent timeouts across all tests.
 @pytest.fixture
 def page(page):
     page.set_default_timeout(UI_ACTION_TIMEOUT_MS)
@@ -68,6 +68,7 @@ def page(page):
     return page
 
 
+# Pytest hook to capture screenshots and HTML on UI test failure.   
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield

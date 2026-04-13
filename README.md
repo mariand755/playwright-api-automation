@@ -1,6 +1,11 @@
 # Playwright API Automation
+A Python test automation framework that covers both UI testing (via Playwright) and REST API testing (via Requests), targeting two separate applications. The framework is designed to be simple, maintainable, and reproducible across local and Docker environments.  
 
-Production-style test automation framework using Python, pytest, and Playwright.
+
+## Target Applications
+- SauceDemo (https://www.saucedemo.com) — UI test target (e-commerce demo site)
+- Restful Booker (https://restful-booker.herokuapp.com) — API test target (hotel booking REST API)
+
 
 ## Scope Implemented
 - UI smoke flow
@@ -44,16 +49,40 @@ Coverage types:
 - Schema validation
 - Data-driven tests using external JSON
 
-## Project Structure
-- `pages/`: UI Page Objects and locator definitions (`login_page.py`, `inventory_page.py`, `locators.py`)
-- `test/ui/`: UI smoke tests
-- `test/api/`: API tests
-- `utils/`: Shared helpers — API client (`api_client.py`), timeout constants (`timeouts.py`), test helpers (`helpers.py`)
-- `data/schemas/`: JSON Schema contracts for API response validation
-- `data/test_data/`: External test data (`test_users.json`)
-- `artifacts/`: Local and Docker run outputs
-- `conftest.py`: Shared pytest fixtures (browser, credentials, API client, timeouts, failure hooks)
-- `artifacts/failures/`: failure diagnostics generated during test runs
+## Repo Structure
+```text
+playwright-api-automation/
+│
+├── conftest.py              # Global pytest fixtures (shared between UI & API tests)
+├── pytest.ini               # Pytest config: test paths, markers, default options
+├── requirements.txt         # Dependencies: pytest, playwright, requests, jsonschema
+├── Dockerfile               # Docker image for running tests in isolation
+│
+├── test/                    # All test cases organized by type
+│   ├── api/
+│   │   └── test_booking_api.py   # API tests against Restful Booker
+│   └── ui/
+│       └── test_login_cart.py    # UI tests against SauceDemo
+│
+├── pages/                   # Page Object Model (POM) classes
+│   ├── locators.py          # All CSS/text selectors, centralized
+│   ├── login_page.py        # LoginPage: navigate, login, verify_login_success
+│   └── inventory_page.py    # InventoryPage: add to cart, open cart, verify
+│
+├── utils/                   # Shared utilities
+│   ├── api_client.py        # BookingApiClient: wraps Requests calls to Restful Booker
+│   ├── helpers.py           # load_json() and get_schema() for loading test data/schemas
+│   └── timeouts.py          # Central timeout constants (UI in ms, API in seconds)
+│
+├── data/
+│   ├── test_data/
+│   │   └── test_users.json  # URLs + test credentials (SauceDemo standard_user)
+│   └── schemas/
+│       ├── booking_schema.json          # JSON Schema: create booking response
+│       └── booking_details_schema.json  # JSON Schema: get booking by ID response
+│
+└── artifacts/               # Auto-generated: screenshots + HTML on UI test failure
+```
 
 ## Tooling Rationale
 This framework uses:

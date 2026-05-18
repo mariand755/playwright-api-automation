@@ -11,22 +11,7 @@ This repo demonstrates API and UI automation using:
 - Docker for reproducible execution
 
 ## Test commands
-Run all tests:
-
-pytest -v
-
-Run API tests:
-
-pytest test/api -v
-
-Run UI tests:
-
-pytest test/ui -v
-
-Run with Docker:
-
-docker build -t playwright-api-automation .
-docker run --rm playwright-api-automation
+see /playwright-api-automation/README.md for details on running tests.
 
 ## QA behavior rules
 Before editing code:

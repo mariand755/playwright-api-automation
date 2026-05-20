@@ -41,6 +41,7 @@ def test_get_booking_by_id(booking_api):
 
 
 @pytest.mark.api
+@pytest.mark.negative
 def test_invalid_booking(booking_api):
     all_bookings = booking_api.get_all_bookings().json()
     existing_ids = [item["bookingid"] for item in all_bookings]

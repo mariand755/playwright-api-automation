@@ -1,6 +1,6 @@
 
 # Official Playwright image with Python support
-FROM mcr.microsoft.com/playwright/python:v1.58.0-noble
+FROM mcr.microsoft.com/playwright/python:v1.60.0-noble
 
 # Set the working directory in the container
 WORKDIR /app

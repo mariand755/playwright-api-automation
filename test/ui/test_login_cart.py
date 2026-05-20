@@ -4,8 +4,8 @@ from pages.inventory_page import InventoryPage
 
 
 #Smoke test: verifies login functionality in isolation.
-@pytest.mark.smoke
 @pytest.mark.ui
+@pytest.mark.smoke
 def test_user_can_login(page, base_url, credentials):
     login = LoginPage(page)
 

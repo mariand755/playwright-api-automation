@@ -60,11 +60,9 @@ def test_get_booking_by_id(booking_api):
 @pytest.mark.api
 @pytest.mark.negative
 def test_invalid_booking(booking_api):
-    all_bookings = booking_api.get_all_bookings().json()
-    existing_ids = [item["bookingid"] for item in all_bookings]
-    invalid_id = max(existing_ids) + 999999
-    
-    # Attempt to retrieve a booking with an ID that is unlikely to exist, expecting a 404 Not Found or 400 Bad Request response.
+    invalid_id = 999999999
+
+    # Attempt to retrieve a booking with an ID that does not exist, expecting a 404 Not Found or 400 Bad Request response.
     response = booking_api.get_booking_by_id(invalid_id)
 
     assert response.status_code in [404, 400], (

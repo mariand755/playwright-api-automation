@@ -4,6 +4,7 @@ from pages.inventory_page import InventoryPage
 
 
 #Smoke test: verifies login functionality in isolation.
+# TC-UI-001
 @pytest.mark.ui
 @pytest.mark.smoke
 def test_user_can_login(page, base_url, credentials):
@@ -15,6 +16,7 @@ def test_user_can_login(page, base_url, credentials):
 
 
 # E2E happy path: login + add product to cart + verify cart contents.
+# TC-UI-002
 @pytest.mark.ui
 def test_user_can_login_and_add_to_cart(page, base_url, credentials):
     login = LoginPage(page)

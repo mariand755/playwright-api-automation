@@ -81,6 +81,12 @@ playwright-api-automation/
 │       ├── booking_schema.json          # JSON Schema: create booking response
 │       └── booking_details_schema.json  # JSON Schema: get booking by ID response
 │
+├── agentic-qa-workflows/    # QA governance, prompts, workflows, and audit outputs
+│   ├── governance/
+│   ├── prompts/
+│   ├── workflows/
+│   └── outputs/
+│
 └── artifacts/               # Auto-generated: screenshots + HTML on UI test failure
 ```
 

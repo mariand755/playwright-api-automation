@@ -3,6 +3,7 @@ from jsonschema import validate
 from utils.helpers import get_schema
 
 
+# TC-API-001
 @pytest.mark.api
 def test_get_all_bookings(booking_api):
     response = booking_api.get_all_bookings()
@@ -12,6 +13,7 @@ def test_get_all_bookings(booking_api):
     assert isinstance(response.json(), list)
 
 
+# TC-API-002
 @pytest.mark.api
 def test_get_booking_by_id(booking_api):
     payload = {
@@ -40,6 +42,7 @@ def test_get_booking_by_id(booking_api):
     validate(instance=response.json(), schema=schema)
 
 
+# TC-API-003
 @pytest.mark.api
 @pytest.mark.negative
 def test_invalid_booking(booking_api):
@@ -53,6 +56,7 @@ def test_invalid_booking(booking_api):
     assert response.status_code in [404, 400]
 
 
+# TC-API-004
 @pytest.mark.api
 def test_create_booking(booking_api):
 

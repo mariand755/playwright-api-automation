@@ -30,13 +30,32 @@ jobs:
         run: docker run --rm playwright-api-automation pytest --collect-only -q
 
       - name: Prepare artifacts directory
-        run: mkdir -p artifacts/failures
+        run: |
+          rm -rf artifacts/failures
+          mkdir -p artifacts/failures
 
       - name: Run full test suite
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
             playwright-api-automation
+
+      - name: Write job summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+          ## CI — Docker Test Suite
+
+          | CI gate | Command |
+          |---|---|
+          | Docker image build | `docker build -t playwright-api-automation .` |
+          | Dockerized collection check | `pytest --collect-only -q` |
+          | Dockerized full-suite check | `pytest -v` via Docker image default command |
+          | Failure artifacts | `artifacts/failures/` uploaded on failure when present |
+
+          Docker is the source of truth. No local Python setup.
+          See the job steps above for actual pass/fail status.
+          EOF
 
       - name: Upload failure artifacts
         if: failure()

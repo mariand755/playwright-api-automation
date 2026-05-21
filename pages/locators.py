@@ -4,6 +4,7 @@ class LoginPageLocators:
     PASSWORD = "#password"
     LOGIN_BUTTON = "#login-button"
     PRODUCTS_TITLE = ".title"
+    ERROR_MESSAGE = "[data-test='error']"
 
 
 class InventoryPageLocators:

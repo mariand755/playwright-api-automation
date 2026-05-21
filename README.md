@@ -81,8 +81,23 @@ playwright-api-automation/
 │       ├── booking_schema.json          # JSON Schema: create booking response
 │       └── booking_details_schema.json  # JSON Schema: get booking by ID response
 │
+├── agentic-qa-workflows/    # QA governance, prompts, workflows, and audit outputs
+│   ├── governance/
+│   ├── prompts/
+│   ├── workflows/
+│   └── outputs/
+│
 └── artifacts/               # Auto-generated: screenshots + HTML on UI test failure
 ```
+
+## Agentic QA Governance
+
+This repo includes a governance layer for AI-assisted QA work under `agentic-qa-workflows/`.
+
+It defines standards, prompt templates, audit workflows, and repeatable output patterns
+that keep AI-driven changes controlled and reviewable.
+
+See [agentic-qa-workflows/README.md](agentic-qa-workflows/README.md) for details.
 
 ## Tooling Rationale
 This framework uses:

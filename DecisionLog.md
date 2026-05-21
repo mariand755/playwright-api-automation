@@ -57,6 +57,13 @@ This reflects a production approach where smoke tests run frequently while broad
 - Updated Docker image default command to run `pytest -v` for container-first execution.
 - Captured separate local and Docker run outputs for full, UI-only, and API-only evidence.
 
+## Agentic QA Governance Layer
+- Added `agentic-qa-workflows/` to establish controlled, reviewable patterns for AI-assisted QA work.
+- Governance defines marker taxonomy, test case ID conventions, POM boundaries, failure evidence requirements, and quality gates.
+- A compliance audit was run against the existing test suite; findings and ordered fixes are recorded under `agentic-qa-workflows/outputs/`.
+- Fixes are applied in small, verifiable steps — decorator changes, comment additions, assertion improvements — each verified in Docker before the next fix begins.
+- This approach treats AI-assisted editing as a workflow to govern, not a shortcut to bypass review.
+
 ## Next Steps If Given More Time
 - Add richer reporting (JUnit XML / HTML report, eg Allure).
 - Expand API suite with update/delete and stronger negative-path coverage.

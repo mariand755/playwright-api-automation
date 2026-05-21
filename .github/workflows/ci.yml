@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Docker Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t playwright-api-automation .
+
+      - name: Verify test collection
+        run: docker run --rm playwright-api-automation pytest --collect-only -q
+
+      - name: Prepare artifacts directory
+        run: mkdir -p artifacts/failures
+
+      - name: Run full test suite
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            playwright-api-automation
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-artifacts
+          path: artifacts/failures/
+          if-no-files-found: ignore

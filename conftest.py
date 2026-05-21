@@ -47,6 +47,23 @@ def credentials(test_data):
 
 
 @pytest.fixture(scope="session")
+def locked_out_credentials(test_data):
+    locked_out_user = test_data.get("locked_out_user", {})
+    username = locked_out_user.get("username")
+    password = locked_out_user.get("password")
+
+    if not username or not password:
+        raise ValueError(
+            "Missing locked_out_user.username or locked_out_user.password in data/test_data/test_users.json"
+        )
+
+    return {
+        "username": username,
+        "password": password,
+    }
+
+
+@pytest.fixture(scope="session")
 def api_base_url(test_data):
     url = test_data.get("urls", {}).get("api_base_url")
     if not url:

@@ -1,0 +1,89 @@
+# Quality Gates
+
+## PR Gate
+
+Before a pull request may be reviewed:
+
+- Dockerized smoke suite must pass:
+  `docker build -t playwright-api-automation . && docker run --rm playwright-api-automation pytest -m smoke -v`
+- No new test may be added without at least one assertion that would fail if the feature broke.
+- All new markers must be declared in `pytest.ini`.
+- Before using new governance markers such as `negative`, `regression`, or `api_contract`, add them to `pytest.ini`.
+- Local pytest runs are optional fast feedback only and do not replace Docker verification.
+
+## Merge Gate
+
+Before a pull request may be merged to main:
+
+- Docker full suite must pass:
+  `docker build -t playwright-api-automation . && docker run --rm playwright-api-automation`
+- No test may be merged in a `skip` or `xfail` state without a comment linking to an open issue explaining why.
+- Any new page class must have a corresponding locator entry in `pages/locators.py`.
+- Any new API endpoint under test must have a corresponding method in `BookingApiClient`.
+
+## Release Gate
+
+Before a release build is tagged:
+
+- Full suite must pass inside Docker: `docker build -t playwright-api-automation . && docker run --rm playwright-api-automation`
+- If the release run produces failure artifacts, review each screenshot/HTML dump and classify the failure as product, test, or infrastructure before making a release decision.
+- Release may proceed only when failures are fixed, formally waived, or documented as non-blocking with rationale.
+
+---
+
+## Docker-First Quality Checks
+
+Docker is the default execution environment for this repo. Local commands are optional fast-feedback only and should not be assumed. An AI agent must ask the repo owner before running local commands or relying on local virtualenv dependencies.
+
+### Current required checks
+
+1. **Docker build:**
+
+   ```bash
+   docker build -t playwright-api-automation .
+   ```
+
+2. **Dockerized pytest collection** — confirm tests collect cleanly with no marker or import errors:
+
+   ```bash
+   docker run --rm playwright-api-automation pytest --collect-only -q
+   ```
+
+3. **Dockerized targeted test check** — run only the smallest relevant suite for the change. The commands below are examples; choose the one that matches the scope of the change:
+
+   ```bash
+   docker run --rm playwright-api-automation pytest -m smoke -v
+   docker run --rm playwright-api-automation pytest test/api -v
+   docker run --rm playwright-api-automation pytest test/ui -v
+   ```
+
+4. **Docker full-suite verification** — final confidence check before push or PR:
+
+   ```bash
+   docker run --rm playwright-api-automation
+   ```
+
+### Future-state checks (not yet implemented)
+
+After tools are intentionally selected and added to the Docker image:
+
+- Dockerized formatting check
+- Dockerized linting check
+- Dockerized optional type/static analysis check
+
+Do not name specific tools, add placeholder commands, add pre-commit tooling, or add new dependencies until the stack is selected.
+
+## Coverage Floor
+
+At a minimum, every public API endpoint and every UI flow must have:
+
+- At least one positive test (happy path)
+- At least one negative test (error path or invalid input)
+
+Endpoints or flows with only a positive test are considered incomplete and must be flagged in the PR description.
+
+## Skips and Expected Failures
+
+- `@pytest.mark.skip`: allowed only for tests blocked by an upstream bug or dependency not yet available. Must include `reason="<issue link>"`.
+- `@pytest.mark.xfail`: allowed only for known, documented failures being tracked. Must include `reason="<issue link>"` and `strict=True` where appropriate.
+- Skips and xfails must be removed when the blocking condition is resolved.

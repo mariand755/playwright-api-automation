@@ -10,5 +10,9 @@
   "locked_out_user": {
     "username": "locked_out_user",
     "password": "secret_sauce"
+  },
+  "api_admin": {
+    "username": "admin",
+    "password": "password123"
   }
 }

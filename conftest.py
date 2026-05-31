@@ -76,6 +76,67 @@ def booking_api(api_base_url):
     return BookingApiClient(api_base_url, timeout=API_REQUEST_TIMEOUT_SECONDS)
 
 
+@pytest.fixture(scope="session")
+def auth_token(booking_api, test_data):
+    admin = test_data.get("api_admin", {})
+    username = admin.get("username")
+    password = admin.get("password")
+    if not username or not password:
+        raise ValueError(
+            "Missing api_admin.username or api_admin.password in data/test_data/test_users.json"
+        )
+    return booking_api.create_token(username, password)
+
+
+@pytest.fixture
+def booking_payload_factory():
+    def _factory(
+        firstname="Test",
+        lastname="User",
+        totalprice=100,
+        depositpaid=False,
+        checkin="2024-01-01",
+        checkout="2024-01-05",
+        additionalneeds=None,
+    ):
+        payload = {
+            "firstname": firstname,
+            "lastname": lastname,
+            "totalprice": totalprice,
+            "depositpaid": depositpaid,
+            "bookingdates": {"checkin": checkin, "checkout": checkout},
+        }
+        if additionalneeds is not None:
+            payload["additionalneeds"] = additionalneeds
+        return payload
+    return _factory
+
+
+@pytest.fixture
+def created_booking(booking_api, auth_token, booking_payload_factory):
+    payload = booking_payload_factory(
+        firstname="Deterministic",
+        lastname="User",
+        totalprice=125,
+        depositpaid=False,
+        checkin="2024-05-01",
+        checkout="2024-05-03",
+        additionalneeds="Late Checkout",
+    )
+    response = booking_api.create_booking(payload)
+    assert response.status_code == 200, (
+        f"Fixture setup failed: status={response.status_code}, body={response.text[:200]}"
+    )
+    data = response.json()
+    yield data
+    delete_response = booking_api.delete_booking(data["bookingid"], auth_token)
+    if delete_response.status_code not in (201, 404):
+        raise RuntimeError(
+            f"Fixture teardown failed: delete booking {data['bookingid']} "
+            f"returned status={delete_response.status_code}, body={delete_response.text[:200]}"
+        )
+
+
 # UI test fixture to set consistent timeouts across all tests.
 @pytest.fixture
 def page(page):

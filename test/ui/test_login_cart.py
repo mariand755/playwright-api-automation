@@ -19,6 +19,7 @@ def test_user_can_login(page, base_url, credentials):
 # TC-UI-003
 @pytest.mark.ui
 @pytest.mark.negative
+@pytest.mark.regression
 def test_locked_out_user_sees_error(page, base_url, locked_out_credentials):
     login = LoginPage(page)
 
@@ -30,6 +31,7 @@ def test_locked_out_user_sees_error(page, base_url, locked_out_credentials):
 # E2E happy path: login + add product to cart + verify cart contents.
 # TC-UI-002
 @pytest.mark.ui
+@pytest.mark.regression
 def test_user_can_login_and_add_to_cart(page, base_url, credentials):
     login = LoginPage(page)
     inventory = InventoryPage(page)
@@ -40,4 +42,4 @@ def test_user_can_login_and_add_to_cart(page, base_url, credentials):
 
     inventory.add_product_to_cart()
     inventory.open_cart()
-    inventory.verify_product_in_cart()
+    inventory.verify_product_in_cart("Sauce Labs Backpack")

@@ -176,9 +176,15 @@ Implemented in `test/ui/test_login_cart.py` using:
 - `pages/locators.py`
 
 ## Failure Diagnostics
-On any test failure, framework captures:
-- Full-page screenshot: `artifacts/failures/<test_name>.png`
-- Page HTML dump: `artifacts/failures/<test_name>.html`
+
+On any UI test failure, the framework automatically captures:
+
+- Screenshot: `artifacts/failures/<test_name>.png`
+- HTML dump: `artifacts/failures/<test_name>.html`
+
+Capture is handled by the `pytest_runtest_makereport` hook in `conftest.py`. API test failures surface diagnostic context (URL, status code, response body excerpt) directly in the pytest traceback — no separate artifact file.
+
+**In CI:** The workflow volume-mounts `artifacts/` into the Docker container so evidence written inside the container persists on the runner. On failure, GitHub Actions uploads `artifacts/failures/` as the `failure-artifacts` artifact. The upload is skipped silently when no files are present (API-only failures produce no screenshot).
 
 ## Assessment Artifacts
 - Source code: repository root

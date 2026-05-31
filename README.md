@@ -1,4 +1,7 @@
 # Playwright API Automation
+
+[![CI](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml)
+
 A Python test automation framework that covers both UI testing (via Playwright) and REST API testing (via Requests), targeting two separate applications. The framework is designed to be simple, maintainable, and reproducible across local and Docker environments.  
 
 
@@ -109,6 +112,10 @@ This framework uses:
 - **Docker** for consistent execution across environments
 
 The goal is to keep the framework simple, maintainable, and reproducible across local and containerized environments.
+
+## CI
+
+GitHub Actions runs a Docker-first workflow that builds the image, verifies pytest collection, runs the full suite inside Docker, and uploads `artifacts/failures/` when failure evidence is present.
 
 ## Prerequisites
 - Python 3.9+

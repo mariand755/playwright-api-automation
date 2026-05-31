@@ -40,11 +40,11 @@ jobs:
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
             playwright-api-automation
 
-      - name: Write job summary
+      - name: Write Docker CI summary
         if: always()
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
-          ## CI — Docker Test Suite
+          ## Docker-first CI summary
 
           | CI gate | Command |
           |---|---|

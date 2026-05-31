@@ -5,6 +5,7 @@ from utils.helpers import get_schema
 
 # TC-API-001
 @pytest.mark.api
+@pytest.mark.smoke
 def test_get_all_bookings(booking_api):
     response = booking_api.get_all_bookings()
 
@@ -18,6 +19,8 @@ def test_get_all_bookings(booking_api):
 
 # TC-API-002
 @pytest.mark.api
+@pytest.mark.regression
+@pytest.mark.api_contract
 def test_get_booking_by_id(booking_api):
     payload = {
         "firstname": "Deterministic",
@@ -59,6 +62,7 @@ def test_get_booking_by_id(booking_api):
 # TC-API-003
 @pytest.mark.api
 @pytest.mark.negative
+@pytest.mark.regression
 def test_invalid_booking(booking_api):
     invalid_id = 999999999
 
@@ -73,6 +77,8 @@ def test_invalid_booking(booking_api):
 
 # TC-API-004
 @pytest.mark.api
+@pytest.mark.smoke
+@pytest.mark.api_contract
 def test_create_booking(booking_api):
 
     payload = {

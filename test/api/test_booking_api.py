@@ -6,6 +6,7 @@ from utils.helpers import get_schema
 # TC-API-001
 @pytest.mark.api
 @pytest.mark.smoke
+@pytest.mark.api_contract
 def test_get_all_bookings(booking_api):
     response = booking_api.get_all_bookings()
 
@@ -13,35 +14,21 @@ def test_get_all_bookings(booking_api):
         f"GET {response.url} failed: "
         f"status={response.status_code}, body={response.text[:200]}"
     )
-    # Validate that the response is a list of bookings, which should be the expected format for this endpoint.
-    assert isinstance(response.json(), list)
+    bookings = response.json()
+    assert isinstance(bookings, list), (
+        f"Expected a list of bookings, got {type(bookings).__name__}"
+    )
+    if bookings:
+        schema = get_schema("booking_list_item_schema.json")
+        validate(instance=bookings[0], schema=schema)
 
 
 # TC-API-002
 @pytest.mark.api
 @pytest.mark.regression
 @pytest.mark.api_contract
-def test_get_booking_by_id(booking_api):
-    payload = {
-        "firstname": "Deterministic",
-        "lastname": "User",
-        "totalprice": 125,
-        "depositpaid": False,
-        "bookingdates": {
-            "checkin": "2024-05-01",
-            "checkout": "2024-05-03",
-        },
-        "additionalneeds": "Late Checkout",
-    }
-
-    create_response = booking_api.create_booking(payload)
-    assert create_response.status_code == 200, (
-        f"POST {create_response.url} failed: "
-        f"status={create_response.status_code}, body={create_response.text[:200]}"
-    )
-
-    # Extract the booking ID from the create response to use in the get request.
-    booking_id = create_response.json()["bookingid"]
+def test_get_booking_by_id(booking_api, created_booking):
+    booking_id = created_booking["bookingid"]
     response = booking_api.get_booking_by_id(booking_id)
 
     assert response.status_code == 200, (
@@ -51,10 +38,9 @@ def test_get_booking_by_id(booking_api):
     schema = get_schema("booking_details_schema.json")
     response_json = response.json()
 
-    # Validate the response against the schema to ensure it has the expected structure and data types.
     validate(instance=response_json, schema=schema)
-    assert response_json["firstname"] == payload["firstname"], (
-        f"Round-trip check failed: expected firstname={payload['firstname']!r}, "
+    assert response_json["firstname"] == created_booking["booking"]["firstname"], (
+        f"Round-trip check failed: expected firstname={created_booking['booking']['firstname']!r}, "
         f"got {response_json.get('firstname')!r}"
     )
 
@@ -79,19 +65,16 @@ def test_invalid_booking(booking_api):
 @pytest.mark.api
 @pytest.mark.smoke
 @pytest.mark.api_contract
-def test_create_booking(booking_api):
-
-    payload = {
-        "firstname": "John",
-        "lastname": "Doe",
-        "totalprice": 100,
-        "depositpaid": True,
-        "bookingdates": {
-            "checkin": "2024-01-01",
-            "checkout": "2024-01-05"
-        }, 
-        "additionalneeds": "Breakfast",
-    }
+def test_create_booking(booking_api, auth_token, booking_payload_factory, request):
+    payload = booking_payload_factory(
+        firstname="John",
+        lastname="Doe",
+        totalprice=100,
+        depositpaid=True,
+        checkin="2024-01-01",
+        checkout="2024-01-05",
+        additionalneeds="Breakfast",
+    )
 
     response = booking_api.create_booking(payload)
 
@@ -99,9 +82,56 @@ def test_create_booking(booking_api):
         f"POST {response.url} failed: "
         f"status={response.status_code}, body={response.text[:200]}"
     )
+    booking_id = response.json()["bookingid"]
+
+    def _cleanup():
+        delete_response = booking_api.delete_booking(booking_id, auth_token)
+        if delete_response.status_code not in (201, 404):
+            raise RuntimeError(
+                f"Test teardown failed: delete booking {booking_id} "
+                f"returned status={delete_response.status_code}, body={delete_response.text[:200]}"
+            )
+
+    request.addfinalizer(_cleanup)
+
     schema = get_schema("booking_schema.json")
     response_json = response.json()
 
     validate(instance=response_json, schema=schema)
-    # Verify that the created booking's firstname matches the payload.
-    assert response_json["booking"]["firstname"] == payload["firstname"]
+    assert response_json["booking"]["firstname"] == payload["firstname"], (
+        f"Round-trip check failed: expected firstname={payload['firstname']!r}, "
+        f"got {response_json['booking'].get('firstname')!r}"
+    )
+
+
+# TC-API-005
+@pytest.mark.api
+@pytest.mark.smoke
+def test_delete_booking(booking_api, auth_token, booking_payload_factory):
+    payload = booking_payload_factory(
+        firstname="ToDelete",
+        lastname="User",
+        totalprice=50,
+        checkin="2024-06-01",
+        checkout="2024-06-02",
+    )
+
+    create_response = booking_api.create_booking(payload)
+    assert create_response.status_code == 200, (
+        f"POST {create_response.url} failed: "
+        f"status={create_response.status_code}, body={create_response.text[:200]}"
+    )
+    booking_id = create_response.json()["bookingid"]
+
+    delete_response = booking_api.delete_booking(booking_id, auth_token)
+    # Restful Booker returns 201 for a successful DELETE — non-standard but documented API behaviour.
+    assert delete_response.status_code == 201, (
+        f"DELETE /booking/{booking_id} expected 201: "
+        f"status={delete_response.status_code}, body={delete_response.text[:200]}"
+    )
+
+    verify_response = booking_api.get_booking_by_id(booking_id)
+    assert verify_response.status_code == 404, (
+        f"GET /booking/{booking_id} after delete expected 404: "
+        f"status={verify_response.status_code}, body={verify_response.text[:200]}"
+    )

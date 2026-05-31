@@ -42,4 +42,4 @@ def test_user_can_login_and_add_to_cart(page, base_url, credentials):
 
     inventory.add_product_to_cart()
     inventory.open_cart()
-    inventory.verify_product_in_cart()
+    inventory.verify_product_in_cart("Sauce Labs Backpack")

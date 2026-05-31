@@ -39,7 +39,7 @@ Fast sanity check that the critical happy path works.
 - Run trigger: every commit, every PR open, before any other suite.
 - Pass requirement for: unblocking further test execution.
 - Target runtime: under 60 seconds.
-- Current tests: `test_user_can_login`, `test_get_all_bookings`, `test_create_booking`
+- Current tests: `test_user_can_login`, `test_get_all_bookings`, `test_create_booking`, `test_delete_booking`
 
 ### `negative`
 

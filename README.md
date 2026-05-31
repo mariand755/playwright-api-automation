@@ -15,7 +15,7 @@ A Python test automation framework that covers both UI testing (via Playwright) 
 - API test suite
 - Page Object Model with separate locator classes
 - Failure diagnostics (screenshot + HTML dump)
-- Ready to run locally and in Docker
+- Docker is the recommended validation path; local runs are supported as optional fast feedback
 
 ## Architecture Overview
 Tests are organized in layers:
@@ -118,12 +118,10 @@ The goal is to keep the framework simple, maintainable, and reproducible across 
 GitHub Actions runs a Docker-first workflow that builds the image, verifies pytest collection, runs the full suite inside Docker, and uploads `artifacts/failures/` when failure evidence is present.
 
 ## Prerequisites
-- Python 3.9+
-- pip
-- Playwright browser binaries
-- Docker (optional)
+- Docker — required for CI-parity validation
+- Python 3.9+, pip, Playwright browser binaries — for optional local runs only
 
-## Setup (Local)
+## Local Setup (optional)
 ```bash
 python -m venv venv
 source venv/bin/activate
@@ -131,7 +129,7 @@ pip install -r requirements.txt
 playwright install
 ```
 
-## Run Tests (Local)
+## Run Tests (Local — optional fast feedback)
 Run all tests:
 ```bash
 pytest -v
@@ -148,6 +146,9 @@ pytest test/api -v
 ```
 
 ## Run with Docker
+
+Docker is the source-of-truth path for full-suite validation and CI parity.
+
 Build image:
 ```bash
 docker build -t playwright-api-automation .  #build the Docker image

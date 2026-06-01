@@ -45,6 +45,24 @@ jobs:
         if: always()
         run: python scripts/ci_summary.py artifacts/report.xml >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Run release readiness gate
+        if: always()
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            playwright-api-automation python scripts/release_gate.py
+
+      - name: Write release gate summary
+        if: always()
+        run: |
+          if [ -f artifacts/release-readiness.md ]; then
+            cat artifacts/release-readiness.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Release Readiness Gate" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> \`artifacts/release-readiness.md\` not found — gate script did not produce output." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish test report
         if: always()
         # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene

@@ -113,6 +113,8 @@ Automated dependency update visibility. Configured in `.github/dependabot.yml` f
 
 Dependabot creates pull requests on a weekly schedule when newer versions are available. It does not block CI; it provides update visibility and keeps dependency versions current.
 
+For recommended GitHub repository settings (branch protection required checks and secret scanning), see [`agentic-qa-workflows/governance/security_and_branch_protection.md`](security_and_branch_protection.md).
+
 ---
 
 ## Coverage Floor

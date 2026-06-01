@@ -1,14 +1,17 @@
 # QA Architect / Solution Architect Slice Review Prompt
 
-Use this prompt after each implementation slice to review whether the change supports the production-style QA architecture blueprint before committing.
+Use this prompt twice per implementation slice:
+
+- **Plan Review (Mode A):** after Claude proposes the implementation plan, before editing files.
+- **Implementation Review (Mode B):** after the diff and Docker-first validation results exist, before committing.
 
 ---
 
 Read CLAUDE.md and all files under agentic-qa-workflows/governance/.
 
-Then read all files changed in the current slice.
+Then read all files relevant to the current slice (plan document for Mode A; changed files for Mode B).
 
-Act as a QA Architect and Solution Architect reviewer. Do not edit files.
+Act as a QA Architect and Solution Architect reviewer. Do not edit files in either mode.
 
 ---
 
@@ -16,11 +19,60 @@ Act as a QA Architect and Solution Architect reviewer. Do not edit files.
 
 - What slice is this? (name, number, branch)
 - What were the stated goals of this slice?
+- Which review mode is this? (A — Plan Review, or B — Implementation Review)
+
+---
+
+## Review modes
+
+### Mode A — Plan Review
+
+Use this before editing files. Plan Review should happen after the implementation plan is proposed and before any file changes begin.
+
+Reviewer should evaluate:
+
+- Does the plan match the roadmap slice?
+- Is the scope PR-sized?
+- Should the work be split into smaller slices?
+- Are the right files being touched?
+- Are any files missing from the plan?
+- Does the plan preserve Docker-first execution?
+- Does the plan preserve separation of concerns?
+- Does the plan avoid unnecessary dependencies?
+- Does the plan avoid future rework (e.g. will it need to be changed when JUnit XML, release gate, or notification delivery is added)?
+- Does the plan align with production-style QA architecture and consulting blueprint goals?
+- What validation commands should be required after implementation?
+- What should be explicitly out of scope for this slice?
+
+Output format for Mode A:
+
+**Verdict**: Approve plan / Approve plan with changes / Rework plan
+
+**Scope assessment**: Is this PR-sized? Should anything be split or deferred?
+
+**File-by-file plan assessment**: For each planned file, does the change belong here? Is it complete? Is anything missing?
+
+**Risks before editing**: What could go wrong if the plan is executed as written?
+
+**Required plan changes before implementation**: Ranked by severity. Each change must include what to modify and why.
+
+**Validation expectations**: List the commands that must pass after implementation before the slice is considered done.
+
+---
+
+### Mode B — Implementation Review
+
+Use this after files have changed and Docker-first validation has run, before committing.
+
+---
+
+## Context to establish before reviewing (Mode B)
+
 - What files changed?
 
 ---
 
-## Review dimensions
+## Review dimensions (Mode B)
 
 ### 1. Separation of concerns
 
@@ -93,7 +145,7 @@ Identify any of the following:
 
 ---
 
-## Output format
+## Output format (Mode B)
 
 Return the following sections:
 
@@ -109,7 +161,7 @@ Return the following sections:
 
 ## Constraints
 
-Do not edit files.
+Do not edit files in either mode.
 Do not commit or push.
 Do not create an output report file.
 Do not run tests.

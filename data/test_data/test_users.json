@@ -14,5 +14,10 @@
   "api_admin": {
     "username": "admin",
     "password": "password123"
+  },
+  "checkout_user": {
+    "first_name": "Test",
+    "last_name": "Buyer",
+    "postal_code": "12345"
   }
 }

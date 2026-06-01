@@ -72,6 +72,26 @@ def api_base_url(test_data):
 
 
 @pytest.fixture(scope="session")
+def checkout_data(test_data):
+    user = test_data.get("checkout_user", {})
+    first_name = user.get("first_name")
+    last_name = user.get("last_name")
+    postal_code = user.get("postal_code")
+
+    if not first_name or not last_name or not postal_code:
+        raise ValueError(
+            "Missing checkout_user.first_name, last_name, or postal_code "
+            "in data/test_data/test_users.json"
+        )
+
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "postal_code": postal_code,
+    }
+
+
+@pytest.fixture(scope="session")
 def booking_api(api_base_url):
     return BookingApiClient(api_base_url, timeout=API_REQUEST_TIMEOUT_SECONDS)
 

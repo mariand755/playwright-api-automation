@@ -12,6 +12,7 @@ Before a pull request may be reviewed:
 - Local pytest runs are optional fast feedback only and do not replace Docker verification.
 - Formatting and lint checks must pass: see Docker-First Quality Checks section below.
 - Dependency and container scans must pass: see Docker-First Quality Checks section below.
+- CodeQL findings should be reviewed before merging: see GitHub-Native Security Checks section below.
 
 ## Merge Gate
 
@@ -92,6 +93,27 @@ After tools are intentionally selected and added to the Docker image:
 - Dockerized optional type/static analysis check
 
 Do not name specific tools, add placeholder commands, add pre-commit tooling, or add new dependencies until the stack is selected.
+
+## GitHub-Native Security Checks
+
+These checks are GitHub-managed. They are not Docker-executed and cannot be run with a local `docker run` command.
+
+### CodeQL
+
+Static security analysis for Python. Configured in `.github/workflows/codeql.yml`. Runs on pull requests to `main`, pushes to `main`, and weekly on a schedule (to apply updated CodeQL queries to the current codebase).
+
+Findings are published to the GitHub Security tab (Security → Code scanning alerts). A CodeQL finding does not block the CI test job; it creates a security alert for review and remediation.
+
+### Dependabot
+
+Automated dependency update visibility. Configured in `.github/dependabot.yml` for two ecosystems:
+
+- **pip** — Python packages declared in `requirements.txt`. Note: `playwright` updates are intentionally ignored; the `playwright` version is coupled to the Docker base image and must be updated in a coordinated slice.
+- **github-actions** — Actions used in `.github/workflows/*.yml`, including SHA-pinned third-party actions.
+
+Dependabot creates pull requests on a weekly schedule when newer versions are available. It does not block CI; it provides update visibility and keeps dependency versions current.
+
+---
 
 ## Coverage Floor
 

@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: playwright
+        versions: ["*"]
+        # playwright version is coupled to the Docker base image tag;
+        # updates require a coordinated base image + requirements change
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

@@ -11,6 +11,7 @@ Before a pull request may be reviewed:
 - Before using new governance markers such as `negative`, `regression`, or `api_contract`, add them to `pytest.ini`.
 - Local pytest runs are optional fast feedback only and do not replace Docker verification.
 - Formatting and lint checks must pass: see Docker-First Quality Checks section below.
+- Dependency and container scans must pass: see Docker-First Quality Checks section below.
 
 ## Merge Gate
 
@@ -75,6 +76,14 @@ Docker is the default execution environment for this repo. Local commands are op
    ```bash
    docker run --rm playwright-api-automation
    ```
+
+7. **Python dependency vulnerability scan** — confirms no known CVEs in project dependencies (queries OSV/PyPI advisory database); runs inside Docker:
+
+   ```bash
+   docker run --rm playwright-api-automation pip-audit -r requirements.txt --progress-spinner off
+   ```
+
+8. **Container image vulnerability scan** — confirms no fixable HIGH or CRITICAL CVEs in the built Docker image; runs as a CI step via `aquasecurity/trivy-action` (v0.36.0, pinned to commit SHA) with `--ignore-unfixed` and `--severity HIGH,CRITICAL`.
 
 ### Future-state checks (not yet implemented)
 

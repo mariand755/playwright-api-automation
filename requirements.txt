@@ -4,3 +4,4 @@ pytest-playwright
 jsonschema
 requests
 ruff
+pip-audit

@@ -8,6 +8,8 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '0 2 * * *'  # Nightly 02:00 UTC — runs on default branch (main)
   workflow_dispatch:
 
 permissions:
@@ -52,27 +54,39 @@ jobs:
       - name: Verify test collection
         run: docker run --rm playwright-api-automation pytest --collect-only -q
 
-      - name: Prepare artifacts directory
-        run: |
-          rm -rf artifacts/failures
-          mkdir -p artifacts/failures
+  api:
+    name: API Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test]
 
-      - name: Run full test suite
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
+        run: docker build -t playwright-api-automation .
+
+      - name: Prepare artifacts directory
+        run: mkdir -p artifacts
+
+      - name: Run API test suite
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
-            playwright-api-automation pytest -v --junitxml=artifacts/report.xml
+            playwright-api-automation pytest test/api -v --junitxml=artifacts/api-report.xml
 
-      - name: Write dynamic test summary
+      - name: Write dynamic API test summary
         if: always()
-        run: python scripts/ci_summary.py artifacts/report.xml >> "$GITHUB_STEP_SUMMARY"
+        run: python scripts/ci_summary.py artifacts/api-report.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run release readiness gate
         if: always()
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
-            playwright-api-automation python scripts/release_gate.py
+            playwright-api-automation python scripts/release_gate.py artifacts/api-report.xml
 
       - name: Write release gate summary
         if: always()
@@ -85,13 +99,53 @@ jobs:
             echo "> \`artifacts/release-readiness.md\` not found — gate script did not produce output." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Publish test report
+      - name: Publish API test report
         if: always()
         # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
         uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
         with:
-          name: Pytest Results
-          path: artifacts/report.xml
+          name: API Test Results
+          path: artifacts/api-report.xml
+          reporter: java-junit
+          fail-on-error: false
+
+  ui:
+    name: UI Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
+        run: docker build -t playwright-api-automation .
+
+      - name: Prepare artifacts directory
+        run: |
+          # Ensure the mounted failure-artifacts directory exists for UI screenshot/HTML capture.
+          rm -rf artifacts/failures
+          mkdir -p artifacts/failures
+
+      - name: Run UI test suite
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            playwright-api-automation pytest test/ui -v --junitxml=artifacts/ui-report.xml
+
+      - name: Write dynamic UI test summary
+        if: always()
+        run: python scripts/ci_summary.py artifacts/ui-report.xml >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish UI test report
+        if: always()
+        # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        with:
+          name: UI Test Results
+          path: artifacts/ui-report.xml
           reporter: java-junit
           fail-on-error: false
 

@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPORT_XML = Path("artifacts/report.xml")
+REPORT_XML = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("artifacts/report.xml")
 OBSERVABILITY_JSON = Path("data/release/observability_snapshot.json")
 DEFECT_METRICS_JSON = Path("data/release/defect_metrics.json")
 OUTPUT_JSON = Path("artifacts/release-readiness.json")

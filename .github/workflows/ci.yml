@@ -33,6 +33,9 @@ jobs:
       - name: Lint
         run: docker run --rm playwright-api-automation ruff check .
 
+      - name: Type check
+        run: docker run --rm playwright-api-automation mypy utils/ pages/ scripts/
+
       - name: Python dependency scan
         run: docker run --rm playwright-api-automation pip-audit -r requirements.txt --progress-spinner off
 

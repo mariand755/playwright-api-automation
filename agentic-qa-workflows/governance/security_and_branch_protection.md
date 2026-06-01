@@ -31,16 +31,17 @@ Analyze Python
 
 #### What `Docker Test Suite` covers
 
-The `Docker Test Suite` job (`.github/workflows/ci.yml`) runs the following gates in order. All eight must pass for the job to succeed:
+The `Docker Test Suite` job (`.github/workflows/ci.yml`) runs the following gates in order. All nine must pass for the job to succeed:
 
 1. Docker build
 2. Ruff format check
 3. Ruff lint check
-4. Python dependency vulnerability scan (pip-audit)
-5. Container image vulnerability scan (Trivy — fixable HIGH/CRITICAL only)
-6. pytest collection check
-7. Full test suite
-8. Release readiness gate
+4. mypy type check (utils/, pages/, scripts/)
+5. Python dependency vulnerability scan (pip-audit)
+6. Container image vulnerability scan (Trivy — fixable HIGH/CRITICAL only)
+7. pytest collection check
+8. Full test suite
+9. Release readiness gate
 
 #### What `Analyze Python` covers
 

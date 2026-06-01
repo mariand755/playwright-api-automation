@@ -4,7 +4,7 @@ from pages.inventory_page import InventoryPage
 from pages.cart_page import CartPage
 
 
-#Smoke test: verifies login functionality in isolation.
+# Smoke test: verifies login functionality in isolation.
 # TC-UI-001
 @pytest.mark.ui
 @pytest.mark.smoke

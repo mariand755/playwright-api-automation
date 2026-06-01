@@ -1,4 +1,3 @@
-
 class LoginPageLocators:
     USERNAME = "#user-name"
     PASSWORD = "#password"

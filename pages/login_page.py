@@ -4,7 +4,6 @@ from pages.locators import LoginPageLocators
 
 
 class LoginPage:
-
     def __init__(self, page: Page):
         self.page = page
         self.username = page.locator(LoginPageLocators.USERNAME)

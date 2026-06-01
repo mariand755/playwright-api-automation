@@ -27,6 +27,12 @@ jobs:
       - name: Build Docker image
         run: docker build -t playwright-api-automation .
 
+      - name: Check formatting
+        run: docker run --rm playwright-api-automation ruff format --check .
+
+      - name: Lint
+        run: docker run --rm playwright-api-automation ruff check .
+
       - name: Verify test collection
         run: docker run --rm playwright-api-automation pytest --collect-only -q
 

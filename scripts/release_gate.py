@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Release readiness gate: consumes JUnit XML + observability + defect metrics → GO/NO_GO decision."""
+
 import json
 import sys
 import xml.etree.ElementTree as ET
@@ -81,13 +82,9 @@ def evaluate_gate(
 
     # Test result rules
     if test_results["failed"] > 0:
-        gate_failures.append(
-            f"test failures: {test_results['failed']} test(s) failed"
-        )
+        gate_failures.append(f"test failures: {test_results['failed']} test(s) failed")
     if test_results["errors"] > 0:
-        gate_failures.append(
-            f"test errors: {test_results['errors']} test(s) errored"
-        )
+        gate_failures.append(f"test errors: {test_results['errors']} test(s) errored")
 
     # Observability rules
     obs_metrics = obs.get("metrics", {})
@@ -122,9 +119,7 @@ def evaluate_gate(
 
     open_blockers = defect_metrics.get("open_blocker_defects", 0)
     if open_blockers > 0:
-        gate_failures.append(
-            f"open_blocker_defects: {open_blockers} open blocker(s)"
-        )
+        gate_failures.append(f"open_blocker_defects: {open_blockers} open blocker(s)")
 
     escape_count = defect_metrics.get("defect_escape_count", 0)
     if escape_count > 0:
@@ -260,16 +255,18 @@ def write_error_output(message: str) -> None:
     }
     OUTPUT_JSON.write_text(json.dumps(error_output, indent=2), encoding="utf-8")
     OUTPUT_MD.write_text(
-        "\n".join([
-            "## Release Readiness Gate",
-            "",
-            "**Decision: ❌ NO_GO**",
-            "",
-            "### Gate Failures",
-            "",
-            f"- ❌ {message}",
-            "",
-        ]),
+        "\n".join(
+            [
+                "## Release Readiness Gate",
+                "",
+                "**Decision: ❌ NO_GO**",
+                "",
+                "### Gate Failures",
+                "",
+                f"- ❌ {message}",
+                "",
+            ]
+        ),
         encoding="utf-8",
     )
 

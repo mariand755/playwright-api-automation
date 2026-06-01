@@ -12,10 +12,14 @@ class BookingApiClient:
         return requests.get(f"{self.base_url}/booking", timeout=self.timeout)
 
     def get_booking_by_id(self, booking_id: int):
-        return requests.get(f"{self.base_url}/booking/{booking_id}", timeout=self.timeout)
+        return requests.get(
+            f"{self.base_url}/booking/{booking_id}", timeout=self.timeout
+        )
 
     def create_booking(self, payload: dict):
-        return requests.post(f"{self.base_url}/booking", json=payload, timeout=self.timeout)
+        return requests.post(
+            f"{self.base_url}/booking", json=payload, timeout=self.timeout
+        )
 
     def create_token(self, username: str, password: str) -> str:
         response = requests.post(

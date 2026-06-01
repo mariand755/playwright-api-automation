@@ -4,7 +4,6 @@ from pages.locators import CheckoutPageLocators
 
 
 class CheckoutPage:
-
     def __init__(self, page: Page):
         self.page = page
         self.first_name = page.locator(CheckoutPageLocators.FIRST_NAME)

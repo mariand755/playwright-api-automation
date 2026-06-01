@@ -43,6 +43,10 @@ Reviewer should evaluate:
 - Does the plan align with production-style QA architecture and consulting blueprint goals?
 - What validation commands should be required after implementation?
 - What should be explicitly out of scope for this slice?
+- What alternatives were considered for this approach, and why was the chosen approach the best fit?
+- What cost, speed, risk, or maintenance benefit does this create?
+- What is intentionally deferred, and why is deferral the right call for this slice?
+- How would this decision benefit a consulting client or QA architecture team?
 
 Output format for Mode A:
 
@@ -57,6 +61,14 @@ Output format for Mode A:
 **Required plan changes before implementation**: Ranked by severity. Each change must include what to modify and why.
 
 **Validation expectations**: List the commands that must pass after implementation before the slice is considered done.
+
+**Trade-offs, benefits, and consulting value**: Answer the following:
+
+- What alternatives were considered?
+- Why is the proposed approach the best fit for this slice?
+- What cost, speed, risk, or maintenance benefit does this create?
+- What is intentionally deferred, and why?
+- How would this decision help a consulting client or QA architecture team?
 
 ---
 
@@ -143,6 +155,14 @@ Identify any of the following:
 - Scope creep that should be deferred to a later slice.
 - Any reason to split the PR before merging.
 
+### 9. Trade-offs and consulting value
+
+- Were there meaningful alternatives for the approach taken?
+- Why is the chosen approach the best fit given project scale and constraints?
+- What cost, speed, risk, or maintenance benefit does this implementation create?
+- Is anything deferred intentionally, and is the deferral well-reasoned?
+- Would a consulting client or QA architecture team find this decision credible and reusable?
+
 ---
 
 ## Output format (Mode B)
@@ -151,11 +171,18 @@ Return the following sections:
 
 **Verdict**: Approve / Approve with fixes / Request changes
 
-**Dimension-by-dimension findings**: Pass or Fail with specific observations for each of the 8 dimensions above.
+**Dimension-by-dimension findings**: Pass or Fail with specific observations for each of the 9 dimensions above.
 
 **Recommended fixes before commit**: Ranked by severity (Medium / Low). For each fix, include the file, what to change, and why.
 
 **Blueprint assessment**: One short paragraph on whether this slice moves the repo meaningfully toward the production-style QA architecture blueprint.
+
+**Implementation trade-offs and realized value**: Answer the following:
+
+- Did the implementation preserve the intended trade-offs from the plan?
+- Did any new trade-off appear during implementation?
+- What benefit does this provide in terms of speed, cost, maintainability, risk reduction, or release confidence?
+- Is the benefit clear enough for a future consulting/client reader?
 
 ---
 

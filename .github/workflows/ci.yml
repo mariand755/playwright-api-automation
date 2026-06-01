@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  checks: write  # required by dorny/test-reporter to create check annotations
 
 jobs:
   test:
@@ -38,24 +39,21 @@ jobs:
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
-            playwright-api-automation
+            playwright-api-automation pytest -v --junitxml=artifacts/report.xml
 
-      - name: Write Docker CI summary
+      - name: Write dynamic test summary
         if: always()
-        run: |
-          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
-          ## Docker-first CI summary
+        run: python scripts/ci_summary.py artifacts/report.xml >> "$GITHUB_STEP_SUMMARY"
 
-          | CI gate | Command |
-          |---|---|
-          | Docker image build | `docker build -t playwright-api-automation .` |
-          | Dockerized collection check | `pytest --collect-only -q` |
-          | Dockerized full-suite check | `pytest -v` via Docker image default command |
-          | Failure artifacts | `artifacts/failures/` uploaded on failure when present |
-
-          Docker is the source of truth. No local Python setup.
-          See the job steps above for actual pass/fail status.
-          EOF
+      - name: Publish test report
+        if: always()
+        # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        with:
+          name: Pytest Results
+          path: artifacts/report.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Upload failure artifacts
         if: failure()

@@ -50,6 +50,7 @@ Thumbs.db
 
 # Test artifacts
 artifacts/failures/
+artifacts/report.xml
 *.png
 *.html
 

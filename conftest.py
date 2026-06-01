@@ -129,6 +129,7 @@ def booking_payload_factory():
         if additionalneeds is not None:
             payload["additionalneeds"] = additionalneeds
         return payload
+
     return _factory
 
 
@@ -166,7 +167,7 @@ def page(page):
     return page
 
 
-# Pytest hook to capture screenshots and HTML on UI test failure.   
+# Pytest hook to capture screenshots and HTML on UI test failure.
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Parse a JUnit XML report and write a Markdown CI summary to stdout."""
+
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path

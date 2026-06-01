@@ -10,6 +10,7 @@ Before a pull request may be reviewed:
 - All new markers must be declared in `pytest.ini`.
 - Before using new governance markers such as `negative`, `regression`, or `api_contract`, add them to `pytest.ini`.
 - Local pytest runs are optional fast feedback only and do not replace Docker verification.
+- Formatting and lint checks must pass: see Docker-First Quality Checks section below.
 
 ## Merge Gate
 
@@ -57,7 +58,19 @@ Docker is the default execution environment for this repo. Local commands are op
    docker run --rm playwright-api-automation pytest test/ui -v
    ```
 
-4. **Docker full-suite verification** — final confidence check before push or PR:
+4. **Dockerized format check** — confirm all Python files match Ruff formatting:
+
+   ```bash
+   docker run --rm playwright-api-automation ruff format --check .
+   ```
+
+5. **Dockerized lint check** — confirm all Python files pass Ruff linting:
+
+   ```bash
+   docker run --rm playwright-api-automation ruff check .
+   ```
+
+6. **Docker full-suite verification** — final confidence check before push or PR:
 
    ```bash
    docker run --rm playwright-api-automation
@@ -67,8 +80,6 @@ Docker is the default execution environment for this repo. Local commands are op
 
 After tools are intentionally selected and added to the Docker image:
 
-- Dockerized formatting check
-- Dockerized linting check
 - Dockerized optional type/static analysis check
 
 Do not name specific tools, add placeholder commands, add pre-commit tooling, or add new dependencies until the stack is selected.

@@ -110,6 +110,7 @@ This framework uses:
 - **requests** for API interactions
 - **jsonschema** for API contract validation
 - **Docker** for consistent execution across environments
+- **Ruff** for code formatting and linting (enforced in CI via Docker)
 
 The goal is to keep the framework simple, maintainable, and reproducible across local and containerized environments.
 

@@ -86,13 +86,21 @@ Docker is the default execution environment for this repo. Local commands are op
 
 8. **Container image vulnerability scan** — confirms no fixable HIGH or CRITICAL CVEs in the built Docker image; runs as a CI step via `aquasecurity/trivy-action` (v0.36.0, pinned to commit SHA) with `--ignore-unfixed` and `--severity HIGH,CRITICAL`.
 
-### Future-state checks (not yet implemented)
+9. **Dockerized type check** — confirms no type errors in production modules (`utils/`, `pages/`, `scripts/`); runs inside Docker:
 
-After tools are intentionally selected and added to the Docker image:
+   ```bash
+   docker run --rm playwright-api-automation mypy utils/ pages/ scripts/
+   ```
 
-- Dockerized optional type/static analysis check
+   Initial strictness: `ignore_missing_imports = true`. Third-party libraries without type stubs (e.g. `requests`) are silently skipped rather than errored. Test files and `conftest.py` are excluded — pytest fixture return types depend on framework internals that require a separate future typing/stubs slice to configure correctly.
+   
+   Structural config: `explicit_package_bases = true` resolves module paths relative to the project root for directories without standard `__init__.py` package files.
 
-Do not name specific tools, add placeholder commands, add pre-commit tooling, or add new dependencies until the stack is selected.
+### Future-state checks
+
+- Expand mypy strictness: add `disallow_untyped_defs = true` per-module as annotation coverage grows.
+- Add `types-requests` stubs to `requirements.txt` when mypy strictness increases to benefit from full `requests.Response` type resolution.
+- Extend type checking to `conftest.py` when pytest typing is configured.
 
 ## GitHub-Native Security Checks
 

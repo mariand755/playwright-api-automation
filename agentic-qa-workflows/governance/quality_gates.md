@@ -93,7 +93,7 @@ Docker is the default execution environment for this repo. Local commands are op
    ```
 
    Initial strictness: `ignore_missing_imports = true`. Third-party libraries without type stubs (e.g. `requests`) are silently skipped rather than errored. Test files and `conftest.py` are excluded — pytest fixture return types depend on framework internals that require a separate future typing/stubs slice to configure correctly.
-   
+
    Structural config: `explicit_package_bases = true` resolves module paths relative to the project root for directories without standard `__init__.py` package files.
 
 ### Future-state checks
@@ -101,6 +101,20 @@ Docker is the default execution environment for this repo. Local commands are op
 - Expand mypy strictness: add `disallow_untyped_defs = true` per-module as annotation coverage grows.
 - Add `types-requests` stubs to `requirements.txt` when mypy strictness increases to benefit from full `requests.Response` type resolution.
 - Extend type checking to `conftest.py` when pytest typing is configured.
+
+### CI job structure
+
+The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks above across three jobs:
+
+| Job | Covers | Depends on |
+|---|---|---|
+| `Docker Test Suite` | Docker build, Ruff format, Ruff lint, mypy type check, pip-audit, Trivy, pytest collection | — |
+| `API Tests` | API test suite, CI summary, release readiness gate | `Docker Test Suite` |
+| `UI Tests` | UI test suite, CI summary, failure artifact upload | `Docker Test Suite` |
+
+`API Tests` and `UI Tests` run in parallel after `Docker Test Suite` passes. All three jobs are required status checks for merge to `main`.
+
+For the full required checks configuration and post-merge update instructions, see [`agentic-qa-workflows/governance/security_and_branch_protection.md`](security_and_branch_protection.md).
 
 ## GitHub-Native Security Checks
 

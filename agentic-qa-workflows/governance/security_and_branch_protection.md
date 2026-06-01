@@ -20,28 +20,54 @@ Navigate to: **GitHub → Settings → Branches → Add branch protection rule �
 
 ### Required status checks
 
-Add exactly two required checks by job name:
+Add exactly four required checks by job name:
 
-```
+```text
 Docker Test Suite
+API Tests
+UI Tests
 Analyze Python
 ```
 
-**Important:** GitHub branch protection operates at the **job level**, not the step level. Individual CI steps — Check formatting, Lint, Python dependency scan, Container image scan, Verify test collection, Run full test suite, Run release readiness gate — are internal steps within the `Docker Test Suite` job. They are not separately addressable as required status checks. Requiring `Docker Test Suite` to pass requires all internal steps to pass first.
+**Important:** GitHub branch protection operates at the **job level**, not the step level. Individual CI steps — Check formatting, Lint, Type check, Python dependency scan, Container image scan, Verify test collection — are internal steps within the `Docker Test Suite` job. They are not separately addressable as required status checks. Requiring `Docker Test Suite` to pass requires all internal steps to pass first.
+
+**Post-merge update required:** `API Tests` and `UI Tests` will not appear in GitHub's branch protection check autocomplete until those jobs have run on `main` at least once. The correct sequence is: merge PR → CI runs on main → job names appear in check history → go to Settings → Branches → edit branch protection rule → add `API Tests` and `UI Tests` as required checks alongside the existing `Docker Test Suite` and `Analyze Python`.
 
 #### What `Docker Test Suite` covers
 
-The `Docker Test Suite` job (`.github/workflows/ci.yml`) runs the following gates in order. All nine must pass for the job to succeed:
+The `Docker Test Suite` job (`.github/workflows/ci.yml`) runs the following gates in order. All seven must pass for the job to succeed:
 
 1. Docker build
 2. Ruff format check
 3. Ruff lint check
-4. mypy type check (utils/, pages/, scripts/)
+4. mypy type check (`utils/`, `pages/`, `scripts/`)
 5. Python dependency vulnerability scan (pip-audit)
 6. Container image vulnerability scan (Trivy — fixable HIGH/CRITICAL only)
 7. pytest collection check
-8. Full test suite
-9. Release readiness gate
+
+#### What `API Tests` covers
+
+The `API Tests` job (`.github/workflows/ci.yml`) runs after `Docker Test Suite` passes. It covers:
+
+1. Docker build (fresh runner)
+2. API test suite execution (`test/api/`) — produces `artifacts/api-report.xml`
+3. API CI summary using `scripts/ci_summary.py`
+4. Release readiness gate using `artifacts/api-report.xml` + observability + defect metrics
+5. API test report through dorny/test-reporter as `API Test Results`
+
+#### What `UI Tests` covers
+
+The `UI Tests` job (`.github/workflows/ci.yml`) runs after `Docker Test Suite` passes. It covers:
+
+1. Docker build (fresh runner)
+2. UI test suite execution (`test/ui/`) — produces `artifacts/ui-report.xml`
+3. UI CI summary using `scripts/ci_summary.py`
+4. UI test report through dorny/test-reporter as `UI Test Results`
+5. Failure artifact upload for screenshots and HTML on UI test failure
+
+**Note:** The release readiness gate currently reflects API test results only. UI failures are surfaced through the `UI Tests` required check blocking merge. Multi-source release gate consolidation (combining API + UI results) is deferred to a future slice.
+
+**Note about job summaries:** Both `API Tests` and `UI Tests` output `## Test Summary` in their respective job summaries. This is intentional — GitHub Actions displays each job's summary separately, so there is no content collision between the two.
 
 #### What `Analyze Python` covers
 
@@ -55,13 +81,15 @@ The `Analyze Python` job (`.github/workflows/codeql.yml`) runs CodeQL static sec
 
 | Check | Type | Blocking | Surface | Trigger |
 |---|---|---|---|---|
-| Ruff format | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push |
-| Ruff lint | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push |
-| pip-audit | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push |
-| Trivy (fixable HIGH/CRITICAL) | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push |
-| pytest collection | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push |
-| Full test suite | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push |
-| Release readiness gate | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push |
+| Ruff format | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| Ruff lint | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| mypy type check | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| pip-audit | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| Trivy (fixable HIGH/CRITICAL) | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| pytest collection | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| API test suite | Hard CI gate | Yes — fails `API Tests` | CI job | PR / push / nightly |
+| UI test suite | Hard CI gate | Yes — fails `UI Tests` | CI job | PR / push / nightly |
+| Release readiness gate | Hard CI gate | Yes — fails `API Tests` | CI step | PR / push / nightly |
 | CodeQL findings | Advisory | No — Security tab | GitHub Security tab | PR / push / weekly |
 | Dependabot updates | Update visibility | No — creates PRs | Dependabot PRs | Weekly |
 | GitHub secret scanning | Platform protection | Yes (push protection enabled) | Git push rejection | Push |
@@ -106,6 +134,7 @@ These credentials are stored in `data/test_users.json` and loaded via fixtures. 
 gitleaks is an open-source secret scanning tool that can be added as a CI step or pre-commit hook to scan git history and staged changes for secrets matching configurable patterns.
 
 **What it adds over GitHub native secret scanning:**
+
 - Runs locally before push in pre-commit mode
 - Supports configurable custom patterns for project-specific secret formats
 - Can scan full git history, not just new pushes

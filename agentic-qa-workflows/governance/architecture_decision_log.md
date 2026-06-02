@@ -20,6 +20,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-008](#adr-008-three-named-ci-jobs-instead-of-matrix-for-apiui-split) | Three named CI jobs instead of matrix for API/UI split | Accepted | 2026-06-01 |
 | [ADR-009](#adr-009-api-only-release-gate-multi-source-deferred) | API-only release gate, multi-source deferred | Accepted | 2026-06-01 |
 | [ADR-010](#adr-010-branch-protection-operates-on-job-names-not-step-names) | Branch protection operates on job names, not step names | Accepted | 2026-06-01 |
+| [ADR-011](#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent) | Notification delivery defaults to dry-run when secrets are absent | Accepted | 2026-06-01 |
 
 ---
 
@@ -428,3 +429,58 @@ Update the required checks list in GitHub Settings whenever a CI job is added, r
 ### Trade-offs and consulting value
 
 Preserving the existing job name prevented any disruption to the branch protection configuration during the split. Trade-off: `Docker Test Suite` is a slightly misleading name — it is the quality gate suite, not the test execution suite — and the name is now load-bearing, which constrains future renaming. For a consulting client, this documents a GitHub architectural constraint that surprises most teams: job names in `ci.yml` are not merely display labels; they are the string identifiers that branch protection rules reference by exact match.
+
+---
+
+## ADR-011: Notification delivery defaults to dry-run when secrets are absent
+
+**Status:** Accepted
+**Date:** 2026-06-01
+
+### Context
+
+Release readiness gate results need outbound delivery to Slack and email after the nightly scheduled regression. Slack incoming webhook URLs and SMTP credentials are real secrets that cannot be committed to the repository. A notification script that fails CI when credentials are absent would break any unconfigured environment — any fork, any new team member, any client repo that has not yet provisioned secrets.
+
+### Decision
+
+`scripts/notify.py` attempts Slack and email delivery independently. Each channel checks its own required env vars (`SLACK_WEBHOOK_URL` for Slack; `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_RECIPIENTS` for email). When a channel's required vars are absent, it logs a dry-run preview and exits 0. Setting `NOTIFY_DRY_RUN=true` (or `1`) forces dry-run for all channels regardless of whether secrets are present — this allows CI operators to validate the notification wiring without triggering live delivery.
+
+The script always exits 0. Notification failure is logged as a warning but never fails CI. The CI notification step runs only on `schedule` and `workflow_dispatch` triggers to avoid noise on push and pull request runs.
+
+SMTP is implemented with generic env vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`) rather than Gmail-specific vars. Port 465 uses `smtplib.SMTP_SSL`; all other ports (default 587) use `smtplib.SMTP` with `starttls()`. Gmail configuration is documented as an example. Zero new Python dependencies are required — `urllib.request`, `smtplib`, `ssl`, and `email.mime` are all stdlib.
+
+### Alternatives considered
+
+- **Require secrets to be set before the notification step runs** — rejected. CI would break for any fork, any unconfigured environment, and any repo copy that has not provisioned secrets. This inverts the correct delivery order: the infrastructure should be validated before credentials exist.
+- **Use a third-party Slack GitHub Action** — rejected. Third-party actions require SHA-pinning for supply-chain hygiene (see ADR-005), introduce an external service dependency, and are GitHub-specific rather than CI-platform-portable. The stdlib `urllib.request` approach is portable to any CI system.
+- **Gmail-specific SMTP env vars (`GMAIL_USER`, `GMAIL_APP_PASSWORD`)** — rejected. Locks the blueprint to Google Workspace. Generic SMTP vars support Gmail, Outlook, SendGrid, AWS SES, and any internal SMTP relay without code changes.
+- **Separate `notify` CI job (needs: [api, ui])** — rejected for this slice. A separate job would require `actions/upload-artifact` and `actions/download-artifact` (third-party, SHA-pinning needed) to transfer `release-readiness.json` between jobs. The step-in-`API Tests` approach has access to the artifact natively. A separate job also adds a new required-check candidate, triggering the ADR-010 two-step branch protection update process unnecessarily.
+
+### Consequences
+
+Notification infrastructure is in CI before live credentials are provisioned. Adding live delivery is a GitHub Settings step (add secrets), not a code change. `NOTIFY_DRY_RUN=true` as a repository variable allows CI-level validation without secrets. SMTP exceptions log only the exception class name — not `str(exc)` — to prevent server response strings from echoing usernames or partial credentials.
+
+No new CI job is added, so branch protection required checks are unchanged (see ADR-010).
+
+### Activation condition
+
+- Configure `SLACK_WEBHOOK_URL` in GitHub Settings → Secrets → Actions when ready for live Slack delivery.
+- Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_RECIPIENTS` (and optionally `EMAIL_FROM`) when ready for live email delivery.
+- Expand the notification step's trigger condition from `schedule || workflow_dispatch` to additional triggers if broader notification coverage is needed.
+- Migrate email from stdlib SMTP to a dedicated delivery API (SendGrid, AWS SES) if volume, deliverability tracking, template rendering, or bounce management requirements exceed stdlib SMTP capabilities.
+- Add a separate `notify` CI job (needs: [api, ui]) when multi-source notification — covering both API and UI results in a single report — is required. This aligns with the ADR-009 activation condition for multi-source release gate consolidation.
+
+### Related PRs / Docs
+
+- `scripts/notify.py` — notification script implementation
+- `.github/workflows/ci.yml` — API Tests job, Deliver release readiness notification step
+- `agentic-qa-workflows/governance/quality_gates.md` — Notification Delivery section
+- `agentic-qa-workflows/governance/security_and_branch_protection.md` — Notification secrets section and gate classification table
+- ADR-009 (API-only release gate, multi-source deferred)
+- ADR-010 (branch protection operates on job names)
+
+### Trade-offs and consulting value
+
+Dry-run default makes the feature safe to ship in any environment without pre-configured credentials. Trade-off: the feature appears fully wired in CI but sends nothing until secrets are provisioned. For a consulting client, this is the correct delivery order: the consulting team ships complete notification infrastructure; the client's security team provisions GitHub Secrets independently, on their schedule, without touching the codebase. The code never changes again for live delivery to begin.
+
+stdlib-only implementation means zero dependency management burden. The Slack incoming webhook JSON format is stable across Slack plan tiers. The SMTP interface is RFC-standard. Neither will change unpredictably, and neither requires account registration or token management to use in dry-run mode.

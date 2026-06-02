@@ -33,6 +33,7 @@ Verify against `agentic-qa-workflows/governance/quality_gates.md`:
 - Full suite passes
 - Coverage floor is met for any new endpoint or flow
 - Review `agentic-qa-workflows/governance/failure_evidence.md` and confirm failure artifacts or logs are captured when applicable.
+- If this slice introduced an architectural decision not already captured in `agentic-qa-workflows/governance/architecture_decision_log.md`, add an ADR entry before merging.
 
 ## Session Constraints
 

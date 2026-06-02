@@ -48,6 +48,34 @@ Reviewer should evaluate:
 - What is intentionally deferred, and why is deferral the right call for this slice?
 - How would this decision benefit a consulting client or QA architecture team?
 
+### Validation integrity and coverage
+
+- Do the proposed validation commands cover every file the plan touches? A command that tests a subset of changed files does not constitute full validation.
+- If the plan edits Python files, `Dockerfile`, or `requirements.txt` (anything copied into the image by `COPY . .`): does the plan require a fresh `docker build` before validation? Or does it rely on a stale image that predates the changes?
+- If validation uses a volume-mounted file, such as `-v $(pwd)/file.py:/app/file.py`, is it clearly labeled as a partial check only? Does the plan also require running the relevant command against the fully rebuilt image before the slice is considered done?
+- Are any required quality checks CI-only (CodeQL, pip-audit, Trivy)? If yes, does the plan acknowledge these will only run in CI and cannot be validated locally?
+- If the plan includes pre-commit as a validation step: is pre-commit clearly labeled as advisory only? Pre-commit does not run CodeQL, pip-audit, or Trivy.
+- Does the slice rename any CI job, add or remove required status checks, or modify GitHub Actions workflows in a way that would affect branch protection? If yes, have the required checks in `security_and_branch_protection.md` and GitHub repository settings been updated?
+
+### Security and secret handling
+
+(Applies when the plan touches env vars, credentials, GitHub Secrets, `os.environ` reads, `.env` files, or scripts and modules that handle secret values. Declare N/A if not applicable.)
+
+- Does any planned code read from env vars or GitHub Secrets?
+- If yes: could secret variable values flow into any of the following — `print()` calls; `logging` calls; f-strings that reference secret variables; exception messages; CI step summaries; helper function arguments used near logging; CI artifact files such as `release-readiness.json`, HTML reports, or markdown summaries; or tuples, lists, or dictionaries that later feed any logging or print output, even when the final printed value appears to be only a non-secret key or label?
+- Does the plan break the taint chain at the variable level, not delegate it to a helper function? A helper function that transforms a secret value is not a CodeQL sanitizer — the taint follows the argument, not the return value.
+- What CodeQL findings would this code be likely to generate? See `failure_evidence.md — CodeQL: secret-taint in logging` for the specific patterns.
+
+### Bounded adjacent-risk scan
+
+Scan for risks in files or behaviors adjacent to the slice's changes that the plan does not address — files the implementation might inadvertently affect, or downstream behaviors that depend on files this slice modifies.
+
+- Return at most 3 findings.
+- For each finding, state: description, classification, and rationale.
+- Classification: **Blocker** (must be resolved before implementation begins; directly affects current slice correctness or safety), **Recommended before commit** (reduces CI surprise risk; should be addressed but does not block plan approval), **Follow-up slice** (real risk but outside current slice scope; document and defer).
+- Do not expand implementation scope unless the finding is a Blocker that directly affects current slice correctness or safety.
+- Blocker findings must appear in "Required plan changes before implementation." Follow-up slice findings are documented here and do not block plan approval.
+
 Output format for Mode A:
 
 **Verdict**: Approve plan / Approve plan with changes / Rework plan
@@ -61,6 +89,10 @@ Output format for Mode A:
 **Required plan changes before implementation**: Ranked by severity. Each change must include what to modify and why.
 
 **Validation expectations**: List the commands that must pass after implementation before the slice is considered done.
+
+**Validation integrity**: Do the proposed validation commands cover all changed files? Does the plan require a fresh Docker build when image contents change? Are CI-only checks (CodeQL, pip-audit, Trivy) acknowledged as CI-only? Is branch protection or GitHub settings impact addressed?
+
+**Adjacent-risk findings (max 3)**: For each finding: description — classification (Blocker / Recommended before commit / Follow-up slice) — rationale. Blocker findings belong in "Required plan changes before implementation." Follow-up slice findings are documented here and do not block plan approval. If none found: "None identified."
 
 **Trade-offs, benefits, and consulting value**: Answer the following:
 
@@ -136,6 +168,11 @@ Use this after files have changed and Docker-first validation has run, before co
 - New test files must be collected by the existing `testpaths = test` configuration in `pytest.ini`.
 - Markers used in the slice must be consistent with the targeted execution commands already defined in `quality_gates.md`.
 - If the slice adds fixtures or utilities that produce output files, confirm the output path is within `artifacts/` so Docker volume-mounting works without CI changes.
+- Was Docker rebuilt after Python files, `Dockerfile`, or `requirements.txt` were edited? Validation against a stale image that predates the changes does not constitute full validation.
+- Was validation run against the fully rebuilt Docker image, not a volume-mounted single-file test? A command like `-v $(pwd)/file.py:/app/file.py` tests that file in isolation and does not prove the rebuilt image passes all checks.
+- Was a volume-mounted single-file test used and correctly labeled as partial coverage, with full image validation also confirmed?
+- Did the implementation rely on a clean pre-commit run as evidence that Docker CI will pass? Pre-commit is advisory only. It does not run CodeQL, pip-audit, or Trivy.
+- If the slice is relevant to CodeQL, pip-audit, or Trivy: are these acknowledged as CI-only checks that cannot be reproduced by local validation?
 
 ### 7. Blueprint and consulting value
 
@@ -163,6 +200,26 @@ Identify any of the following:
 - Is anything deferred intentionally, and is the deferral well-reasoned?
 - Would a consulting client or QA architecture team find this decision credible and reusable?
 
+### 10. Security and secret hygiene
+
+(Apply when the slice touches env vars, credentials, GitHub Secrets, `os.environ` reads, `.env` files, or any code path that handles secret values. Declare Pass/N/A if not applicable.)
+
+- Do any changed scripts or modules read from env vars or GitHub Secrets?
+- If yes: do secret variable values flow — directly or via argument — into any of the following: `print()` calls; `logging` calls; f-strings that reference secret variables; exception messages; CI step summaries; helper function arguments used near logging; CI artifact files such as `release-readiness.json`, HTML reports, or markdown summaries; or as values in tuples, lists, or dictionaries that later feed any logging or print output, even when the final printed value appears to be only a non-secret key or label?
+- Is the taint chain broken at the variable level — not delegated to a helper function? A helper function that transforms a secret value is not a CodeQL sanitizer; CodeQL follows the argument, not the return value.
+- Are log and print statements using hardcoded status strings (`"configured"`, `"set"`, `"not set"`) derived from truthiness checks (`if secret_var:`) rather than from the secret variable's value?
+- Reference: `failure_evidence.md — CodeQL: secret-taint in logging` for the specific patterns CodeQL will flag.
+
+### 11. Bounded adjacent-risk scan
+
+Scan for risks in files or behaviors adjacent to the slice's changes that are not covered by the main review dimensions above.
+
+- Return at most 3 findings.
+- For each finding, state: description, classification, and rationale.
+- Classification: **Blocker** (must be fixed before commit; directly affects current PR correctness or safety), **Recommended before commit** (reduces CI surprise risk; should be addressed but does not block), **Follow-up slice** (real risk but outside current slice scope; document and defer).
+- Do not expand review scope or implementation scope beyond what is needed to resolve Blockers.
+- Blocker findings belong in "Recommended fixes before commit." Follow-up slice findings belong in "Follow-up slice items from adjacent-risk scan."
+
 ---
 
 ## Output format (Mode B)
@@ -171,9 +228,11 @@ Return the following sections:
 
 **Verdict**: Approve / Approve with fixes / Request changes
 
-**Dimension-by-dimension findings**: Pass or Fail with specific observations for each of the 9 dimensions above.
+**Dimension-by-dimension findings**: Pass or Fail with specific observations for each of the 11 dimensions above. Dimension 10 (Security and secret hygiene) and Dimension 11 (Bounded adjacent-risk scan) follow the same Pass/Fail/N/A format as dimensions 1–9.
 
-**Recommended fixes before commit**: Ranked by severity (Medium / Low). For each fix, include the file, what to change, and why.
+**Recommended fixes before commit**: Ranked by severity (High / Medium / Low). For each fix, include the file, what to change, and why. Blocker findings from Dimension 11 belong here.
+
+**Follow-up slice items from adjacent-risk scan**: For each Follow-up slice finding from Dimension 11: description — rationale — suggested slice scope. If none: "None identified." These items do not affect the verdict and do not block commit.
 
 **Blueprint assessment**: One short paragraph on whether this slice moves the repo meaningfully toward the production-style QA architecture blueprint.
 

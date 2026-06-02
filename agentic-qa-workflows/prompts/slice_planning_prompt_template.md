@@ -24,13 +24,13 @@ Expected outcomes:
 [EXPECTED_OUTCOMES — numbered list of what this slice should produce. Include new files, changed files, new behaviors, and CI changes. Be specific enough that the AI can verify completeness.]
 
 Questions to answer before editing:
-[QUESTIONS — numbered list of decisions or trade-offs the AI should resolve in the plan output, before proposing any file changes. Include questions about approach, scope, alternative implementations, and deferral candidates.]
+[QUESTIONS — numbered list of decisions or trade-offs the AI should resolve in the plan output, before proposing any file changes. Include questions about approach, scope, alternative implementations, and deferral candidates. Include: which proposed validation checks are CI-only and cannot be reproduced locally (CodeQL, pip-audit, Trivy require CI)? Which validation checks rely on a fresh Docker build?]
 
 Constraints — do not change:
 [DO_NOT_CHANGE_LIST — list of files, behaviors, systems, or patterns that must not be modified in this slice. Be explicit. If a file is not listed here but should not be changed, add it.]
 
 Validation required after implementation:
-[VALIDATION_COMMANDS — commands or checks that must pass before the slice is considered done. Include Docker commands if the repo uses Docker-first validation, lint/type-check commands, and any manual verification steps.]
+[VALIDATION_COMMANDS — commands or checks that must pass before the slice is considered done. Include Docker commands if the repo uses Docker-first validation, lint/type-check commands, and any manual verification steps. Validation commands must cover every changed file. If any changed file is copied into the Docker image via `COPY . .`, specify a fresh `docker build` step. Note which checks are CI-only and cannot be run locally: CodeQL, pip-audit, and Trivy require CI and cannot be reproduced by local validation or pre-commit.]
 
 Trade-offs and consulting value to address in the plan:
 - What alternatives were considered for the proposed approach?

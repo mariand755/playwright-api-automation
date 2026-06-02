@@ -24,7 +24,7 @@ Every non-trivial implementation slice follows a four-step process. Use the corr
 | File | Purpose | When to use |
 |---|---|---|
 | `slice_planning_prompt_template.md` | Fill-in template for Step 1: proposing an implementation plan | At the start of any non-trivial slice |
-| `qa_architect_slice_review_prompt.md` | QA Architect / Solution Architect dual-mode reviewer (Mode A and Mode B) | Step 2 (Mode A) and Step 4 (Mode B) |
+| `qa_architect_slice_review_prompt.md` | QA Architect / Solution Architect dual-mode reviewer (Mode A and Mode B) (v2 — 2026-06-02: added validation integrity, security/secret hygiene, and bounded adjacent-risk scan to both modes) | Step 2 (Mode A) and Step 4 (Mode B) |
 | `governance_blueprint_prompt.md` | Governance enforcement review: naming, markers, POM/API client boundaries, credentials | When reviewing repo governance compliance informally |
 | `governance_compliance_audit_prompt.md` | Structured compliance audit across all governance files | When running a formal governance audit with an output report |
 | `first_run_prompt.md` | Initial architectural overview: current architecture, top quality risks, improvement recommendations | First session on a new repo, or after a long gap between sessions |
@@ -51,4 +51,4 @@ GitHub automatically populates `.github/pull_request_template.md` when a PR is o
 - When a new prompt file is added, add a row to the table above.
 - When the four-step slice workflow changes (e.g., a new review mode is added), update the workflow table.
 - Prompt files should not be modified mid-slice — use the version that was current when the slice started.
-- When a prompt is substantially revised, note the revision in the prompt file itself and update this README if the usage instructions change.
+- When a prompt is substantially revised, add a revision note `(vN — YYYY-MM-DD: summary)` to the prompt's row in the table above, and update this README if the usage instructions change.

@@ -34,6 +34,8 @@ Verify against `agentic-qa-workflows/governance/quality_gates.md`:
 - Coverage floor is met for any new endpoint or flow
 - Review `agentic-qa-workflows/governance/failure_evidence.md` and confirm failure artifacts or logs are captured when applicable.
 - If this slice introduced an architectural decision not already captured in `agentic-qa-workflows/governance/architecture_decision_log.md`, add an ADR entry before merging.
+- If the slice touches env vars, credentials, GitHub Secrets, or scripts that read `os.environ`: review `failure_evidence.md — CodeQL: secret-taint in logging` before committing. Confirm the taint chain is broken at the variable level — a helper function that transforms a secret value is not a sanitizer.
+- A clean pre-commit run does not constitute CI validation. Confirm Docker CI validation ran and Docker was rebuilt if Python files, `Dockerfile`, or `requirements.txt` changed.
 
 ## Session Constraints
 

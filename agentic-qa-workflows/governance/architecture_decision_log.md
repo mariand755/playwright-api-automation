@@ -22,6 +22,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-010](#adr-010-branch-protection-operates-on-job-names-not-step-names) | Branch protection operates on job names, not step names | Accepted | 2026-06-01 |
 | [ADR-011](#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent) | Notification delivery defaults to dry-run when secrets are absent | Accepted | 2026-06-01 |
 | [ADR-012](#adr-012-pre-commit-as-advisory-local-guardrail-docker-ci-as-source-of-truth) | Pre-commit as advisory local guardrail; Docker CI as source of truth | Accepted | 2026-06-02 |
+| [ADR-013](#adr-013-bounded-adjacent-risk-scan-in-qa-reviewer-prompts) | Bounded adjacent-risk scan in QA reviewer prompts | Accepted | 2026-06-02 |
 
 ---
 
@@ -586,3 +587,99 @@ The `language: system` decision is the most architecturally significant choice i
 The advisory positioning is correct for a consulting blueprint repo. Mandatory pre-commit creates contributor friction that is difficult to enforce without a CI-level enforcement step. For a client engagement, the correct recommendation is: start with advisory pre-commit for immediate feedback value and elevate to mandatory only when the team has standardized the local venv workflow.
 
 The explicit documentation of what pre-commit does **not** cover — CodeQL, pip-audit, Trivy — is a consulting best practice that most teams omit. A developer who sees all green in pre-commit and concludes security analysis is satisfied is a governance failure. Both the config file header and the `quality_gates.md` entry address this directly at the point where it matters.
+
+---
+
+## ADR-013: Bounded adjacent-risk scan in QA reviewer prompts
+
+**Status:** Accepted
+**Date:** 2026-06-02
+
+### Context
+
+Prior Mode A and Mode B reviews using `qa_architect_slice_review_prompt.md` had no structured checks for: validation freshness (stale Docker image), changed-files vs. validation-coverage gap, CodeQL-style secret-taint patterns, or CI-only check awareness. PR #22 (notification delivery dry-run) demonstrated that each of these gaps can produce a CI failure that a reviewer would not have caught under the prior prompt:
+
+- Ruff format and lint checks ran against a stale Docker image, not the current working tree
+- A CodeQL taint path through a helper function argument was not flagged during review — the taint follows the function argument, not the return value
+- No reviewer check asked whether pre-commit passing constituted full CI validation
+
+The risk of adding these checks without a scope cap is unbounded review scope expansion, where reviewers enumerate adjacent findings indefinitely, making reviews non-repeatable and prompts non-reusable across projects.
+
+This ADR is a companion to ADR-012. ADR-012 governs pre-commit as a local execution tool — which hooks to include, `language: system` vs. remote pins, why CodeQL/pip-audit/Trivy are excluded. ADR-013 governs reviewer behavior in Mode A and Mode B — what reviewers must check and how adjacent findings are classified and capped.
+
+### Decision
+
+Add bounded adjacent-risk scan and four specific named checks to `qa_architect_slice_review_prompt.md`:
+
+- **Mode A additions:** `Validation integrity and coverage`, `Security and secret handling`, `Bounded adjacent-risk scan` subsections inside the plan-review evaluation criteria; corresponding output format sections.
+- **Mode B additions:** Expand Dimension 6 with Docker rebuild and volume-mount validation checks; add Dimension 10 (Security and secret hygiene) and Dimension 11 (Bounded adjacent-risk scan); add `Follow-up slice items` output section.
+
+**Bounded adjacent-risk scan cap:** Maximum 3 findings per review pass. Each finding classified as:
+
+- **Blocker** — must be resolved before implementation begins (Mode A) or before commit (Mode B); directly affects current slice correctness or safety
+- **Recommended before commit** — reduces CI surprise risk; should be addressed but does not block
+- **Follow-up slice** — real risk outside current slice scope; document and defer
+
+Implementation scope must not expand unless the finding is a Blocker that directly affects current slice correctness.
+
+**Dimension 10 (Security and secret hygiene)** covers the full set of CodeQL taint sinks: `print()`, `logging`, f-strings referencing secret variables, exception messages, CI step summaries, helper function arguments used near logging, CI artifact files, and tuples/lists/dictionaries that later feed any logging or print output. It applies when a slice touches env vars, credentials, GitHub Secrets, `os.environ` reads, `.env` files, or secret-handling code paths. Reviewers declare N/A when not applicable.
+
+### Why the max-3 cap
+
+Three findings is the standard consulting "top-N" triage framing. It forces reviewers to rank rather than enumerate. More than three adjacent findings creates a secondary review loop that defeats the purpose of a bounded scan — reviewers begin chasing adjacent risks to adjacent findings. The cap makes review behavior predictable and the prompt reusable across project engagements.
+
+### Why secret-taint gets a dedicated Mode B dimension rather than being only an adjacent-risk finding
+
+A secret-taint violation in changed code is a direct correctness and safety finding within the slice scope — not an adjacent risk. Placing it in the bounded adjacent-risk scan would allow it to be deprioritized if two other findings consumed the cap first. Dimension 10 ensures it is a first-class required check on every review where the slice touches secret-handling code.
+
+### Why CodeQL, pip-audit, and Trivy remain CI-only from the reviewer perspective
+
+A reviewer can recognize patterns that CodeQL would flag — using `failure_evidence.md` as a reference — but cannot substitute for the full CodeQL analysis:
+
+- **CodeQL** performs interprocedural taint analysis across the full codebase call graph. Reviewer reasoning is intra-procedural; it cannot trace taint through multiple call boundaries the way CodeQL can. PR #22 CodeQL findings required exactly this level of analysis.
+- **pip-audit** queries the OSV advisory database live. A reviewer cannot replicate a CVE check without running the tool against a current `requirements.txt`.
+- **Trivy** scans built Docker image layers. The image must exist; there is no static equivalent.
+
+The reviewer's role for CI-only checks is to acknowledge that they will run in CI and to confirm the plan does not assume local validation is sufficient.
+
+### Why Mode C (security-focused review) is deferred
+
+A third review mode would change the four-step slice workflow and add coordination overhead for every slice that touches security-relevant code. The bounded Dimension 10 check achieves equivalent coverage for the currently known CodeQL taint patterns at zero workflow overhead. Activate Mode C if secret/credential handling becomes a recurring major slice category requiring a full security review pass separate from functional review.
+
+### Alternatives considered
+
+- **No adjacent-risk scan** — rejected. PR #22 demonstrated three concrete review gaps that would recur in any similar slice without a structured check.
+- **Unlimited adjacent-risk findings** — rejected. Unbounded enumeration makes review duration unpredictable and encourages scope expansion that the four-step slice workflow is designed to prevent.
+- **Fold secret-taint into the adjacent-risk scan** — rejected. A Blocker-class security finding in changed code must not be deprioritized by the 3-finding cap. Dedicated dimension prevents this.
+- **Mode C (security-only review)** — rejected at this stage. See rationale above.
+
+### Consequences
+
+Mode A reviewers now check: whether validation commands cover all changed files, whether a fresh Docker build is specified when image contents change, whether volume-mounted validation is distinguished from full image validation, whether CI-only checks are acknowledged, whether secret-taint patterns in planned code are flagged, and whether adjacent risks are surfaced with a cap and classification.
+
+Mode B reviewers now check all of the above against the actual implementation, plus 11 named dimensions with Pass/Fail/N/A verdicts.
+
+`qa_architect_slice_review_prompt.md` v2 — revision noted in `prompts/README.md`.
+
+### Activation conditions
+
+- **Increase the cap** if 3 findings consistently proves too restrictive and important findings are being deferred unnecessarily. This is a judgment call — increase only if there is a documented pattern of cap-limited reviews missing critical findings.
+- **Add Mode C** if secret/credential handling becomes a recurring major slice category requiring a dedicated security review pass.
+- **Extend Dimension 10 patterns** as new CodeQL findings are documented in `failure_evidence.md` — the cross-reference in the prompt ensures the extension path is clear.
+
+### Related PRs / Docs
+
+- PR #23 (`feature/pre-commit-developer-guardrails`) — pre-commit advisory guardrail (ADR-012); stale Docker image root cause (PR #22)
+- `agentic-qa-workflows/prompts/qa_architect_slice_review_prompt.md` — v2; the primary artifact of this ADR
+- `agentic-qa-workflows/governance/failure_evidence.md` — CodeQL: secret-taint in logging section; cross-referenced by Dimension 10
+- `agentic-qa-workflows/governance/quality_gates.md` — Local Developer Guardrails section; pre-commit CI-only check exclusions
+- `agentic-qa-workflows/governance/agentic_workflow_rules.md` — Before Submitting a PR section; secret-taint trigger and pre-commit non-substitution rule
+- ADR-012 (pre-commit as advisory local guardrail; Docker CI as source of truth)
+
+### Trade-offs and consulting value
+
+The bounded adjacent-risk scan with a max-3 cap and three-class classification is the established consulting code review triage pattern. It forces reviewers to rank rather than enumerate, keeps reviews repeatable, and makes the prompt reusable across client engagements.
+
+Adding specific named dimensions (Dimension 10: security and secret hygiene; Dimension 11: adjacent-risk scan) rather than folding them into the general "Risks" dimension makes them first-class review criteria. The existing Dimension 8 "Risks and recommended fixes" is too broad to reliably prompt a reviewer to check CodeQL-style taint patterns for a specific list of sinks.
+
+For a consulting client, the updated prompt is a tangible differentiator: most client review checklists do not distinguish volume-mounted single-file testing from full image validation, do not have a structured CodeQL-style taint check, and have no bounded mechanism for surfacing adjacent risks without opening unlimited scope. A reviewer following this prompt would have flagged both the stale Docker image scenario and the helper-function taint chain from PR #22 before CI ran.

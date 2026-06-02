@@ -28,15 +28,15 @@ Pattern: `TC-<AREA>-<NNN>`, where `AREA` is `UI` or `API`.
 Use pytest markers such as `smoke`, `negative`, `regression`, or future markers such as `api_contract` to classify execution scope.
 All markers must be declared in `pytest.ini` before use.
 
-**Current state:** 
-- TC-ID comments are human-readable traceability only. 
-- They are not parsed by pytest, do not appear in reports, and cannot be used for targeted execution. 
+**Current state:**
+- TC-ID comments are human-readable traceability only.
+- They are not parsed by pytest, do not appear in reports, and cannot be used for targeted execution.
 - Their value is review-time and audit-time cross-referencing.
 
-**Future state (not yet implemented):** 
+**Future state (not yet implemented):**
 - TC-ID tooling may later suggest the next available `TC-UI` / `TC-API` ID, validate uniqueness, and optionally add TC-ID metadata so IDs can surface in the selected reporting layer (such as Allure or CI test reports) and support future targeted execution by ID.
 
-- Do not add temporary or placeholder TC-ID metadata. 
+- Do not add temporary or placeholder TC-ID metadata.
 - Keep TC-ID comments as the current standard until reporting and selection behavior are intentionally designed and implemented.
 
 ## DRY Rules

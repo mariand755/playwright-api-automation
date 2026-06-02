@@ -98,6 +98,58 @@ After editing any file that is copied into the Docker image (`COPY . .` in the D
 
    Structural config: `explicit_package_bases = true` resolves module paths relative to the project root for directories without standard `__init__.py` package files.
 
+### Local Developer Guardrails
+
+Pre-commit provides optional fast feedback before push. It is not a replacement for Docker CI and does not constitute a quality gate — Docker CI remains the enforcement layer for all required checks.
+
+| Property | Value |
+| --- | --- |
+| Advisory | Yes — `--no-verify` bypasses all hooks |
+| Docker CI replacement | No — Docker CI is the source of truth |
+| Required for contributors | No — install is per developer machine |
+
+Install and register once per developer machine:
+
+```bash
+pip install pre-commit   # or: brew install pre-commit
+pre-commit install       # registers the git hook in .git/hooks/pre-commit
+```
+
+Run manually against all files:
+
+```bash
+pre-commit run --all-files
+```
+
+#### Hooks included
+
+| Hook | Source | Scope | Catches |
+| --- | --- | --- | --- |
+| `trailing-whitespace` | pre-commit-hooks | All files | Trailing whitespace |
+| `end-of-file-fixer` | pre-commit-hooks | All files | Missing end-of-file newline |
+| `check-yaml` | pre-commit-hooks | `.yml`/`.yaml` | Malformed YAML syntax |
+| `check-json` | pre-commit-hooks | `.json` | Malformed JSON |
+| `check-toml` | pre-commit-hooks | `.toml` | Malformed TOML — protects `pyproject.toml` config |
+| `debug-statements` | pre-commit-hooks | `.py` | Committed `pdb`/`breakpoint()` debug calls |
+| `ruff format` | local/system | `.py` | Formatting violations (auto-fixes) |
+| `ruff check --fix` | local/system | `.py` | Lint violations (auto-fixes where possible) |
+| `mypy` | local/system | `utils/`, `pages/`, `scripts/` | Type errors — same scope as CI |
+
+#### What pre-commit does NOT cover
+
+Pre-commit does **not** run CodeQL, pip-audit, Trivy, or Docker test execution. These remain CI-only gates:
+
+- **CodeQL** — interprocedural taint analysis; requires the full CodeQL engine and codebase call graph. Cannot be replicated by a pre-commit hook. PR #22 CodeQL findings (secret-taint logging paths) required exactly this level of analysis.
+- **pip-audit** — Python dependency vulnerability scan against the OSV advisory database.
+- **Trivy** — container image vulnerability scan against the built Docker image layers.
+- **Docker test execution** — pytest inside Docker; the authoritative test result.
+
+A clean pre-commit run does not imply CI will pass. Always validate with a fresh Docker build before pushing a PR.
+
+#### Tool-version coupling
+
+Ruff and mypy run via `language: system` — they invoke tools from your active Python environment, not from a pre-commit-managed isolated environment. Activate your local venv (installed from `requirements.txt`) before committing to match the versions used in Docker CI. See [ADR-012](architecture_decision_log.md#adr-012-pre-commit-as-advisory-local-guardrail-docker-ci-as-source-of-truth) for the rationale.
+
 ### Future-state checks
 
 - Expand mypy strictness: add `disallow_untyped_defs = true` per-module as annotation coverage grows.

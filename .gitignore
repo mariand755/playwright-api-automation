@@ -29,6 +29,7 @@ env/
 .pytest_cache/
 .cache/
 .hypothesis/
+.mypy_cache/
 
 # Playwright
 test-results/
@@ -64,4 +65,3 @@ artifacts/release-readiness.md
 
 # Private local notes
 .private/
-

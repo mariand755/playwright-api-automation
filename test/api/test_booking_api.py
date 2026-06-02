@@ -7,6 +7,7 @@ from utils.helpers import get_schema
 @pytest.mark.api
 @pytest.mark.smoke
 @pytest.mark.api_contract
+@pytest.mark.tc_id("TC-API-001")
 def test_get_all_bookings(booking_api):
     response = booking_api.get_all_bookings()
 
@@ -27,6 +28,7 @@ def test_get_all_bookings(booking_api):
 @pytest.mark.api
 @pytest.mark.regression
 @pytest.mark.api_contract
+@pytest.mark.tc_id("TC-API-002")
 def test_get_booking_by_id(booking_api, created_booking):
     booking_id = created_booking["bookingid"]
     response = booking_api.get_booking_by_id(booking_id)
@@ -49,6 +51,7 @@ def test_get_booking_by_id(booking_api, created_booking):
 @pytest.mark.api
 @pytest.mark.negative
 @pytest.mark.regression
+@pytest.mark.tc_id("TC-API-003")
 def test_invalid_booking(booking_api):
     invalid_id = 999999999
 
@@ -65,6 +68,7 @@ def test_invalid_booking(booking_api):
 @pytest.mark.api
 @pytest.mark.smoke
 @pytest.mark.api_contract
+@pytest.mark.tc_id("TC-API-004")
 def test_create_booking(booking_api, auth_token, booking_payload_factory, request):
     payload = booking_payload_factory(
         firstname="John",
@@ -107,6 +111,7 @@ def test_create_booking(booking_api, auth_token, booking_payload_factory, reques
 # TC-API-005
 @pytest.mark.api
 @pytest.mark.smoke
+@pytest.mark.tc_id("TC-API-005")
 def test_delete_booking(booking_api, auth_token, booking_payload_factory):
     payload = booking_payload_factory(
         firstname="ToDelete",

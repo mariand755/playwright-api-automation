@@ -184,3 +184,10 @@ def pytest_runtest_makereport(item, call):
 
             page.screenshot(path=str(screenshot_path), full_page=True)
             html_path.write_text(page.content(), encoding="utf-8")
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        marker = item.get_closest_marker("tc_id")
+        if marker and marker.args:
+            item.user_properties.append(("tc_id", str(marker.args[0])))

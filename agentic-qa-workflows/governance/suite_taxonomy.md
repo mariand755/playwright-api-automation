@@ -65,6 +65,20 @@ Marks tests that validate API response schema against a declared JSON schema con
 - Run trigger: every commit alongside the API area suite; targeted execution via `pytest -m api_contract`.
 - Current tests: `test_get_booking_by_id` (TC-API-002), `test_create_booking` (TC-API-004)
 
+## Traceability Markers
+
+Traceability markers are a third category, distinct from area markers and execution-scope markers. They are not used for test selection or targeted execution — their purpose is to carry structured metadata that can be consumed by downstream tooling (JUnit XML parsers, test-management systems, CI dashboards).
+
+### `tc_id`
+
+Marks a test with its unique test case ID for machine-readable traceability.
+
+- **Purpose:** writes `<property name="tc_id" value="TC-..."/>` into the JUnit XML `<properties>` block for each `<testcase>` element, via the `pytest_collection_modifyitems` hook in `conftest.py`.
+- **Scope:** every test that has a TC-ID. Apply to all tests as the last decorator in the stack.
+- **Run trigger:** not used for test selection (`pytest -m tc_id` is not a supported command). Applied at collection time only.
+- **Behavior on absence:** silent. A test without a `tc_id` marker produces no property in JUnit XML. Collection does not fail or warn.
+- **Future use:** collection enforcement (fail/warn if missing), CI summary display, test-management integration (Xray, TestRail, Zephyr).
+
 ## Future / Target Markers
 
 No target-only markers are currently defined. All active markers are declared in `pytest.ini`.

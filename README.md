@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml)
 
-A Python test automation framework that covers both UI testing (via Playwright) and REST API testing (via Requests), targeting two separate applications. The framework is designed to be simple, maintainable, and reproducible across local and Docker environments.  
+A Python test automation framework that covers both UI testing (via Playwright) and REST API testing (via Requests), targeting two separate applications. The framework is designed to be simple, maintainable, and reproducible across local and Docker environments.
 
 
 ## Target Applications
@@ -129,6 +129,18 @@ source venv/bin/activate
 pip install -r requirements.txt
 playwright install
 ```
+
+## Optional: Pre-commit Guardrails
+
+Pre-commit hooks provide optional fast feedback before push — catching formatting issues, lint violations, and type errors in seconds without a Docker build. This is advisory; Docker CI remains the gate.
+
+```bash
+pip install pre-commit   # or: brew install pre-commit
+pre-commit install       # registers the hook — runs automatically on git commit
+pre-commit run --all-files  # optional: run on all files immediately
+```
+
+See [agentic-qa-workflows/governance/quality_gates.md](agentic-qa-workflows/governance/quality_gates.md) for the full hook list and what pre-commit does not cover (CodeQL, pip-audit, Trivy).
 
 ## Run Tests (Local — optional fast feedback)
 Run all tests:

@@ -1,0 +1,61 @@
+# Pre-commit configuration — local developer guardrails
+#
+# These hooks provide optional fast feedback before push. They are ADVISORY.
+# Docker CI (ci.yml) is the source of truth for all quality gates.
+# A commit that bypasses pre-commit will still be validated by CI.
+#
+# Pre-commit does NOT run CodeQL, pip-audit, or Trivy.
+# Security analysis and dependency/container scanning require CI.
+#
+# Ruff and mypy invoke tools from your active Python environment (requirements.txt).
+# Activate your local venv before committing to match Docker CI tool versions.
+#
+# If a hook auto-fixes files (ruff format, ruff lint), stage the changes
+# with `git add` and re-commit.
+#
+# Setup (one-time per developer machine):
+#   pip install pre-commit        # or: brew install pre-commit
+#   pre-commit install            # registers the git hook in .git/hooks/pre-commit
+#   pre-commit run --all-files    # optional: run on all files immediately
+
+exclude: '^(venv|\.venv|artifacts)/'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: debug-statements
+
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: Ruff format
+        language: system
+        entry: ruff format
+        types: [python]
+
+      - id: ruff-lint
+        name: Ruff lint
+        language: system
+        entry: ruff check --fix
+        types: [python]
+
+      - id: mypy
+        name: mypy type check
+        language: system
+        entry: mypy utils/ pages/ scripts/
+        pass_filenames: false
+        types: [python]
+
+  # actionlint — GitHub Actions workflow linter (deferred)
+  # Requires a Go binary: https://github.com/rhysd/actionlint#installation
+  # Uncomment and set the rev when ready to enable:
+  # - repo: https://github.com/rhysd/actionlint
+  #   rev: v1.7.7
+  #   hooks:
+  #     - id: actionlint

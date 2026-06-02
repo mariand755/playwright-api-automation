@@ -21,6 +21,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-009](#adr-009-api-only-release-gate-multi-source-deferred) | API-only release gate, multi-source deferred | Accepted | 2026-06-01 |
 | [ADR-010](#adr-010-branch-protection-operates-on-job-names-not-step-names) | Branch protection operates on job names, not step names | Accepted | 2026-06-01 |
 | [ADR-011](#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent) | Notification delivery defaults to dry-run when secrets are absent | Accepted | 2026-06-01 |
+| [ADR-012](#adr-012-pre-commit-as-advisory-local-guardrail-docker-ci-as-source-of-truth) | Pre-commit as advisory local guardrail; Docker CI as source of truth | Accepted | 2026-06-02 |
 
 ---
 
@@ -484,3 +485,104 @@ No new CI job is added, so branch protection required checks are unchanged (see 
 Dry-run default makes the feature safe to ship in any environment without pre-configured credentials. Trade-off: the feature appears fully wired in CI but sends nothing until secrets are provisioned. For a consulting client, this is the correct delivery order: the consulting team ships complete notification infrastructure; the client's security team provisions GitHub Secrets independently, on their schedule, without touching the codebase. The code never changes again for live delivery to begin.
 
 stdlib-only implementation means zero dependency management burden. The Slack incoming webhook JSON format is stable across Slack plan tiers. The SMTP interface is RFC-standard. Neither will change unpredictably, and neither requires account registration or token management to use in dry-run mode.
+
+---
+
+## ADR-012: Pre-commit as advisory local guardrail; Docker CI as source of truth
+
+**Status:** Accepted
+**Date:** 2026-06-02
+
+### Context
+
+PR #22 (notification delivery dry-run) exposed a local-validation gap: Ruff format and lint checks ran against a stale Docker image (built before the code change), not the current working tree. An 89-character line in `scripts/notify.py` passed local validation and was caught by CI only after a fresh Docker build. A parallel stale-image gap exists for mypy. `quality_gates.md` now documents the fresh Docker rebuild rule, and `failure_evidence.md` documents the CI gate failure pattern.
+
+Local guardrails that run before `git commit` — before any Docker build, before any push — catch this class of error in seconds rather than consuming a full CI run. Pre-commit is the standard mechanism for this in Python projects.
+
+### Decision
+
+Add `.pre-commit-config.yaml` with hooks for `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-json`, `check-toml`, `debug-statements`, Ruff format (auto-fix), Ruff lint (auto-fix where possible), and mypy (`utils/`, `pages/`, `scripts/`).
+
+Pre-commit is **advisory**, not mandatory:
+
+- Hooks can be bypassed with `git commit --no-verify`.
+- `pre-commit` is not added to `requirements.txt` — it is a developer ergonomics tool, not a project test dependency.
+- Installation is per developer machine. Contributors who do not install pre-commit are still validated by Docker CI.
+
+Docker CI remains the authoritative source of truth. Pre-commit is the shift-left speed layer: seconds of local feedback before a multi-minute Docker build.
+
+### Why `language: system` instead of remote `repo:` + `rev:` pins
+
+The standard pre-commit pattern for third-party tools pins an explicit version:
+
+```yaml
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.9.0
+  hooks:
+    - id: ruff
+```
+
+This creates a pre-commit-managed isolated environment with the pinned version. The problem: a `rev:` pin in `.pre-commit-config.yaml` is a second version surface for ruff and mypy, separate from `requirements.txt`. If the two diverge — ruff 0.8.x in `requirements.txt` but `rev: v0.9.0` in the pre-commit config — a passing pre-commit run no longer predicts a passing Docker CI run. This is the "works locally, fails in CI" failure mode that this slice was created to prevent.
+
+Using `language: system` ties the hook to the developer's active Python environment. If the developer activates the local venv (installed from `requirements.txt`), the tool versions are identical to those installed inside Docker. No separate pin is required and no pin can drift.
+
+The trade-off: if the developer runs `git commit` without a venv active and ruff/mypy are not in their global PATH, the hook fails with "command not found" (exit 127). This is a loud failure — the developer sees it immediately — not a silent pass. Docker CI still catches everything regardless.
+
+### Why `pre-commit` is not in `requirements.txt`
+
+`requirements.txt` defines the project's test execution dependencies — tools that are installed inside Docker and run during CI. `pre-commit` is a developer workflow tool that orchestrates git hooks on a local machine. It is not called during Docker builds, CI test runs, or any automated pipeline. Adding it to `requirements.txt` would install it inside the Docker image unnecessarily and conflate test infrastructure with developer ergonomics.
+
+The correct installation path is `pip install pre-commit` (or `brew install pre-commit`) as a one-time developer setup step, documented in `README.md` and `quality_gates.md`.
+
+### Why CodeQL, pip-audit, and Trivy remain CI-only
+
+These tools cannot be run meaningfully as pre-commit hooks:
+
+- **CodeQL** performs interprocedural taint analysis across the full codebase call graph. It cannot run on staged files without the full CodeQL engine, the GitHub Actions environment, and 1–3 minutes of analysis time. PR #22 CodeQL findings (secret-taint logging paths) required exactly this level of analysis.
+- **pip-audit** scans `requirements.txt` dependencies against the OSV advisory database. Running it on every commit adds network I/O for zero benefit — `requirements.txt` does not change on every commit.
+- **Trivy** scans the built Docker image. The image must be built first. Running `docker build` inside a pre-commit hook would take 2–5 minutes and eliminate the fast-feedback value of pre-commit entirely.
+
+A clean pre-commit run does not imply CI will pass. Security analysis and supply-chain scanning remain CI-only gates.
+
+### Why actionlint is deferred
+
+actionlint validates GitHub Actions workflow YAML semantics — step names, expression syntax, secret references, conditional logic. It would add value for workflow files. The blocker: actionlint is a Go binary that requires `brew install actionlint` on macOS or a binary download/`go install` on Linux. It cannot be installed via pip or pre-commit's Python package management. Adding it to `.pre-commit-config.yaml` with `language: golang` requires all contributors to have Go tooling installed.
+
+At the current repo scale (two workflow files, both stable and passing CI), the installation overhead does not justify the coverage gain. A commented-out block in `.pre-commit-config.yaml` documents the activation path without requiring installation now.
+
+### Alternatives considered
+
+- **Remote `repo:` + `rev:` pins for ruff and mypy** — rejected. Creates a second version surface that silently drifts from `requirements.txt`. See the `language: system` rationale above.
+- **Dockerized pre-commit hooks (`entry: docker run ... ruff format`)** — rejected. Running `docker build && docker run` per commit takes 2–5 minutes and eliminates the fast-feedback value. Docker CI is already the Docker validation path.
+- **Mandatory pre-commit (enforced via CI re-run)** — rejected. A CI step that re-runs pre-commit against the pushed commit adds CI time without adding coverage beyond the existing Ruff and mypy Docker steps. The correct enforcement point is the existing Docker CI gates.
+- **Skipping pre-commit entirely** — rejected. The PR #22 stale-Docker gap demonstrated that fast local feedback prevents trivial formatting violations from consuming CI cycles.
+
+### Consequences
+
+A developer who installs pre-commit and activates their local venv catches Ruff formatting and lint violations, mypy type errors, trailing whitespace, malformed YAML/JSON/TOML, and debug statement leaks before pushing. The PR #22 class of error — an 89-char line caught by CI after a fresh Docker build — is caught in seconds before any Docker build begins.
+
+Contributors who do not install pre-commit are unaffected. Docker CI continues to enforce all quality gates.
+
+### Activation conditions
+
+- **Make pre-commit mandatory:** Add a CI step that runs `pre-commit run --all-files` against the pushed commit. Activate when the team has standardized on a shared venv workflow, or when a client engagement requires mandatory local hook enforcement.
+- **Switch to remote `repo:` + `rev:` pins:** Activate if `requirements.txt` is replaced by a pinned lockfile (e.g., `ruff==0.9.0`). With fully pinned versions, a matching `rev:` in `.pre-commit-config.yaml` can be kept in sync via `pre-commit autoupdate`.
+- **Enable actionlint:** Activate when workflow count or complexity grows (more than five workflow files, custom action authoring, complex matrix strategies) and when the team can standardize on a Go binary installation method.
+- **Expand hook set:** Add `bandit` (security linting) if CodeQL advisory posture is tightened to blocking. Add `pyupgrade` if the minimum Python version increases beyond 3.9.
+
+### Related PRs / Docs
+
+- `.pre-commit-config.yaml` — hook configuration
+- `agentic-qa-workflows/governance/quality_gates.md` — Local Developer Guardrails section
+- `agentic-qa-workflows/governance/failure_evidence.md` — CI Gate / Workflow Failures section; stale Docker rebuild rule (root cause that motivated this slice)
+- ADR-001 (Docker-first execution as source of truth)
+- ADR-002 (Ruff as single format+lint tool)
+- ADR-003 (mypy with pragmatic initial strictness)
+
+### Trade-offs and consulting value
+
+The `language: system` decision is the most architecturally significant choice in this slice and the one most likely to require explanation to a client team. Most teams either (a) copy a pre-commit config with remote `repo:` + `rev:` entries and discover version drift months later when a tool upgrade in `requirements.txt` diverges from the pre-commit pin, or (b) skip pre-commit entirely and accept slow CI feedback loops. The `language: system` pattern — document the venv coupling, own version resolution through `requirements.txt`, avoid a second version surface — is the correct approach for a repo that already has a full Docker-first CI layer and `requirements.txt` as the version authority.
+
+The advisory positioning is correct for a consulting blueprint repo. Mandatory pre-commit creates contributor friction that is difficult to enforce without a CI-level enforcement step. For a client engagement, the correct recommendation is: start with advisory pre-commit for immediate feedback value and elevate to mandatory only when the team has standardized the local venv workflow.
+
+The explicit documentation of what pre-commit does **not** cover — CodeQL, pip-audit, Trivy — is a consulting best practice that most teams omit. A developer who sees all green in pre-commit and concludes security analysis is satisfied is a governance failure. Both the config file header and the `quality_gates.md` entry address this directly at the point where it matters.

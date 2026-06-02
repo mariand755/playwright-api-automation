@@ -83,6 +83,7 @@ Rules for scripts that read from secret env vars:
 - Do not rely on helper functions to sanitize secret values for logging — the taint follows the argument, not the return value.
 - Break the taint chain entirely: avoid referencing the secret variable in any expression that leads to a log sink.
 - Print hardcoded status strings (`"configured"`, `"set"`, `"not set"`) derived from truthiness checks (`if secret_var:`) rather than from the value itself.
+- Avoid placing secret variables as values in tuples, lists, or dictionaries that later feed log output, even when the printed value appears to be only a non-secret key or label.
 
 Example — flagged by CodeQL:
 

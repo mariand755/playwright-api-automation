@@ -38,6 +38,8 @@ Before a release build is tagged:
 
 Docker is the default execution environment for this repo. Local commands are optional fast-feedback only and should not be assumed. An AI agent must ask the repo owner before running local commands or relying on local virtualenv dependencies.
 
+After editing any file that is copied into the Docker image (`COPY . .` in the Dockerfile), rebuild the image before running Dockerized validation. `ruff`, `mypy`, and `pytest` validate the image contents, not the local working tree. A volume-mounted dry-run, such as `-v $(pwd)/file.py:/app/file.py`, tests that mounted file in isolation and does not prove the rebuilt image passes all checks.
+
 ### Current required checks
 
 1. **Docker build:**

@@ -174,16 +174,15 @@ def send_email(
     email_from = os.environ.get("EMAIL_FROM", "") or smtp_user
     recipients_str = os.environ.get("NOTIFY_RECIPIENTS", "")
 
-    required_missing = [
-        name
-        for name, val in [
-            ("SMTP_HOST", smtp_host),
-            ("SMTP_USER", smtp_user),
-            ("SMTP_PASSWORD", smtp_password),
-            ("NOTIFY_RECIPIENTS", recipients_str),
-        ]
-        if not val
-    ]
+    required_missing: list[str] = []
+    if not smtp_host:
+        required_missing.append("SMTP_HOST")
+    if not smtp_user:
+        required_missing.append("SMTP_USER")
+    if not smtp_password:
+        required_missing.append("SMTP_PASSWORD")
+    if not recipients_str:
+        required_missing.append("NOTIFY_RECIPIENTS")
 
     lines = (
         build_message_lines(data, run_url)
@@ -198,7 +197,9 @@ def send_email(
             missing_str = ", ".join(required_missing)
             print(f"[DRY RUN] Email: {missing_str} not set — skipping live delivery")
         recipients_status = "configured" if recipients_str else "not set"
-        print(f"[DRY RUN] Email would be sent to: NOTIFY_RECIPIENTS {recipients_status}")
+        print(
+            f"[DRY RUN] Email would be sent to: NOTIFY_RECIPIENTS {recipients_status}"
+        )
         print("[DRY RUN] Email body preview:")
         for line in lines:
             print(f"  {line}")

@@ -99,6 +99,19 @@ jobs:
             echo "> \`artifacts/release-readiness.md\` not found — gate script did not produce output." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Deliver release readiness notification
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          NOTIFY_RECIPIENTS: ${{ secrets.NOTIFY_RECIPIENTS }}
+          NOTIFY_DRY_RUN: ${{ vars.NOTIFY_DRY_RUN }}
+        run: python scripts/notify.py
+
       - name: Publish API test report
         if: always()
         # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene

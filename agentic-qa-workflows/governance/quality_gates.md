@@ -107,7 +107,7 @@ Docker is the default execution environment for this repo. Local commands are op
 The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks above across three jobs:
 
 | Job | Covers | Depends on |
-|---|---|---|
+| --- | --- | --- |
 | `Docker Test Suite` | Docker build, Ruff format, Ruff lint, mypy type check, pip-audit, Trivy, pytest collection | — |
 | `API Tests` | API test suite, CI summary, release readiness gate | `Docker Test Suite` |
 | `UI Tests` | UI test suite, CI summary, failure artifact upload | `Docker Test Suite` |
@@ -115,6 +115,34 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks 
 `API Tests` and `UI Tests` run in parallel after `Docker Test Suite` passes. All three jobs are required status checks for merge to `main`.
 
 For the full required checks configuration and post-merge update instructions, see [`agentic-qa-workflows/governance/security_and_branch_protection.md`](security_and_branch_protection.md).
+
+## Notification Delivery
+
+Notification is report delivery, not a release gate. It does not block CI and is not a required status check.
+
+The notification step (`Deliver release readiness notification`) runs in the `API Tests` job after the release gate summary is written. It reads `artifacts/release-readiness.json` and delivers the GO/NO_GO decision, test totals, gate failures, and warnings to Slack and email.
+
+| Property | Value |
+| --- | --- |
+| Triggers | `schedule` and `workflow_dispatch` only — not on push or pull request |
+| Blocking | Never — script always exits 0 |
+| Required check | No — no branch protection change required |
+| Implementation | `scripts/notify.py` — stdlib only, zero new dependencies |
+
+**Channels are independent.** Slack can send while email dry-runs, and vice versa. Each channel checks its own env vars separately.
+
+**Missing secrets trigger dry-run, not failure.** When a channel's required env vars are absent, the step logs a message preview and continues. CI does not fail.
+
+**Live credentials are added through GitHub Settings, not committed config.** To enable live delivery:
+
+- Slack: add `SLACK_WEBHOOK_URL` to GitHub Settings → Secrets → Actions
+- Email: add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_RECIPIENTS` (and optionally `EMAIL_FROM`)
+- Gmail example: `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_PASSWORD` must be a Gmail App Password (not the account password)
+
+**`NOTIFY_DRY_RUN`.** Set to `true` or `1` (as a GitHub repository variable or local env var) to force dry-run for all channels even when secrets are present. Useful for validating notification wiring without triggering live delivery.
+
+For the architectural decision record, see [`architecture_decision_log.md` — ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent).
+For the secrets policy, see [`security_and_branch_protection.md` — Notification secrets](security_and_branch_protection.md).
 
 ## GitHub-Native Security Checks
 

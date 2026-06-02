@@ -93,6 +93,7 @@ The `Analyze Python` job (`.github/workflows/codeql.yml`) runs CodeQL static sec
 | CodeQL findings | Advisory | No — Security tab | GitHub Security tab | PR / push / weekly |
 | Dependabot updates | Update visibility | No — creates PRs | Dependabot PRs | Weekly |
 | GitHub secret scanning | Platform protection | Yes (push protection enabled) | Git push rejection | Push |
+| Notification delivery | Advisory | No — exits 0 always | CI step output | schedule / workflow_dispatch |
 
 ---
 
@@ -126,6 +127,30 @@ This repo tests against public demo services. The following credentials are publ
 | SauceDemo | `locked_out_user` | `secret_sauce` | Public demo credential — safe to commit |
 
 These credentials are stored in `data/test_users.json` and loaded via fixtures. They do not trigger GitHub secret scanning because they are not registered secret patterns.
+
+---
+
+### Notification secrets
+
+The following secrets are required for live notification delivery from `scripts/notify.py`. Store all values in **GitHub Settings → Secrets → Actions**. Never commit these values to the repository. Rotate and remove from git history if accidentally committed.
+
+| Secret | Purpose |
+| --- | --- |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook URL — the URL itself is the credential |
+| `SMTP_HOST` | SMTP server hostname (e.g., `smtp.gmail.com` for Gmail) |
+| `SMTP_PORT` | SMTP port (optional; default `587` for STARTTLS, `465` for SMTP_SSL) |
+| `SMTP_USER` | SMTP login / sender email address |
+| `SMTP_PASSWORD` | SMTP password or app password — see Gmail note below |
+| `EMAIL_FROM` | Sender display address (optional; defaults to `SMTP_USER`) |
+| `NOTIFY_RECIPIENTS` | Comma-separated recipient email addresses |
+
+**Gmail configuration:** set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`. `SMTP_PASSWORD` must be a **Gmail App Password** (Google Account → Security → App passwords) — not the Google account password. App passwords are 16-character codes generated per application.
+
+**No branch protection change required.** The notification step runs inside the existing `API Tests` job (not a new CI job), so the four required checks remain unchanged.
+
+**`NOTIFY_DRY_RUN`.** Set to `true` or `1` as a GitHub repository variable (Settings → Variables → Actions, not Secrets) to force dry-run for all channels without removing the secrets. Useful for temporarily pausing live delivery without credential changes.
+
+For the notification delivery architecture and alternatives considered, see [`architecture_decision_log.md` — ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent).
 
 ---
 

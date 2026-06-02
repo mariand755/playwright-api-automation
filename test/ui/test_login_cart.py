@@ -8,6 +8,7 @@ from pages.cart_page import CartPage
 # TC-UI-001
 @pytest.mark.ui
 @pytest.mark.smoke
+@pytest.mark.tc_id("TC-UI-001")
 def test_user_can_login(page, base_url, credentials):
     login = LoginPage(page)
 
@@ -21,6 +22,7 @@ def test_user_can_login(page, base_url, credentials):
 @pytest.mark.ui
 @pytest.mark.negative
 @pytest.mark.regression
+@pytest.mark.tc_id("TC-UI-003")
 def test_locked_out_user_sees_error(page, base_url, locked_out_credentials):
     login = LoginPage(page)
 
@@ -33,6 +35,7 @@ def test_locked_out_user_sees_error(page, base_url, locked_out_credentials):
 # TC-UI-002
 @pytest.mark.ui
 @pytest.mark.regression
+@pytest.mark.tc_id("TC-UI-002")
 def test_user_can_login_and_add_to_cart(page, base_url, credentials):
     login = LoginPage(page)
     inventory = InventoryPage(page)

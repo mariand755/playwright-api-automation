@@ -8,6 +8,7 @@ from pages.checkout_page import CheckoutPage
 # TC-UI-004
 @pytest.mark.ui
 @pytest.mark.regression
+@pytest.mark.tc_id("TC-UI-004")
 def test_user_can_complete_checkout(page, base_url, credentials, checkout_data):
     login = LoginPage(page)
     inventory = InventoryPage(page)

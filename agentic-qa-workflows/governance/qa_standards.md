@@ -15,29 +15,31 @@
 - Verification methods may use `verify_` or `assert_`, but tests should still make the scenario intent clear.
 
 ### Test Case IDs
-Tag each test with a unique ID comment above the test’s pytest marker decorators.
+Tag each test with a unique ID comment above the test’s pytest marker decorators, and with a `@pytest.mark.tc_id(...)` marker as the last decorator.
 
 ```python
 # TC-UI-001
 @pytest.mark.ui
 @pytest.mark.smoke
+@pytest.mark.tc_id("TC-UI-001")
 def test_user_can_login(page, base_url, credentials):
 ```
 
 Pattern: `TC-<AREA>-<NNN>`, where `AREA` is `UI` or `API`.
-Use pytest markers such as `smoke`, `negative`, `regression`, or future markers such as `api_contract` to classify execution scope.
+Use pytest markers such as `smoke`, `negative`, `regression`, or `api_contract` to classify execution scope.
 All markers must be declared in `pytest.ini` before use.
 
 **Current state:**
-- TC-ID comments are human-readable traceability only.
-- They are not parsed by pytest, do not appear in reports, and cannot be used for targeted execution.
-- Their value is review-time and audit-time cross-referencing.
+- TC-ID comments (`# TC-UI-001`) provide human-readable traceability above the decorator stack.
+- `@pytest.mark.tc_id("TC-UI-001")` markers provide machine-readable traceability. Both forms are the current standard.
+- A `pytest_collection_modifyitems` hook in `conftest.py` reads each `tc_id` marker and appends `("tc_id", value)` to `item.user_properties`, which pytest writes as `<property name="tc_id" value="TC-UI-001"/>` inside a `<properties>` block in each `<testcase>` element of the JUnit XML.
+- TC-ID enforcement is not yet implemented. A test without a `tc_id` marker silently produces no property in the XML. Collection does not fail or warn.
 
 **Future state (not yet implemented):**
-- TC-ID tooling may later suggest the next available `TC-UI` / `TC-API` ID, validate uniqueness, and optionally add TC-ID metadata so IDs can surface in the selected reporting layer (such as Allure or CI test reports) and support future targeted execution by ID.
-
-- Do not add temporary or placeholder TC-ID metadata.
-- Keep TC-ID comments as the current standard until reporting and selection behavior are intentionally designed and implemented.
+- Collection enforcement: fail or warn when a test is missing a `tc_id` marker.
+- Optional TC-ID display in the CI step summary (`scripts/ci_summary.py`).
+- Targeted execution by TC-ID if test-management integration is added.
+- TC-ID uniqueness validation tooling (suggest next available `TC-UI` / `TC-API` ID, validate no duplicates).
 
 ## DRY Rules
 - All URLs and credentials come from fixtures — never inline strings in tests.

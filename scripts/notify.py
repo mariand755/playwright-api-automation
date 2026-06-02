@@ -41,11 +41,6 @@ MAX_ITEMS_IN_MESSAGE = 3
 NETWORK_TIMEOUT = 10  # seconds
 
 
-def _secret_status(value: str) -> str:
-    """Return 'set' or 'not set' without revealing the value."""
-    return "set" if value else "not set"
-
-
 def get_run_url() -> str:
     server = os.environ.get("GITHUB_SERVER_URL", "")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
@@ -142,10 +137,7 @@ def send_slack(
         if dry_run_forced and webhook_url:
             print("[DRY RUN] Slack: NOTIFY_DRY_RUN is set — skipping live delivery")
         else:
-            print(
-                f"[DRY RUN] Slack: SLACK_WEBHOOK_URL {_secret_status(webhook_url)}"
-                " — skipping live delivery"
-            )
+            print("[DRY RUN] Slack: SLACK_WEBHOOK_URL not set — skipping live delivery")
         print("[DRY RUN] Slack message preview:")
         for line in lines:
             print(f"  {line}")
@@ -205,10 +197,8 @@ def send_email(
         else:
             missing_str = ", ".join(required_missing)
             print(f"[DRY RUN] Email: {missing_str} not set — skipping live delivery")
-        recipients_display = (
-            recipients_str if recipients_str else "NOTIFY_RECIPIENTS not set"
-        )
-        print(f"[DRY RUN] Email would be sent to: {recipients_display}")
+        recipients_status = "configured" if recipients_str else "not set"
+        print(f"[DRY RUN] Email would be sent to: NOTIFY_RECIPIENTS {recipients_status}")
         print("[DRY RUN] Email body preview:")
         for line in lines:
             print(f"  {line}")

@@ -16,4 +16,5 @@ This folder contains the rules, standards, and architectural records that govern
 | `quality_gates.md` | PR gate, merge gate, release gate definitions; Docker-first quality checks; CI job structure | Before submitting a PR; before adding CI steps or jobs |
 | `agentic_workflow_rules.md` | How AI agents must behave in this repo; session constraints; required output format; ADR maintenance obligation | At the start of every AI-assisted session |
 | `security_and_branch_protection.md` | GitHub branch protection required checks; secret scanning guidance; demo credential policy; gate classification | When adding CI jobs; when configuring GitHub repository settings |
+| `notification_wiring.md` | Step-by-step guide for wiring live Slack and SMTP email notifications through GitHub Actions repository secrets | When enabling live notification delivery |
 | `architecture_decision_log.md` | ADR entries for major architectural decisions: what was decided, why, what alternatives were rejected, and what is deferred | When making tooling or architecture decisions; when onboarding to the repo |

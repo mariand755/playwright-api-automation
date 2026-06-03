@@ -197,6 +197,7 @@ The notification step (`Deliver release readiness notification`) runs in the `AP
 
 For the architectural decision record, see [`architecture_decision_log.md` — ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent).
 For the secrets policy, see [`security_and_branch_protection.md` — Notification secrets](security_and_branch_protection.md).
+For step-by-step live Slack and SMTP setup, see [`notification_wiring.md`](notification_wiring.md).
 
 ## GitHub-Native Security Checks
 

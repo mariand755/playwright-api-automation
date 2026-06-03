@@ -65,6 +65,24 @@ Marks tests that validate API response schema against a declared JSON schema con
 - Run trigger: every commit alongside the API area suite; targeted execution via `pytest -m api_contract`.
 - Current tests: `test_get_booking_by_id` (TC-API-002), `test_create_booking` (TC-API-004)
 
+### `read_only`
+
+Marks tests that are safe to run against production read-only environments.
+
+- **Purpose:** identifies tests that perform no writes, creates, updates, or deletes against external systems. These tests are the permitted subset for prod-read-only CI runs.
+- **Scope:** one positive read test per major feature area where a clean prod read is a meaningful health signal. Do not apply to tests that depend on synthetic setup or teardown data, error-state checks, or any test that calls a write API endpoint — even if the write is in a fixture.
+- **Run trigger:** only in the guarded prod-read-only CI steps inside `API Tests` and `UI Tests` jobs, and only when `TEST_SCOPE=full` AND `PROD_ENV_ACTIVE=true`. Not used for test selection on PRs or feature branch pushes.
+- **Current tests:** `test_get_all_bookings` (TC-API-001), `test_user_can_login` (TC-UI-001)
+- **Excluded tests (with reason):**
+  - `test_get_booking_by_id` — uses `created_booking` fixture which calls POST and DELETE
+  - `test_invalid_booking` — error-state check; not a meaningful prod read-only health signal
+  - `test_create_booking` — POST /booking + DELETE cleanup
+  - `test_delete_booking` — POST /booking + DELETE /booking/{id}
+  - `test_user_can_login_and_add_to_cart` — cart state; not prod-read-only safe
+  - `test_locked_out_user_sees_error` — locked-account error state; not a clean prod read signal
+  - `test_user_can_complete_checkout` (TC-UI-004) — checkout flow modifies cart and order state; not prod-read-only safe
+- **Future:** expand `read_only` coverage only after explicit risk review. Any candidate test must have zero write or delete operations, no synthetic setup fixtures, and must produce a meaningful signal about prod health.
+
 ## Traceability Markers
 
 Traceability markers are a third category, distinct from area markers and execution-scope markers. They are not used for test selection or targeted execution — their purpose is to carry structured metadata that can be consumed by downstream tooling (JUnit XML parsers, test-management systems, CI dashboards).

@@ -6,6 +6,7 @@ from utils.helpers import get_schema
 # TC-API-001
 @pytest.mark.api
 @pytest.mark.smoke
+@pytest.mark.read_only
 @pytest.mark.api_contract
 @pytest.mark.tc_id("TC-API-001")
 def test_get_all_bookings(booking_api):

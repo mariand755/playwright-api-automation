@@ -8,6 +8,7 @@ from pages.cart_page import CartPage
 # TC-UI-001
 @pytest.mark.ui
 @pytest.mark.smoke
+@pytest.mark.read_only
 @pytest.mark.tc_id("TC-UI-001")
 def test_user_can_login(page, base_url, credentials):
     login = LoginPage(page)

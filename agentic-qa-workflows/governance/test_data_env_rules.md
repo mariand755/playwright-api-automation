@@ -28,5 +28,26 @@
 ## Multiple Environments
 
 - The test data file (`test_users.json`) is the single source of truth for environment URLs.
-- To support multiple environments (staging, production), introduce an `ENV` environment variable that selects the correct URL block from `test_users.json`.
+- URLs are organised under an `environments` key. Each sub-key is a named environment block with `base_url` and `api_base_url`:
+
+  ```json
+  {
+    "environments": {
+      "staging": {
+        "base_url": "https://www.saucedemo.com",
+        "api_base_url": "https://restful-booker.herokuapp.com"
+      },
+      "prod_read_only": {
+        "base_url": "...",
+        "api_base_url": "..."
+      }
+    }
+  }
+  ```
+
+- `conftest.py` reads the `ENV` environment variable (default: `staging`) via the `env_name` session fixture. Only values listed in `_KNOWN_ENVIRONMENTS` are accepted; an unknown value fails fast with a clear error message listing valid environments.
+- Credentials (`valid_user`, `locked_out_user`, `api_admin`, `checkout_user`) remain at the top level of `test_users.json` and are environment-independent for this repo's demo services.
+- Invalid `ENV` values raise `ValueError` at collection time, not at test runtime.
+- Real prod URLs must not be committed to `test_users.json`. When real prod wiring is activated, the URL must be injected as a GitHub Secret or environment variable and not hard-coded in any committed file.
+- Real prod credentials must be stored as GitHub Secrets and injected via Docker `-e` flags at runtime. They must never be added to `test_users.json`.
 - Prefer one environment-aware data file for this repo unless the environment structure becomes too large to maintain cleanly.

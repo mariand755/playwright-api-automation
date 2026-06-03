@@ -24,6 +24,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-012](#adr-012-pre-commit-as-advisory-local-guardrail-docker-ci-as-source-of-truth) | Pre-commit as advisory local guardrail; Docker CI as source of truth | Accepted | 2026-06-02 |
 | [ADR-013](#adr-013-bounded-adjacent-risk-scan-in-qa-reviewer-prompts) | Bounded adjacent-risk scan in QA reviewer prompts | Accepted | 2026-06-02 |
 | [ADR-014](#adr-014-smoke-only-ci-on-pr-and-feature-branch-push-full-suite-on-main-nightly-and-workflow_dispatch) | Smoke-only CI on PR and feature branch push; full suite on main, nightly, and workflow_dispatch | Accepted | 2026-06-02 |
+| [ADR-015](#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) | Cross-environment selection with staging default and prod-read-only activation gate | Accepted | 2026-06-03 |
 
 ---
 
@@ -752,3 +753,77 @@ The smoke-first PR pattern is the answer to the most common CI question in consu
 The key consulting-facing decisions documented here are: (1) why the release gate is restricted to full-suite contexts only — partial-suite GO/NO_GO is misleading, not conservative; (2) why job names are preserved despite the behavioral change — the ADR-010 constraint on load-bearing job names applies equally to scope changes and structural changes; (3) why the UI smoke subset gap is accepted — the taxonomy defines smoke and regression as deliberate separate scopes, and the gap is documented rather than papered over by marker promotion.
 
 For a client team adopting this pattern, the activation conditions define a clear growth path: add tests to `smoke` as coverage needs grow, add parallelization when runtime warrants it, revisit scope boundaries when the smoke subset no longer reflects the critical happy paths. None of these require changing the CI scope mechanism introduced here.
+
+---
+
+## ADR-015: Cross-environment selection with staging default and prod-read-only activation gate
+
+**Status:** Accepted
+**Date:** 2026-06-03
+
+### Context
+
+The repo targeted a single environment (SauceDemo UI + Restful Booker API) from inception. `test_data_env_rules.md` has always stated the intent to support multiple environments via an `ENV` var and `test_users.json` URL blocks, but the mechanism was not implemented. All CI runs used the same URL regardless of trigger or context.
+
+Phase 7 adds prod-read-only validation as a named capability: the ability to run a safe, non-destructive subset of tests against a separate environment. The constraint is that no write, create, update, or delete operation may target a production-class environment under any CI trigger. A prod-read-only run that accidentally POSTs or DELETEs data is worse than no prod run at all.
+
+The additional constraint is cost and speed: prod-read-only runs must not add CI overhead to PRs or feature branch pushes, which already run only the smoke subset for fast feedback (ADR-014).
+
+### Decision
+
+Introduce `ENV`-based environment selection throughout the test layer:
+
+- `data/test_data/test_users.json` gains an `environments` key with `staging` and `prod_read_only` sub-blocks, each containing `base_url` and `api_base_url`. Credentials (`valid_user`, `locked_out_user`, `api_admin`, `checkout_user`) remain at the top level — they are environment-independent for this repo's demo services.
+- `conftest.py` reads `ENV` from `os.environ` (default: `staging`) via a new `env_name` session fixture. A module-level `_KNOWN_ENVIRONMENTS` frozenset validates the value at collection time; unknown values fail fast with a clear error listing valid environments.
+- `base_url` and `api_base_url` fixtures are updated to resolve URLs from `test_data["environments"][env_name]`.
+- A new `read_only` marker is added to `pytest.ini`. It is applied only to tests with zero write or delete operations and no synthetic setup fixtures: TC-API-001 (`test_get_all_bookings`) and TC-UI-001 (`test_user_can_login`).
+- Two prod-read-only steps are added inside the existing `API Tests` and `UI Tests` jobs. Each step is guarded by two conditions: `TEST_SCOPE=full` (only on main/schedule/workflow_dispatch) AND `PROD_ENV_ACTIVE=true` (a GitHub repository variable, not a secret). When either condition is not met, the step logs a skip notice and exits 0.
+- The `prod_read_only` URL block uses a placeholder API URL. No real production URL is committed.
+- The release gate remains staging-only. A one-test prod-read-only result is not a meaningful GO/NO_GO decision.
+- The notification step is unchanged. It reads `release-readiness.json` (staging) on schedule/workflow\_dispatch — both of which are always `TEST_SCOPE=full` and always produce a staging gate result.
+
+### Alternatives considered
+
+- **`strategy.matrix: [staging, prod_read_only]` on the `api` and `ui` jobs** — rejected. Matrix entries change the GitHub Actions job display name from `API Tests` to `API Tests (staging)` and `API Tests (prod_read_only)`. This breaks the four required status checks documented in ADR-010. A branch protection update would be required with the ADR-010 two-step coordination process. This slice's constraint is zero branch protection disruption.
+- **Separate `API Tests (prod-read-only)` and `UI Tests (prod-read-only)` jobs** — viable but adds new job names that are not required checks. These jobs would be non-blocking advisory runs, which is correct — but they require a separate branch protection promotion slice when live prod is wired. Steps inside existing jobs achieve the same advisory behavior today and promote to hard gates naturally (a step failure fails the parent job, which fails the required check) without an additional ADR-010 coordination step.
+- **Per-environment config files** — rejected. A single environment-aware `test_users.json` is simpler and already described in `test_data_env_rules.md` as the preferred pattern for this repo.
+- **Skip write tests at runtime via `ENV` check in test logic** — rejected. Embedding environment-awareness in test code mixes environment policy with test logic. The marker approach is cleaner: marker assignment is a deliberate, reviewable, one-time decision. A test either is or is not `read_only` — the environment at runtime does not change that classification.
+
+### Consequences
+
+- `ENV=staging` is the safe default. No existing test, CI run, or local command changes behavior unless `ENV` is explicitly set.
+- `_KNOWN_ENVIRONMENTS` validation provides a clear error message when an unknown environment is passed — prevents silent misconfiguration.
+- The `read_only` subset starts at two tests. This is intentionally thin — marking TC-API-003 or TC-UI-002 as `read_only` to look more comprehensive would misrepresent production safety.
+- Prod-read-only JUnit XML (`artifacts/api-prod-report.xml`, `artifacts/ui-prod-report.xml`) is not currently consumed by `dorny/test-reporter`. Results are visible only in the step log. This is acceptable for a stub. The prod activation slice must add test-reporter publication if prod results need to appear in the CI test panel.
+- Branch protection required checks (`Docker Test Suite`, `API Tests`, `UI Tests`, `Analyze Python`) are unchanged.
+
+### Activation conditions
+
+Before setting `PROD_ENV_ACTIVE=true` in GitHub Settings → Variables → Actions:
+
+1. A real prod URL must be known and accessible from GitHub Actions runners.
+2. Per-environment prod credentials must be stored as GitHub Secrets — for example `PROD_API_USERNAME` / `PROD_API_PASSWORD` — and injected via Docker `-e` flags in the prod-read-only step. They must never be added to `test_users.json`.
+3. The `read_only` suite must be reviewed for production safety against the actual prod environment (auth requirements, rate limits, data visibility).
+4. A dedicated activation slice must document the credential wiring and add `dorny/test-reporter` publication for `artifacts/api-prod-report.xml` and `artifacts/ui-prod-report.xml` if prod results need to appear in the CI test panel.
+5. If the prod URL must also be kept secret (i.e., not committed to `test_users.json`), inject it via a GitHub Secret and override the `prod_read_only.api_base_url` value using a Docker `-e API_BASE_URL=...` flag with a corresponding `conftest.py` env var check.
+
+### Related PRs / Docs
+
+- `data/test_data/test_users.json` — `environments` block
+- `conftest.py` — `env_name` fixture, `_KNOWN_ENVIRONMENTS`, updated `base_url` and `api_base_url` fixtures
+- `pytest.ini` — `read_only` marker declaration
+- `agentic-qa-workflows/governance/suite_taxonomy.md` — `read_only` marker section
+- `agentic-qa-workflows/governance/test_data_env_rules.md` — Multiple Environments section updated from intent to active behavior
+- `agentic-qa-workflows/governance/quality_gates.md` — CI scope table updated with environment column and prod-read-only row
+- ADR-008 (three named CI jobs instead of matrix for API/UI split)
+- ADR-010 (branch protection operates on job names, not step names)
+- ADR-011 (notification delivery defaults to dry-run when secrets are absent — same activation variable pattern)
+- ADR-014 (smoke/full trigger scope — prod-read-only steps only run when `TEST_SCOPE=full`)
+
+### Trade-offs and consulting value
+
+The `ENV` var + JSON URL block pattern is the correct lightweight answer to "how do we parameterize environments without per-environment config files or secrets in code?" It keeps the test layer environment-agnostic (fixtures resolve URLs from a named block; tests never reference URLs directly) while keeping the environment topology visible and reviewable in a single committed file.
+
+The `PROD_ENV_ACTIVE` guard is the key insight for any client engagement delivering this pattern. It means the mechanism can be merged into the main branch on day one without risk of live prod traffic — the first prod run only happens after explicit opt-in with a documented activation checklist. The same pattern is already established in this repo for notification delivery (`NOTIFY_DRY_RUN`), making `PROD_ENV_ACTIVE` consistent with existing idioms rather than a one-off.
+
+The `read_only` marker strategy resolves the hardest problem in multi-environment testing: how to prevent write tests from running in prod without embedding environment checks in test code. The answer is that prod safety is a property of the test, not of the runtime environment — a test either writes or it does not, and that property is captured at authoring time with a marker. When prod coverage grows, the review process for adding `read_only` to a new test is the same as any marker assignment: explicit, documented, and separately reviewable from the test logic itself.

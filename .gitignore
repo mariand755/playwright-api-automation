@@ -54,6 +54,8 @@ artifacts/failures/
 artifacts/report.xml
 artifacts/api-report.xml
 artifacts/ui-report.xml
+artifacts/api-prod-report.xml
+artifacts/ui-prod-report.xml
 artifacts/release-readiness.json
 artifacts/release-readiness.md
 *.png

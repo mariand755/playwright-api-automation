@@ -151,6 +151,7 @@ The following secrets are required for live notification delivery from `scripts/
 **`NOTIFY_DRY_RUN`.** Set to `true` or `1` as a GitHub repository variable (Settings → Variables → Actions, not Secrets) to force dry-run for all channels without removing the secrets. Useful for temporarily pausing live delivery without credential changes.
 
 For the notification delivery architecture and alternatives considered, see [`architecture_decision_log.md` — ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent).
+For step-by-step live Slack and SMTP setup, see [`notification_wiring.md`](notification_wiring.md).
 
 ---
 

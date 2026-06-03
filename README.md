@@ -118,6 +118,8 @@ The goal is to keep the framework simple, maintainable, and reproducible across 
 
 GitHub Actions runs a Docker-first workflow that builds the image, verifies pytest collection, runs the full suite inside Docker, and uploads `artifacts/failures/` when failure evidence is present.
 
+For live Slack and SMTP notification setup, see [agentic-qa-workflows/governance/notification_wiring.md](agentic-qa-workflows/governance/notification_wiring.md).
+
 ## Prerequisites
 - Docker — required for CI-parity validation
 - Python 3.9+, pip, Playwright browser binaries — for optional local runs only

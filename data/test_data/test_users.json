@@ -1,7 +1,13 @@
 {
-  "urls": {
-    "base_url": "https://www.saucedemo.com",
-    "api_base_url": "https://restful-booker.herokuapp.com"
+  "environments": {
+    "staging": {
+      "base_url": "https://www.saucedemo.com",
+      "api_base_url": "https://restful-booker.herokuapp.com"
+    },
+    "prod_read_only": {
+      "base_url": "https://www.saucedemo.com",
+      "api_base_url": "https://placeholder-prod-api.example.com"
+    }
   },
   "valid_user": {
     "username": "standard_user",

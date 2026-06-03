@@ -1,16 +1,18 @@
 import json
+import os
 import pytest
 
 from pathlib import Path
 from playwright.sync_api import expect
 from utils.api_client import BookingApiClient
-
 from utils.timeouts import (
     API_REQUEST_TIMEOUT_SECONDS,
     UI_ACTION_TIMEOUT_MS,
     UI_EXPECT_TIMEOUT_MS,
     UI_NAVIGATION_TIMEOUT_MS,
 )
+
+_KNOWN_ENVIRONMENTS = frozenset({"staging", "prod_read_only"})
 
 
 @pytest.fixture(scope="session")
@@ -21,10 +23,22 @@ def test_data():
 
 
 @pytest.fixture(scope="session")
-def base_url(test_data):
-    url = test_data.get("urls", {}).get("base_url")
+def env_name() -> str:
+    env = os.environ.get("ENV", "staging")
+    if env not in _KNOWN_ENVIRONMENTS:
+        raise ValueError(
+            f"Unknown ENV={env!r}. Valid environments: {sorted(_KNOWN_ENVIRONMENTS)}"
+        )
+    return env
+
+
+@pytest.fixture(scope="session")
+def base_url(test_data, env_name):
+    url = test_data.get("environments", {}).get(env_name, {}).get("base_url")
     if not url:
-        raise ValueError("Missing urls.base_url in data/test_data/test_users.json")
+        raise ValueError(
+            f"Missing environments.{env_name}.base_url in data/test_data/test_users.json"
+        )
     return url
 
 
@@ -64,10 +78,12 @@ def locked_out_credentials(test_data):
 
 
 @pytest.fixture(scope="session")
-def api_base_url(test_data):
-    url = test_data.get("urls", {}).get("api_base_url")
+def api_base_url(test_data, env_name):
+    url = test_data.get("environments", {}).get(env_name, {}).get("api_base_url")
     if not url:
-        raise ValueError("Missing urls.api_base_url in data/test_data/test_users.json")
+        raise ValueError(
+            f"Missing environments.{env_name}.api_base_url in data/test_data/test_users.json"
+        )
     return url
 
 

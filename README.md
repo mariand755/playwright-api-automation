@@ -118,6 +118,8 @@ The goal is to keep the framework simple, maintainable, and reproducible across 
 
 GitHub Actions runs a Docker-first workflow that builds the image and verifies pytest collection. On PRs and feature branch pushes, CI runs the smoke subset for fast feedback. On push to `main`, nightly schedule, and `workflow_dispatch`, CI runs the full suite and produces a release readiness decision. Failure artifacts are uploaded when UI test evidence is present.
 
+The `ENV` environment variable selects the URL block from `data/test_data/test_users.json`. `staging` is the default and is used for all standard CI runs. A `prod_read_only` environment block is defined as an activation-ready stub: prod-read-only steps run `read_only`-marked tests only and are gated by `PROD_ENV_ACTIVE=true` (a GitHub repository variable). See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for activation conditions.
+
 For live Slack and SMTP notification setup, see [agentic-qa-workflows/governance/notification_wiring.md](agentic-qa-workflows/governance/notification_wiring.md).
 
 ## Prerequisites

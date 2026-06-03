@@ -89,6 +89,24 @@ jobs:
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
             playwright-api-automation pytest test/api $MARKER_ARGS -v --junitxml=artifacts/api-report.xml
 
+      - name: Run API test suite (prod-read-only)
+        if: always()
+        run: |
+          if [ "$TEST_SCOPE" != "full" ]; then
+            exit 0
+          fi
+          if [ "${{ vars.PROD_ENV_ACTIVE }}" != "true" ]; then
+            echo "Prod-read-only run skipped — PROD_ENV_ACTIVE not set. See ADR-015 activation conditions."
+            exit 0
+          fi
+          # artifacts/api-prod-report.xml is not currently consumed by dorny/test-reporter.
+          # Add a test-reporter step in the prod activation slice (ADR-015 activation conditions).
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            -e ENV=prod_read_only \
+            playwright-api-automation pytest test/api -m read_only -v \
+            --junitxml=artifacts/api-prod-report.xml
+
       - name: Write test scope to summary
         if: always()
         run: |
@@ -187,6 +205,24 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
             playwright-api-automation pytest test/ui $MARKER_ARGS -v --junitxml=artifacts/ui-report.xml
+
+      - name: Run UI test suite (prod-read-only)
+        if: always()
+        run: |
+          if [ "$TEST_SCOPE" != "full" ]; then
+            exit 0
+          fi
+          if [ "${{ vars.PROD_ENV_ACTIVE }}" != "true" ]; then
+            echo "Prod-read-only run skipped — PROD_ENV_ACTIVE not set. See ADR-015 activation conditions."
+            exit 0
+          fi
+          # artifacts/ui-prod-report.xml is not currently consumed by dorny/test-reporter.
+          # Add a test-reporter step in the prod activation slice (ADR-015 activation conditions).
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            -e ENV=prod_read_only \
+            playwright-api-automation pytest test/ui -m read_only -v \
+            --junitxml=artifacts/ui-prod-report.xml
 
       - name: Write test scope to summary
         if: always()

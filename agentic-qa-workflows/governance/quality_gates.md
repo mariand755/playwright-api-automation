@@ -162,13 +162,18 @@ Ruff and mypy run via `language: system` — they invoke tools from your active 
 
 The `API Tests` and `UI Tests` jobs select their test scope based on the GitHub Actions trigger:
 
-| Trigger | Scope | pytest command |
-| --- | --- | --- |
-| `pull_request` to main | Smoke only | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
-| `push` to `feature/**` | Smoke only | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
-| `push` to `main` | Full suite | `pytest test/api` / `pytest test/ui` |
-| `schedule` (nightly) | Full suite | `pytest test/api` / `pytest test/ui` |
-| `workflow_dispatch` | Full suite | `pytest test/api` / `pytest test/ui` |
+| Trigger | Scope | Environment | pytest command |
+| --- | --- | --- | --- |
+| `pull_request` to main | Smoke only | staging (default) | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
+| `push` to `feature/**` | Smoke only | staging (default) | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
+| `push` to `main` | Full suite | staging (default) | `pytest test/api` / `pytest test/ui` |
+| `schedule` (nightly) | Full suite | staging (default) | `pytest test/api` / `pytest test/ui` |
+| `workflow_dispatch` | Full suite | staging (default) | `pytest test/api` / `pytest test/ui` |
+| Full-suite trigger + `PROD_ENV_ACTIVE=true` | `read_only` subset | prod\_read\_only | `pytest test/api -m read_only` / `pytest test/ui -m read_only` |
+
+**Environment selection:** The `ENV` environment variable selects the URL block from `data/test_data/test_users.json`. When `ENV` is unset, staging is used. Only `staging` and `prod_read_only` are valid values; any other value fails fast at collection time with a clear error.
+
+**Prod-read-only activation:** The prod-read-only steps inside `API Tests` and `UI Tests` run only when `TEST_SCOPE=full` AND `PROD_ENV_ACTIVE=true` (a GitHub repository variable, not a secret). When `PROD_ENV_ACTIVE` is absent or not `true`, the step logs a skip notice and exits 0 — it never blocks CI. See ADR-015 activation conditions before setting this variable.
 
 **Smoke PR runs are fast feedback, not full release readiness evidence.** Regression-only and negative tests run only on full-suite contexts. The release readiness gate skips on smoke runs and produces a "Smoke run — gate skipped" summary notice instead of a GO/NO_GO decision. `release-readiness.json` is not produced on PR runs.
 

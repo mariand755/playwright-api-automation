@@ -23,6 +23,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-011](#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent) | Notification delivery defaults to dry-run when secrets are absent | Accepted | 2026-06-01 |
 | [ADR-012](#adr-012-pre-commit-as-advisory-local-guardrail-docker-ci-as-source-of-truth) | Pre-commit as advisory local guardrail; Docker CI as source of truth | Accepted | 2026-06-02 |
 | [ADR-013](#adr-013-bounded-adjacent-risk-scan-in-qa-reviewer-prompts) | Bounded adjacent-risk scan in QA reviewer prompts | Accepted | 2026-06-02 |
+| [ADR-014](#adr-014-smoke-only-ci-on-pr-and-feature-branch-push-full-suite-on-main-nightly-and-workflow_dispatch) | Smoke-only CI on PR and feature branch push; full suite on main, nightly, and workflow_dispatch | Accepted | 2026-06-02 |
 
 ---
 
@@ -683,3 +684,71 @@ The bounded adjacent-risk scan with a max-3 cap and three-class classification i
 Adding specific named dimensions (Dimension 10: security and secret hygiene; Dimension 11: adjacent-risk scan) rather than folding them into the general "Risks" dimension makes them first-class review criteria. The existing Dimension 8 "Risks and recommended fixes" is too broad to reliably prompt a reviewer to check CodeQL-style taint patterns for a specific list of sinks.
 
 For a consulting client, the updated prompt is a tangible differentiator: most client review checklists do not distinguish volume-mounted single-file testing from full image validation, do not have a structured CodeQL-style taint check, and have no bounded mechanism for surfacing adjacent risks without opening unlimited scope. A reviewer following this prompt would have flagged both the stale Docker image scenario and the helper-function taint chain from PR #22 before CI ran.
+
+---
+
+## ADR-014: Smoke-only CI on PR and feature branch push; full suite on main, nightly, and workflow_dispatch
+
+**Status:** Accepted
+**Date:** 2026-06-02
+
+### Context
+
+The `smoke` marker has been declared in `pytest.ini` and documented in `suite_taxonomy.md` since Phase 3. `suite_taxonomy.md` states its run trigger as "every commit, every PR open, before any other suite." `quality_gates.md` documents the PR Gate as `pytest -m smoke` and the Merge Gate as the full suite. Despite this stated intent, CI has run the full API and UI test suites on every trigger — push to feature branches, pull requests, push to main, nightly schedule, and `workflow_dispatch` — since the API/UI job split in ADR-008.
+
+As test count grows, running a full regression on every feature branch commit adds latency to PR feedback with no additional merge protection benefit. The required status checks (`API Tests`, `UI Tests`) block merge regardless of whether one test or five ran; the smoke subset provides the fast-feedback signal intended for that checkpoint.
+
+### Decision
+
+Add a `Determine test scope` step to both `API Tests` and `UI Tests` jobs that writes `TEST_SCOPE` and `MARKER_ARGS` to `$GITHUB_ENV`:
+
+- `TEST_SCOPE=full`, `MARKER_ARGS=` (empty) when:
+  - `github.ref == refs/heads/main` (push to main)
+  - OR `github.event_name == schedule` (nightly)
+  - OR `github.event_name == workflow_dispatch` (manual)
+- `TEST_SCOPE=smoke`, `MARKER_ARGS=-m smoke` otherwise (PR and feature branch push)
+
+Test execution commands use `$MARKER_ARGS` (unquoted) so that the empty full-suite case passes no extra argument and the smoke case passes `-m smoke`.
+
+The release readiness gate (`scripts/release_gate.py`) runs only when `TEST_SCOPE=full`. On smoke runs, the step logs "Smoke-only run — release gate skipped." and exits 0. The job summary shows a "Release gate skipped" notice instead of a GO/NO_GO decision. `release-readiness.json` is not produced on smoke PR runs.
+
+The notification step condition remains `github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'`. Both of those events are `TEST_SCOPE=full` by this logic, so the notification step always reads a full-suite gate result. No notification changes are required.
+
+### Alternatives considered
+
+- **Separate `API Smoke` and `UI Smoke` CI jobs** — rejected. New job names would trigger the ADR-010 two-step branch protection update process: jobs must run on `main` before they appear in the required-check autocomplete, creating a window of unprotected merges. This slice's constraint is zero branch protection disruption.
+- **Full suite on all triggers forever** — rejected. The `smoke` marker and `suite_taxonomy.md` have always stated the smoke-first intent. Running full suite on every PR is an inconsistency between stated governance and actual CI behavior, not a safe status quo.
+- **`strategy.matrix: [smoke, full]`** — rejected for the same reasons as ADR-008. The `API Tests` and `UI Tests` jobs have heterogeneous post-processing chains (release gate in API only, failure artifact upload in UI only). A matrix requires `if: matrix.scope == 'full'`-style conditionals on multiple steps, which is harder to read and more error-prone than the current two-job structure.
+- **`if: env.TEST_SCOPE == 'full'` step condition for the release gate** — viable, but replaced with shell `if/exit 0` inside the `run:` block for explicitness: the skip reason appears in the step log, and the approach does not rely on understanding exactly when `$GITHUB_ENV`-set variables are available in GitHub Actions expression evaluation.
+
+### Consequences
+
+- Required status check names (`Docker Test Suite`, `API Tests`, `UI Tests`, `Analyze Python`) are unchanged. No branch protection update required.
+- `release-readiness.json` is not produced on PR runs. The notification step (schedule/workflow\_dispatch only) always has full-suite gate evidence when it reads the file.
+- PR smoke pass is fast feedback confirming the critical happy paths work — it is not full release readiness evidence. Regression-only and negative tests are caught on the main push, nightly schedule, or manual `workflow_dispatch` full run.
+- The UI smoke subset is currently one test (TC-UI-001 `test_user_can_login`). A PR that breaks the add-to-cart flow (TC-UI-002, `regression`-only) will pass the `UI Tests` required check and be caught on the next full run. This is the accepted trade-off of the smoke-first pattern and is consistent with the marker assignments in `suite_taxonomy.md`. Marker reassignment is a separate taxonomy decision, not in scope for this slice.
+- JUnit XML paths (`artifacts/api-report.xml`, `artifacts/ui-report.xml`) are unchanged. dorny/test-reporter reads the same paths in both smoke and full modes; on smoke runs the files contain the smoke subset and the reporter reflects accurate counts.
+
+### Activation condition
+
+- Revisit scope boundaries if the UI smoke subset (currently one test) becomes too thin to provide meaningful PR confidence — promote additional tests to `smoke` in a dedicated taxonomy slice.
+- Revisit if branch protection strategy changes and new job names become feasible without a merge-protection gap.
+- Revisit if full suite runtime grows large enough to require parallelization beyond the current smoke/full split (pytest-xdist decision gate per Phase 7 roadmap).
+
+### Related PRs / Docs
+
+- `.github/workflows/ci.yml` — `Determine test scope` step in `api` and `ui` jobs
+- `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table; smoke vs. full trigger documentation
+- `agentic-qa-workflows/governance/suite_taxonomy.md` — `smoke` marker run trigger updated to reflect enforced CI behavior
+- ADR-008 (three named CI jobs instead of matrix)
+- ADR-009 (API-only release gate, multi-source deferred)
+- ADR-010 (branch protection operates on job names, not step names)
+- ADR-011 (notification delivery defaults to dry-run when secrets are absent)
+
+### Trade-offs and consulting value
+
+The smoke-first PR pattern is the answer to the most common CI question in consulting engagements: "how do we make PRs faster without losing regression coverage?" The implementation is approximately 25 lines of YAML shell logic with no new jobs, no new dependencies, and no branch protection changes. That ratio — meaningful behavioral change from minimal structural disruption — is the correct pattern for CI evolution at any scale.
+
+The key consulting-facing decisions documented here are: (1) why the release gate is restricted to full-suite contexts only — partial-suite GO/NO_GO is misleading, not conservative; (2) why job names are preserved despite the behavioral change — the ADR-010 constraint on load-bearing job names applies equally to scope changes and structural changes; (3) why the UI smoke subset gap is accepted — the taxonomy defines smoke and regression as deliberate separate scopes, and the gap is documented rather than papered over by marker promotion.
+
+For a client team adopting this pattern, the activation conditions define a clear growth path: add tests to `smoke` as coverage needs grow, add parallelization when runtime warrants it, revisit scope boundaries when the smoke subset no longer reflects the critical happy paths. None of these require changing the CI scope mechanism introduced here.

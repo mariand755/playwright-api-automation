@@ -116,7 +116,7 @@ The goal is to keep the framework simple, maintainable, and reproducible across 
 
 ## CI
 
-GitHub Actions runs a Docker-first workflow that builds the image, verifies pytest collection, runs the full suite inside Docker, and uploads `artifacts/failures/` when failure evidence is present.
+GitHub Actions runs a Docker-first workflow that builds the image and verifies pytest collection. On PRs and feature branch pushes, CI runs the smoke subset for fast feedback. On push to `main`, nightly schedule, and `workflow_dispatch`, CI runs the full suite and produces a release readiness decision. Failure artifacts are uploaded when UI test evidence is present.
 
 For live Slack and SMTP notification setup, see [agentic-qa-workflows/governance/notification_wiring.md](agentic-qa-workflows/governance/notification_wiring.md).
 

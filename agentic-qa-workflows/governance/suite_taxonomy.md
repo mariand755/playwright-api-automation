@@ -36,7 +36,7 @@ Marks tests that call REST endpoints via `BookingApiClient`. All tests in `test/
 Fast sanity check that the critical happy path works.
 
 - Scope: one positive test per major feature area.
-- Run trigger: every commit, every PR open, before any other suite.
+- Run trigger: CI runs smoke-tagged tests only on every PR and feature branch push. Full regression runs include smoke tests and additionally run `regression` and `negative` tests. This scope split is enforced in `.github/workflows/ci.yml` through `TEST_SCOPE` logic (see [ADR-014](architecture_decision_log.md#adr-014-smoke-only-ci-on-pr-and-feature-branch-push-full-suite-on-main-nightly-and-workflow_dispatch)).
 - Pass requirement for: unblocking further test execution.
 - Target runtime: under 60 seconds.
 - Current tests: `test_user_can_login`, `test_get_all_bookings`, `test_create_booking`, `test_delete_booking`

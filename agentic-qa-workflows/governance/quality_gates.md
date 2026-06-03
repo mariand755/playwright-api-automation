@@ -6,6 +6,7 @@ Before a pull request may be reviewed:
 
 - Dockerized smoke suite must pass:
   `docker build -t playwright-api-automation . && docker run --rm playwright-api-automation pytest -m smoke -v`
+- **CI enforces this automatically:** on pull request and feature branch push, `API Tests` and `UI Tests` run `pytest -m smoke` only. The release readiness gate is skipped on smoke runs.
 - No new test may be added without at least one assertion that would fail if the feature broke.
 - All new markers must be declared in `pytest.ini`.
 - Before using new governance markers such as `negative`, `regression`, or `api_contract`, add them to `pytest.ini`.
@@ -20,6 +21,7 @@ Before a pull request may be merged to main:
 
 - Docker full suite must pass:
   `docker build -t playwright-api-automation . && docker run --rm playwright-api-automation`
+- **CI enforces this automatically:** on push to `main` (after merge), `API Tests` and `UI Tests` run the full suite and the release readiness gate produces a GO/NO_GO decision.
 - No test may be merged in a `skip` or `xfail` state without a comment linking to an open issue explaining why.
 - Any new page class must have a corresponding locator entry in `pages/locators.py`.
 - Any new API endpoint under test must have a corresponding method in `BookingApiClient`.
@@ -156,15 +158,31 @@ Ruff and mypy run via `language: system` — they invoke tools from your active 
 - Add `types-requests` stubs to `requirements.txt` when mypy strictness increases to benefit from full `requests.Response` type resolution.
 - Extend type checking to `conftest.py` when pytest typing is configured.
 
+### CI test scope by trigger
+
+The `API Tests` and `UI Tests` jobs select their test scope based on the GitHub Actions trigger:
+
+| Trigger | Scope | pytest command |
+| --- | --- | --- |
+| `pull_request` to main | Smoke only | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
+| `push` to `feature/**` | Smoke only | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
+| `push` to `main` | Full suite | `pytest test/api` / `pytest test/ui` |
+| `schedule` (nightly) | Full suite | `pytest test/api` / `pytest test/ui` |
+| `workflow_dispatch` | Full suite | `pytest test/api` / `pytest test/ui` |
+
+**Smoke PR runs are fast feedback, not full release readiness evidence.** Regression-only and negative tests run only on full-suite contexts. The release readiness gate skips on smoke runs and produces a "Smoke run — gate skipped" summary notice instead of a GO/NO_GO decision. `release-readiness.json` is not produced on PR runs.
+
+For the CI policy decision record, see [`architecture_decision_log.md` — ADR-014](architecture_decision_log.md#adr-014-smoke-only-ci-on-pr-and-feature-branch-push-full-suite-on-main-nightly-and-workflow_dispatch).
+
 ### CI job structure
 
 The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks above across three jobs:
 
-| Job | Covers | Depends on |
-| --- | --- | --- |
-| `Docker Test Suite` | Docker build, Ruff format, Ruff lint, mypy type check, pip-audit, Trivy, pytest collection | — |
-| `API Tests` | API test suite, CI summary, release readiness gate | `Docker Test Suite` |
-| `UI Tests` | UI test suite, CI summary, failure artifact upload | `Docker Test Suite` |
+| Job | Covers | Trigger scope | Depends on |
+| --- | --- | --- | --- |
+| `Docker Test Suite` | Docker build, Ruff format, Ruff lint, mypy type check, pip-audit, Trivy, pytest collection | All triggers | — |
+| `API Tests` | API test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, release readiness gate (full runs only) | All triggers | `Docker Test Suite` |
+| `UI Tests` | UI test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, failure artifact upload | All triggers | `Docker Test Suite` |
 
 `API Tests` and `UI Tests` run in parallel after `Docker Test Suite` passes. All three jobs are required status checks for merge to `main`.
 

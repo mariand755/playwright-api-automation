@@ -71,11 +71,31 @@ jobs:
       - name: Prepare artifacts directory
         run: mkdir -p artifacts
 
+      - name: Determine test scope
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
+             [[ "${{ github.event_name }}" == "schedule" ]] || \
+             [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "TEST_SCOPE=full" >> "$GITHUB_ENV"
+            echo "MARKER_ARGS=" >> "$GITHUB_ENV"
+          else
+            echo "TEST_SCOPE=smoke" >> "$GITHUB_ENV"
+            echo "MARKER_ARGS=-m smoke" >> "$GITHUB_ENV"
+          fi
+
       - name: Run API test suite
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
-            playwright-api-automation pytest test/api -v --junitxml=artifacts/api-report.xml
+            playwright-api-automation pytest test/api $MARKER_ARGS -v --junitxml=artifacts/api-report.xml
+
+      - name: Write test scope to summary
+        if: always()
+        run: |
+          if [ "$TEST_SCOPE" = "smoke" ]; then
+            echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\`, nightly schedule, and \`workflow_dispatch\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Write dynamic API test summary
         if: always()
@@ -84,6 +104,10 @@ jobs:
       - name: Run release readiness gate
         if: always()
         run: |
+          if [ "$TEST_SCOPE" != "full" ]; then
+            echo "Smoke-only run — release gate skipped."
+            exit 0
+          fi
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
             playwright-api-automation python scripts/release_gate.py artifacts/api-report.xml
@@ -91,7 +115,11 @@ jobs:
       - name: Write release gate summary
         if: always()
         run: |
-          if [ -f artifacts/release-readiness.md ]; then
+          if [ "$TEST_SCOPE" != "full" ]; then
+            echo "## Release Readiness Gate" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Smoke run** — release gate skipped. Full release readiness runs on push to \`main\`, nightly schedule, and \`workflow_dispatch\`." >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f artifacts/release-readiness.md ]; then
             cat artifacts/release-readiness.md >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## Release Readiness Gate" >> "$GITHUB_STEP_SUMMARY"
@@ -142,11 +170,31 @@ jobs:
           rm -rf artifacts/failures
           mkdir -p artifacts/failures
 
+      - name: Determine test scope
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
+             [[ "${{ github.event_name }}" == "schedule" ]] || \
+             [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "TEST_SCOPE=full" >> "$GITHUB_ENV"
+            echo "MARKER_ARGS=" >> "$GITHUB_ENV"
+          else
+            echo "TEST_SCOPE=smoke" >> "$GITHUB_ENV"
+            echo "MARKER_ARGS=-m smoke" >> "$GITHUB_ENV"
+          fi
+
       - name: Run UI test suite
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
-            playwright-api-automation pytest test/ui -v --junitxml=artifacts/ui-report.xml
+            playwright-api-automation pytest test/ui $MARKER_ARGS -v --junitxml=artifacts/ui-report.xml
+
+      - name: Write test scope to summary
+        if: always()
+        run: |
+          if [ "$TEST_SCOPE" = "smoke" ]; then
+            echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\`, nightly schedule, and \`workflow_dispatch\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Write dynamic UI test summary
         if: always()

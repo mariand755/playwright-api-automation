@@ -25,6 +25,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-013](#adr-013-bounded-adjacent-risk-scan-in-qa-reviewer-prompts) | Bounded adjacent-risk scan in QA reviewer prompts | Accepted | 2026-06-02 |
 | [ADR-014](#adr-014-smoke-only-ci-on-pr-and-feature-branch-push-full-suite-on-main-nightly-and-workflow_dispatch) | Smoke-only CI on PR and feature branch push; full suite on main, nightly, and workflow_dispatch | Accepted | 2026-06-02 |
 | [ADR-015](#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) | Cross-environment selection with staging default and prod-read-only activation gate | Accepted | 2026-06-03 |
+| [ADR-016](#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete) | Aggregate CI notification job after all required jobs complete | Accepted | 2026-06-03 |
 
 ---
 
@@ -458,7 +459,7 @@ SMTP is implemented with generic env vars (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`
 - **Require secrets to be set before the notification step runs** — rejected. CI would break for any fork, any unconfigured environment, and any repo copy that has not provisioned secrets. This inverts the correct delivery order: the infrastructure should be validated before credentials exist.
 - **Use a third-party Slack GitHub Action** — rejected. Third-party actions require SHA-pinning for supply-chain hygiene (see ADR-005), introduce an external service dependency, and are GitHub-specific rather than CI-platform-portable. The stdlib `urllib.request` approach is portable to any CI system.
 - **Gmail-specific SMTP env vars (`GMAIL_USER`, `GMAIL_APP_PASSWORD`)** — rejected. Locks the blueprint to Google Workspace. Generic SMTP vars support Gmail, Outlook, SendGrid, AWS SES, and any internal SMTP relay without code changes.
-- **Separate `notify` CI job (needs: [api, ui])** — rejected for this slice. A separate job would require `actions/upload-artifact` and `actions/download-artifact` (third-party, SHA-pinning needed) to transfer `release-readiness.json` between jobs. The step-in-`API Tests` approach has access to the artifact natively. A separate job also adds a new required-check candidate, triggering the ADR-010 two-step branch protection update process unnecessarily.
+- **Separate `notify` CI job (needs: [api, ui])** — rejected for this slice. A separate job would require `actions/upload-artifact` and `actions/download-artifact` (third-party, SHA-pinning needed) to transfer `release-readiness.json` between jobs. The step-in-`API Tests` approach has access to the artifact natively. A separate job also adds a new required-check candidate, triggering the ADR-010 two-step branch protection update process unnecessarily. **Note (ADR-016, 2026-06-03):** This alternative was later adopted when aggregate notification became a requirement. See ADR-016.
 
 ### Consequences
 
@@ -827,3 +828,65 @@ The `ENV` var + JSON URL block pattern is the correct lightweight answer to "how
 The `PROD_ENV_ACTIVE` guard is the key insight for any client engagement delivering this pattern. It means the mechanism can be merged into the main branch on day one without risk of live prod traffic — the first prod run only happens after explicit opt-in with a documented activation checklist. The same pattern is already established in this repo for notification delivery (`NOTIFY_DRY_RUN`), making `PROD_ENV_ACTIVE` consistent with existing idioms rather than a one-off.
 
 The `read_only` marker strategy resolves the hardest problem in multi-environment testing: how to prevent write tests from running in prod without embedding environment checks in test code. The answer is that prod safety is a property of the test, not of the runtime environment — a test either writes or it does not, and that property is captured at authoring time with a marker. When prod coverage grows, the review process for adding `read_only` to a new test is the same as any marker assignment: explicit, documented, and separately reviewable from the test logic itself.
+
+---
+
+## ADR-016: Aggregate CI notification job after all required jobs complete
+
+**Status:** Accepted
+**Date:** 2026-06-03
+
+### Context
+
+The release readiness notification ran inside the `API Tests` job, which runs in parallel with `UI Tests`. The release gate could produce a GO decision, Slack would fire immediately with `Release Readiness: ✅ GO`, and the `UI Tests` job could then fail — leaving a delivered GO notification against a workflow that ended in failure. This is incorrect release-readiness semantics.
+
+The root cause is timing: notification was placed in the first job that generated gate data, not in a job that could observe all required job outcomes.
+
+This ADR fulfills the activation condition stated in ADR-011: "Add a separate notify CI job when multi-source notification is required."
+
+### Decision
+
+Add a new `notify` job with `needs: [test, api, ui]` and `if: always() && (schedule || workflow_dispatch)`. The job runs after all three required jobs complete, regardless of their outcomes. It:
+
+- Receives `needs.test.result`, `needs.api.result`, and `needs.ui.result` as env vars (`DOCKER_TEST_SUITE_RESULT`, `API_TESTS_RESULT`, `UI_TESTS_RESULT`).
+- Downloads `release-readiness.json` from the `api` job via `actions/upload-artifact@v4` / `actions/download-artifact@v4`. The download step uses `continue-on-error: true` so the notify job proceeds even when the artifact was not produced.
+- Computes **Overall Release Readiness** as BLOCKED if any required job result is not exactly `success` (failure, cancelled, skipped, and unknown are all BLOCKED), GO if all jobs succeeded and the gate decision is GO, NO_GO if all jobs succeeded and the gate decision is NO_GO, and UNKNOWN if all jobs succeeded but gate data is missing.
+- Delivers the aggregate message to Slack and email via `scripts/notify.py` (stdlib-only, runs directly on the runner without Docker or pip install).
+
+The `notify` job is not a required branch protection check. It is advisory notification delivery. `scripts/notify.py` always exits 0 — notification failure never blocks CI.
+
+### Alternatives rejected
+
+- **Keep notification inside `API Tests`** — rejected. `API Tests` and `UI Tests` run in parallel. Notification from `API Tests` fires before `UI Tests` completes. A UI failure after notification produces a false GO.
+- **Separate webhook call from each job** — rejected. Multiple partial notifications per run produce redundant, inconsistent delivery with no aggregate view. Recipients would need to reconcile three separate messages to determine overall CI state.
+- **Mark `notify` as a required branch protection check** — rejected. Notification is advisory delivery, not a release gate. Making it a required check would add branch protection churn per ADR-010 with no correctness benefit. Notification failures are expected under unconfigured secret conditions and must not block merges.
+
+### Consequences
+
+- The notification message now includes an **Overall Release Readiness** line, a **CI Status** section with per-job result rows, and a **Release Gate** line that shows the component gate result. When Overall Release Readiness is BLOCKED and the Release Gate shows GO, the message annotates the gate line: `(component signal only — overall readiness is BLOCKED)`.
+- `release-readiness.json` is now transferred via artifact upload in `api` job / artifact download in `notify` job. `overwrite: true` on the upload step makes CI re-runs safe (avoids duplicate artifact name failure).
+- The `notify` job is the only CI job that receives the three `needs.*.result` values. Running locally without CI context, all three env vars are empty strings — `compute_overall_readiness` skips empty values, preserving backward-compatible behavior.
+- Existing required job names (`Docker Test Suite`, `API Tests`, `UI Tests`) are unchanged. No branch protection update required.
+
+### Activation condition
+
+No further activation required — the `notify` job is live on every `schedule` and `workflow_dispatch` run. To enable live delivery: configure `SLACK_WEBHOOK_URL` and SMTP secrets in GitHub Settings → Secrets → Actions. `NOTIFY_DRY_RUN=true` (repository variable) forces dry-run while secrets are being validated.
+
+### Related PRs / Docs
+
+- `.github/workflows/ci.yml` — `notify` job; artifact upload step in `api` job
+- `scripts/notify.py` — `get_ci_status()`, `compute_overall_readiness()`, updated `build_message_lines()`
+- `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table; Notification Delivery section
+- `agentic-qa-workflows/governance/notification_wiring.md` — overview and validation sections
+- ADR-009 (API-only release gate, multi-source deferred)
+- ADR-010 (branch protection operates on job names — `notify` is not a required check)
+- ADR-011 (notification delivery defaults to dry-run — activation condition fulfilled)
+- ADR-014 (smoke/full trigger scope — `notify` job only fires on full-suite triggers)
+
+### Trade-offs and consulting value
+
+**Accepted trade-off:** Notification arrives after all three jobs complete rather than after the first job that generates gate data. This is unconditionally better — a notification that arrives with the complete picture is worth more than one that arrives one minute earlier with potentially incorrect content.
+
+**Accepted trade-off:** Cross-job artifact upload/download adds two steps and one inter-job artifact. This is the canonical GitHub Actions pattern for cross-job data sharing and is well understood by any team familiar with the platform.
+
+**Consulting value:** The `needs.*.result` aggregation pattern for downstream notification is the most commonly misimplemented part of multi-job CI pipelines. Most teams place notification inside the first job that generates useful data — exactly what this repo was doing before this slice. ADR-016 makes the failure mode explicit (parallel job, early notification, false GO) and documents the correct aggregate pattern. The distinction between "component gate passed" and "overall release readiness" is a concept that recurs in every client engagement that has both API and UI test jobs in the same pipeline.

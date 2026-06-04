@@ -186,10 +186,11 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks 
 | Job | Covers | Trigger scope | Depends on |
 | --- | --- | --- | --- |
 | `Docker Test Suite` | Docker build, Ruff format, Ruff lint, mypy type check, pip-audit, Trivy, pytest collection | All triggers | — |
-| `API Tests` | API test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, release readiness gate (full runs only) | All triggers | `Docker Test Suite` |
+| `API Tests` | API test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, release readiness gate (full runs only), release readiness artifact upload | All triggers | `Docker Test Suite` |
 | `UI Tests` | UI test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, failure artifact upload | All triggers | `Docker Test Suite` |
+| `Notify` | Aggregate Slack/SMTP notification with overall CI status and release readiness | `schedule` and `workflow_dispatch` only | `Docker Test Suite`, `API Tests`, `UI Tests` |
 
-`API Tests` and `UI Tests` run in parallel after `Docker Test Suite` passes. All three jobs are required status checks for merge to `main`.
+`API Tests` and `UI Tests` run in parallel after `Docker Test Suite` passes. `Notify` runs after all three required jobs complete. `Docker Test Suite`, `API Tests`, and `UI Tests` are required status checks for merge to `main`. `Notify` is not a required check — it is advisory delivery and must never block merges.
 
 For the full required checks configuration and post-merge update instructions, see [`agentic-qa-workflows/governance/security_and_branch_protection.md`](security_and_branch_protection.md).
 
@@ -197,7 +198,13 @@ For the full required checks configuration and post-merge update instructions, s
 
 Notification is report delivery, not a release gate. It does not block CI and is not a required status check.
 
-The notification step (`Deliver release readiness notification`) runs in the `API Tests` job after the release gate summary is written. It reads `artifacts/release-readiness.json` and delivers the GO/NO_GO decision, test totals, gate failures, and warnings to Slack and email.
+The `Notify` job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` all complete. It receives each job's outcome via `needs.*.result` env vars, downloads `release-readiness.json` from the `API Tests` artifact upload, and delivers an aggregate message to Slack and email.
+
+**Overall Release Readiness** is computed from the combination of all three job outcomes and the release gate decision:
+- BLOCKED if any required job result is not exactly `success` (failure, cancelled, skipped, and unknown are all BLOCKED)
+- GO if all three jobs succeeded and the release gate decision is GO
+- NO_GO if all three jobs succeeded and the release gate decision is NO_GO
+- UNKNOWN if all three jobs succeeded but release gate data is missing
 
 | Property | Value |
 | --- | --- |

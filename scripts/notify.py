@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Deliver release readiness notification to Slack and/or email.
 
+IMPORTANT: This script must remain stdlib-only. It runs directly on the GitHub Actions runner
+in the `notify` job without a Docker build or pip install. Adding non-stdlib imports will break
+CI unless the notify job is updated to install dependencies or run inside Docker.
+
 Dry-runs when required env vars are absent or when NOTIFY_DRY_RUN is set.
 CI never fails due to missing credentials — each channel dry-runs independently.
 
@@ -15,6 +19,11 @@ Optional env vars:
 
 GitHub Actions env vars (auto-set, used to construct the run URL):
   GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID
+
+CI job result env vars (set by the notify job via needs.*.result):
+  DOCKER_TEST_SUITE_RESULT  Result of the Docker Test Suite job
+  API_TESTS_RESULT          Result of the API Tests job
+  UI_TESTS_RESULT           Result of the UI Tests job
 
 Gmail example configuration:
   SMTP_HOST=smtp.gmail.com
@@ -66,72 +75,123 @@ def is_dry_run_forced() -> bool:
     return os.environ.get("NOTIFY_DRY_RUN", "").strip().lower() in ("true", "1")
 
 
-def build_message_lines(data: dict[str, object], run_url: str) -> list[str]:
-    """Build channel-agnostic message lines from release gate data."""
-    decision = str(data.get("overall_decision", "UNKNOWN"))
-    emoji = "✅" if decision == "GO" else "❌"
+def get_ci_status() -> dict[str, str]:
+    return {
+        "docker_test_suite": os.environ.get("DOCKER_TEST_SUITE_RESULT", ""),
+        "api_tests": os.environ.get("API_TESTS_RESULT", ""),
+        "ui_tests": os.environ.get("UI_TESTS_RESULT", ""),
+    }
 
-    tr = data.get("test_results", {})
-    if isinstance(tr, dict):
-        total = tr.get("total", "?")
-        passed = tr.get("passed", "?")
-        failed = tr.get("failed", "?")
-        skipped = tr.get("skipped", "?")
-        duration = tr.get("duration_secs", "?")
+
+def compute_overall_readiness(
+    ci_status: dict[str, str], gate_decision: str | None
+) -> str:
+    required = ["docker_test_suite", "api_tests", "ui_tests"]
+    # Any result that is not exactly "success" is treated as BLOCKED —
+    # failure, cancelled, skipped, or any unknown/non-success value is unsafe for release.
+    # Empty string means the env var was not set (local run); skip those to preserve
+    # backward-compatible behavior when running without CI context.
+    if any(v and v != "success" for v in (ci_status.get(k, "") for k in required)):
+        return "BLOCKED"
+    if gate_decision == "GO":
+        return "GO"
+    if gate_decision == "NO_GO":
+        return "NO_GO"
+    return "UNKNOWN"
+
+
+def build_message_lines(
+    data: dict[str, object] | None,
+    run_url: str,
+    ci_status: dict[str, str],
+) -> list[str]:
+    """Build channel-agnostic message lines including overall CI status and release gate."""
+    gate_decision = str(data.get("overall_decision", "")) if data is not None else None
+    overall = compute_overall_readiness(ci_status, gate_decision)
+    _overall_emoji = {"GO": "✅", "NO_GO": "❌"}
+    overall_emoji = _overall_emoji.get(overall, "⚠️")
+
+    lines: list[str] = [f"Overall Release Readiness: {overall_emoji} {overall}"]
+
+    job_labels = [
+        ("docker_test_suite", "Docker Test Suite"),
+        ("api_tests", "API Tests"),
+        ("ui_tests", "UI Tests"),
+    ]
+    non_empty = [
+        (label, ci_status.get(key, ""))
+        for key, label in job_labels
+        if ci_status.get(key, "")
+    ]
+    if non_empty:
+        all_success = all(result == "success" for _, result in non_empty)
+        ci_emoji = "✅" if all_success else "❌"
+        ci_label = (
+            "All required jobs passed" if all_success else "Failed job(s) detected"
+        )
+        lines.append(f"CI Status: {ci_emoji} {ci_label}")
+        for label, result in non_empty:
+            lines.append(f"  · {label}: {result}")
+
+    if data is None:
+        lines.append(
+            "Release Gate: ⚠️ No release gate data (gate did not run or api job failed)"
+        )
     else:
-        total = passed = failed = skipped = duration = "?"
+        gate_str = str(data.get("overall_decision", "UNKNOWN"))
+        gate_emoji = "✅" if gate_str == "GO" else "❌"
+        gate_line = f"Release Gate (staging API): {gate_emoji} {gate_str}"
+        if overall == "BLOCKED" and gate_str == "GO":
+            gate_line += " — component signal only; overall readiness is BLOCKED"
+        lines.append(gate_line)
 
-    lines: list[str] = [
-        f"Release Readiness: {emoji} {decision}",
-        f"Tests: {passed} passed, {failed} failed, {skipped} skipped"
-        f" ({total} total, {duration}s)",
-    ]
+        tr = data.get("test_results", {})
+        if isinstance(tr, dict):
+            total = tr.get("total", "?")
+            passed = tr.get("passed", "?")
+            failed = tr.get("failed", "?")
+            skipped = tr.get("skipped", "?")
+            duration = tr.get("duration_secs", "?")
+        else:
+            total = passed = failed = skipped = duration = "?"
 
-    gate_failures = data.get("gate_failures", [])
-    if isinstance(gate_failures, list) and gate_failures:
-        lines.append("Gate failures:")
-        for item in gate_failures[:MAX_ITEMS_IN_MESSAGE]:
-            lines.append(f"  - {item}")
-        remaining = len(gate_failures) - MAX_ITEMS_IN_MESSAGE
-        if remaining > 0:
-            lines.append(f"  ... and {remaining} more")
+        lines.append(
+            f"Tests: {passed} passed, {failed} failed, {skipped} skipped"
+            f" ({total} total, {duration}s)"
+        )
 
-    warnings = data.get("warnings", [])
-    if isinstance(warnings, list) and warnings:
-        lines.append("Warnings:")
-        for item in warnings[:MAX_ITEMS_IN_MESSAGE]:
-            lines.append(f"  - {item}")
-        remaining = len(warnings) - MAX_ITEMS_IN_MESSAGE
-        if remaining > 0:
-            lines.append(f"  ... and {remaining} more")
+        gate_failures = data.get("gate_failures", [])
+        if isinstance(gate_failures, list) and gate_failures:
+            lines.append("Gate failures:")
+            for item in gate_failures[:MAX_ITEMS_IN_MESSAGE]:
+                lines.append(f"  - {item}")
+            remaining = len(gate_failures) - MAX_ITEMS_IN_MESSAGE
+            if remaining > 0:
+                lines.append(f"  ... and {remaining} more")
+
+        warnings = data.get("warnings", [])
+        if isinstance(warnings, list) and warnings:
+            lines.append("Warnings:")
+            for item in warnings[:MAX_ITEMS_IN_MESSAGE]:
+                lines.append(f"  - {item}")
+            remaining = len(warnings) - MAX_ITEMS_IN_MESSAGE
+            if remaining > 0:
+                lines.append(f"  ... and {remaining} more")
 
     if run_url:
         lines.append(f"Run: {run_url}")
 
-    return lines
-
-
-def _fallback_message_lines(run_url: str) -> list[str]:
-    lines = [
-        "Release Readiness: ⚠️ UNKNOWN",
-        f"{ARTIFACT_JSON} not found or unreadable.",
-        "The release gate may not have run or failed before producing output.",
-    ]
-    if run_url:
-        lines.append(f"Run: {run_url}")
     return lines
 
 
 def send_slack(
-    data: dict[str, object] | None, run_url: str, dry_run_forced: bool
+    data: dict[str, object] | None,
+    run_url: str,
+    dry_run_forced: bool,
+    ci_status: dict[str, str],
 ) -> bool:
     webhook_url = os.environ.get("SLACK_WEBHOOK_URL", "")
-
-    lines = (
-        build_message_lines(data, run_url)
-        if data is not None
-        else _fallback_message_lines(run_url)
-    )
+    lines = build_message_lines(data, run_url, ci_status)
 
     if dry_run_forced or not webhook_url:
         if dry_run_forced and webhook_url:
@@ -165,7 +225,10 @@ def send_slack(
 
 
 def send_email(
-    data: dict[str, object] | None, run_url: str, dry_run_forced: bool
+    data: dict[str, object] | None,
+    run_url: str,
+    dry_run_forced: bool,
+    ci_status: dict[str, str],
 ) -> bool:
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_port_str = os.environ.get("SMTP_PORT", "587")
@@ -184,11 +247,7 @@ def send_email(
     if not recipients_str:
         required_missing.append("NOTIFY_RECIPIENTS")
 
-    lines = (
-        build_message_lines(data, run_url)
-        if data is not None
-        else _fallback_message_lines(run_url)
-    )
+    lines = build_message_lines(data, run_url, ci_status)
 
     if dry_run_forced or required_missing:
         if dry_run_forced and not required_missing:
@@ -216,11 +275,12 @@ def send_email(
         print("WARNING: SMTP_PORT is not a valid integer — skipping email")
         return False
 
-    decision = str((data or {}).get("overall_decision", "UNKNOWN"))
-    emoji = "✅" if decision == "GO" else "❌"
+    gate_decision = str(data.get("overall_decision", "")) if data is not None else None
+    overall = compute_overall_readiness(ci_status, gate_decision)
+    emoji = {"GO": "✅", "NO_GO": "❌"}.get(overall, "⚠️")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     subject_suffix = f" — {repo}" if repo else ""
-    subject = f"Release Readiness: {emoji} {decision}{subject_suffix}"
+    subject = f"Release Readiness: {emoji} {overall}{subject_suffix}"
 
     body_text = "\n".join(lines)
     msg = MIMEMultipart("alternative")
@@ -253,15 +313,16 @@ def main() -> int:
     data = load_release_data()
     run_url = get_run_url()
     dry_run_forced = is_dry_run_forced()
+    ci_status = get_ci_status()
 
     if data is None:
         print(
             f"WARNING: {ARTIFACT_JSON} not found or unreadable"
-            " — sending fallback notification"
+            " — release gate data unavailable"
         )
 
-    slack_ok = send_slack(data, run_url, dry_run_forced)
-    email_ok = send_email(data, run_url, dry_run_forced)
+    slack_ok = send_slack(data, run_url, dry_run_forced, ci_status)
+    email_ok = send_email(data, run_url, dry_run_forced, ci_status)
 
     if not slack_ok or not email_ok:
         print("WARNING: one or more notification channels failed — see above")

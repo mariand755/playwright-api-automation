@@ -2,17 +2,24 @@
 
 ## Overview
 
-The notification step in CI reads `artifacts/release-readiness.json` after the release readiness gate runs and delivers the GO/NO_GO decision, test counts, gate failures, and warnings to Slack and email.
+The `Notify` CI job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` all complete. It downloads `artifacts/release-readiness.json` from the `API Tests` artifact upload, receives each required job's outcome via `needs.*.result` env vars, and delivers an aggregate message to Slack and email.
 
 **When it runs:** `schedule` (nightly) and `workflow_dispatch` (manual) triggers only — not on push or pull request.
 
-**Dry-run default:** each channel checks its own required environment variables independently. When a channel's required variables are absent, it logs a message preview and continues without failing CI.
+**Message structure:** Each notification includes:
+- **Overall Release Readiness** — the aggregate verdict: GO, NO_GO, BLOCKED, or UNKNOWN. BLOCKED if any required job result is not exactly `success` (failure, cancelled, skipped, and unknown are all BLOCKED).
+- **CI Status** — per-job result rows for Docker Test Suite, API Tests, and UI Tests.
+- **Release Gate (staging API)** — the component gate decision from `release-readiness.json`. When overall readiness is BLOCKED but the component gate says GO, the line is annotated: `— component signal only; overall readiness is BLOCKED`.
+- **Tests** — pass/fail/skip counts and duration (when release gate data is present).
+- **Run URL** — link to the GitHub Actions run.
+
+**Dry-run default:** each channel checks its own required environment variables independently. When a channel's required variables are absent, it logs a message preview and continues without failing CI. Dry-run output includes all CI Status rows so wiring can be validated before live credentials are provisioned.
 
 **Channel independence:** Slack and email operate independently. Slack can deliver live while email dry-runs, and vice versa.
 
-**Implementation:** `scripts/notify.py` — stdlib only; zero new Python dependencies.
+**Implementation:** `scripts/notify.py` — stdlib only; zero new Python dependencies. The script runs directly on the GitHub Actions runner in the `notify` job without a Docker build or pip install.
 
-For the architectural decision record, see [ADR-011 in architecture_decision_log.md](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent).
+For the architectural decision record, see [ADR-016 in architecture_decision_log.md](architecture_decision_log.md#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete) and [ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent).
 
 ---
 
@@ -122,21 +129,31 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 ### Step 1 — Dry-run validation (no secrets required)
 
 1. Go to **GitHub → Actions → CI → Run workflow**, select branch `main`, and click **Run workflow**.
-2. Wait for the `API Tests` job to complete.
-3. Open the `API Tests` job and expand the **Deliver release readiness notification** step.
+2. Wait for `Docker Test Suite`, `API Tests`, and `UI Tests` to complete.
+3. Open the `Notify` job and expand the **Deliver aggregate CI notification** step.
 
 Expected output when no secrets are configured:
 
 ```text
 [DRY RUN] Slack: SLACK_WEBHOOK_URL not set — skipping live delivery
 [DRY RUN] Slack message preview:
-  Release Readiness: ✅ GO
+  Overall Release Readiness: ✅ GO
+  CI Status: ✅ All required jobs passed
+    · Docker Test Suite: success
+    · API Tests: success
+    · UI Tests: success
+  Release Gate (staging API): ✅ GO
   Tests: N passed, 0 failed, 0 skipped (N total, ...s)
   Run: https://github.com/.../actions/runs/...
 [DRY RUN] Email: SMTP_HOST, SMTP_USER, SMTP_PASSWORD, NOTIFY_RECIPIENTS not set — skipping live delivery
 [DRY RUN] Email would be sent to: NOTIFY_RECIPIENTS not set
 [DRY RUN] Email body preview:
-  Release Readiness: ✅ GO
+  Overall Release Readiness: ✅ GO
+  CI Status: ✅ All required jobs passed
+    · Docker Test Suite: success
+    · API Tests: success
+    · UI Tests: success
+  Release Gate (staging API): ✅ GO
   Tests: N passed, 0 failed, 0 skipped (N total, ...s)
   Run: https://github.com/.../actions/runs/...
 ```
@@ -154,11 +171,11 @@ After adding `SLACK_WEBHOOK_URL` to GitHub Secrets:
 
 1. Confirm `NOTIFY_DRY_RUN` is unset or `false` (check **Settings → Secrets and variables → Actions → Variables tab**).
 2. Trigger a `workflow_dispatch` run on `main`.
-3. Open the `API Tests` job and expand **Deliver release readiness notification**.
+3. Open the `Notify` job and expand **Deliver aggregate CI notification**.
 
 Expected in step logs: `Slack: delivered (HTTP 200)`
 
-Expected in the Slack channel: a message with the release readiness status and a link to the CI run.
+Expected in the Slack channel: a message with Overall Release Readiness, CI Status rows, Release Gate status, test counts, and a link to the CI run.
 
 ### Step 3 — Optional live email validation
 
@@ -166,7 +183,7 @@ After adding all SMTP secrets and `NOTIFY_RECIPIENTS`:
 
 1. Confirm `NOTIFY_DRY_RUN` is unset or `false`.
 2. Trigger a `workflow_dispatch` run on `main`.
-3. Open the `API Tests` job and expand **Deliver release readiness notification**.
+3. Open the `Notify` job and expand **Deliver aggregate CI notification**.
 
 Expected in step logs: `Email: delivered to N recipient(s)`
 
@@ -202,7 +219,8 @@ If GitHub secret scanning and push protection are enabled (**Settings → Code s
 ## References
 
 - [`scripts/notify.py`](../../scripts/notify.py) — notification script implementation
-- [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — API Tests job, Deliver release readiness notification step
-- [`quality_gates.md`](quality_gates.md) — Notification Delivery section
+- [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — `notify` job; artifact upload step in `api` job
+- [`quality_gates.md`](quality_gates.md) — Notification Delivery section; CI job structure table
 - [`security_and_branch_protection.md`](security_and_branch_protection.md) — Notification secrets section
+- [`architecture_decision_log.md` — ADR-016](architecture_decision_log.md#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete)
 - [`architecture_decision_log.md` — ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent)

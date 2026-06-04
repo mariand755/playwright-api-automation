@@ -34,6 +34,8 @@ Before a release build is tagged:
 - If the release run produces failure artifacts, review each screenshot/HTML dump and classify the failure as product, test, or infrastructure before making a release decision.
 - Release may proceed only when failures are fixed, formally waived, or documented as non-blocking with rationale.
 
+`scripts/pull_observability.py` documents the Datadog/Grafana/PagerDuty pull interface; replace the stub bodies and provision credentials (see ADR-017) to populate this file from a live observability stack.
+
 ---
 
 ## Docker-First Quality Checks

@@ -27,6 +27,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-015](#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) | Cross-environment selection with staging default and prod-read-only activation gate | Accepted | 2026-06-03 |
 | [ADR-016](#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete) | Aggregate CI notification job after all required jobs complete | Accepted | 2026-06-03 |
 | [ADR-017](#adr-017-observability-snapshot-populated-via-stub-pending-live-stack-connection) | Observability snapshot populated via stub pending live stack connection | Accepted | 2026-06-03 |
+| [ADR-018](#adr-018-failure-only-aggregate-notification-on-push-to-main) | Failure-only aggregate notification on push to main | Accepted | 2026-06-06 |
 
 ---
 
@@ -948,3 +949,100 @@ All five conditions must be met before wiring `pull_observability.py` to CI:
 **Accepted trade-off:** The static sample file is unchanged. The release gate continues to run on representative values that are not live production data. This is the correct decision — a fictional live integration with no real stack would be worse than clearly labeled sample data.
 
 **Consulting value:** The stub-first interface pattern addresses one of the most common hand-off failures in QA platform projects. Teams build the test and gate infrastructure first, then stall when the observability stack is ready because no interface was documented. A well-commented stub with per-provider endpoint patterns, credential naming conventions, and an ADR with an ordered activation checklist gives any future implementer everything needed to complete the integration in a single session without reading a design document or asking the original architect. The five-item activation checklist — replace stub body, provision secrets, align paths, add freshness check, wire CI — is the consulting deliverable: it converts "we deferred this" into "here is exactly how to activate it."
+
+---
+
+## ADR-018: Failure-only aggregate notification on push to main
+
+**Status:** Accepted
+**Date:** 2026-06-06
+
+### Context
+
+The `notify` job (ADR-016) runs after all three required CI jobs complete and delivers an aggregate Slack/email notification. Since its introduction, the job has fired only on `schedule` and `workflow_dispatch` triggers. Push to main runs the full suite and the release gate but sends no outbound notification on any outcome — a push-to-main failure is visible only in CI logs and GitHub branch status, with no active alert to the team.
+
+ADR-011 explicitly deferred this as an activation condition (line 475): "Expand the notification step's trigger condition from `schedule || workflow_dispatch` to additional triggers if broader notification coverage is needed."
+
+Notifying on every push to main would produce noise on clean merges. The correct policy is "opinionated silence" on clean pushes — teams receive a notification only when the main branch is unhealthy.
+
+### Decision
+
+Expand the `notify` job-level `if:` condition in `.github/workflows/ci.yml` to include push-to-main runs where any required job result is not exactly `success`:
+
+```yaml
+if: >-
+  always() && (
+  github.event_name == 'schedule' ||
+  github.event_name == 'workflow_dispatch' ||
+  (github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+  (needs.test.result != 'success' || needs.api.result != 'success' || needs.ui.result != 'success')))
+```
+
+**Trigger policy:**
+
+| Trigger | Outcome | Notify? |
+|---|---|---|
+| `schedule` | any | Always — unchanged |
+| `workflow_dispatch` | any | Always — unchanged |
+| `push` to `main` | any required job not `success` | Yes — BLOCKED notification |
+| `push` to `main` | all required jobs `success` | No — silent clean merge |
+| `pull_request` | any | No — unchanged |
+| feature branch push | any | No — unchanged |
+
+No changes to `scripts/notify.py`, `scripts/release_gate.py`, job structure, job names, env vars, secrets, or branch protection.
+
+### Why `always()` is required
+
+`always()` is not optional. Without it, GitHub Actions automatically skips a job whose `needs:` list includes any job that failed, was cancelled, or was skipped — this is the platform default. Removing `always()` would silently prevent the `notify` job from ever starting on push-to-main failure, because the upstream job failure would trigger the default skip behavior before the `if:` expression is evaluated.
+
+`always()` causes the platform to evaluate the job's `if:` condition regardless of upstream outcomes. The expanded condition then determines whether to start the job based on event, ref, and upstream results. Both are required together.
+
+### Semantic rules
+
+**Skipped required jobs are BLOCKED.** There is no skip-by-design mechanism for required jobs on push to main. Push to main always runs `TEST_SCOPE=full` (ADR-014). A skipped required job on main means the workflow was interrupted before that job started — this is a pipeline failure, not an intentional opt-out.
+
+**Cancelled required jobs are BLOCKED.** A cancelled job on main means the workflow was aborted before delivery was complete. Deliberate.
+
+**Release gate NO_GO is captured by `needs.api.result != 'success'`.** `scripts/release_gate.py` exits 1 on any non-GO decision (line 316: `return 0 if decision == "GO" else 1`). A non-GO exit code fails the `Run release readiness gate` step, which fails the `API Tests` job, which makes `needs.api.result = 'failure'`. No separate gate-decision check is needed in the trigger condition.
+
+**`NOTIFY_DRY_RUN` applies to all trigger types.** When `NOTIFY_DRY_RUN=true` (GitHub repository variable), push-to-main failure notifications also dry-run — the `notify` job starts and logs a preview but sends no live Slack or email. Operators relying on push-to-main failure alerts must confirm `NOTIFY_DRY_RUN` is unset or `false`.
+
+### Alternatives considered
+
+- **Step-level shell guard in the `Deliver aggregate CI notification` step** — rejected. Requires the Notify job to start on every push-to-main (clean or not), consuming a runner for a few seconds with no delivery. Also produces ambiguous CI logs: `Notify: success` for both "delivery succeeded" and "delivery silently skipped." The job-level `if:` is the correct mechanism for trigger eligibility.
+- **Logic in `scripts/notify.py` to read `GITHUB_EVENT_NAME` and `GITHUB_REF`** — rejected. Violates separation of concerns. Trigger eligibility is a CI orchestration decision, not a script responsibility. The script should know how to deliver, not whether the job should run. Would also make it harder to validate the policy by reading the workflow YAML.
+- **Helper eligibility script** — rejected. No codebase precedent. Adds a file for a function expressible as one condition in YAML. No benefit over the job-level approach.
+
+### Consequences
+
+- Push-to-main failures produce an active Slack/email notification. Clean merges are silent.
+- Existing schedule/workflow_dispatch behavior is unchanged.
+- `compute_overall_readiness()` in `notify.py` already handles BLOCKED/GO/NO_GO/UNKNOWN correctly for all job result combinations — no script changes required.
+- Job names (`Docker Test Suite`, `API Tests`, `UI Tests`) and required branch protection checks are unchanged. No post-merge branch protection update required.
+- Gmail/SMTP live delivery debugging remains deferred. The push-to-main notification fires but dry-runs until live credentials are provisioned.
+
+### Activation condition
+
+No further activation required. The condition is live on push to main immediately after this PR merges.
+
+- **Live delivery:** configure `SLACK_WEBHOOK_URL` and/or SMTP secrets in GitHub Settings → Secrets → Actions. Confirm `NOTIFY_DRY_RUN` is unset or `false`.
+- **Expand further:** if notification is needed on additional triggers (e.g., tag push, release), extend the `if:` condition in a new slice.
+
+### Related PRs / Docs
+
+- `.github/workflows/ci.yml` — `notify` job, `if:` condition
+- `agentic-qa-workflows/governance/notification_wiring.md` — "When it runs" and NOTIFY_DRY_RUN sections
+- `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table; Notification Delivery section
+- `agentic-qa-workflows/governance/security_and_branch_protection.md` — gate classification table, Notification delivery row
+- ADR-011 — activation condition fulfilled (trigger expansion); notification delivery defaults
+- ADR-016 — aggregate Notify job structure being extended
+
+### Trade-offs and consulting value
+
+**Accepted trade-off:** clean push-to-main merges are silent — no outbound confirmation. Teams that want explicit delivery confirmation can use `workflow_dispatch`. This is the correct default: notification frequency should be bounded by failure frequency, not push frequency.
+
+**Consulting value:** The "opinionated silence on clean merges" pattern is the answer to the most common notification design question in CI consulting: "how do we get alerted when something breaks on main without getting spammed on every commit?" The implementation is a single `if:` condition change with no new jobs, no new scripts, no new dependencies, and no branch protection changes. The ratio of behavioral capability to structural change is the correct pattern for incremental CI evolution.
+
+The `skipped = BLOCKED` and `cancelled = BLOCKED` semantics are worth documenting explicitly because most teams treat skipped as "not applicable" rather than "interrupted." Making this intent explicit — and encoding it as `!= 'success'` rather than `== 'failure'` — is a reusable architectural teaching point for any client engagement that has multi-job pipelines with downstream notification.
+
+---

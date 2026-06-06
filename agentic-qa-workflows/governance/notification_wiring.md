@@ -4,7 +4,7 @@
 
 The `Notify` CI job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` all complete. It downloads `artifacts/release-readiness.json` from the `API Tests` artifact upload, receives each required job's outcome via `needs.*.result` env vars, and delivers an aggregate message to Slack and email.
 
-**When it runs:** `schedule` (nightly) and `workflow_dispatch` (manual) triggers only — not on push or pull request.
+**When it runs:** `schedule` (nightly) and `workflow_dispatch` (manual) triggers always. `push` to `main` when any required job (`Docker Test Suite`, `API Tests`, `UI Tests`) result is not exactly `success` — failure, cancelled, and skipped all produce a BLOCKED notification. Clean pushes to main (all jobs success) run silently with no notification. Not on pull request or feature branch push.
 
 **Message structure:** Each notification includes:
 - **Overall Release Readiness** — the aggregate verdict: GO, NO_GO, BLOCKED, or UNKNOWN. BLOCKED if any required job result is not exactly `success` (failure, cancelled, skipped, and unknown are all BLOCKED).
@@ -122,6 +122,8 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 - Temporarily pause live delivery without removing or rotating secrets
 - Re-enable live delivery by deleting the variable or setting its value to `false`
 
+**Push-to-main failure notifications:** `NOTIFY_DRY_RUN=true` applies to all trigger types, including push-to-main failure notifications. A push to main that fails a required job will cause the `Notify` job to run, but all channels will dry-run — no live Slack or email is sent. Confirm `NOTIFY_DRY_RUN` is unset or `false` before relying on live push-to-main failure alerts.
+
 **Important:** if `NOTIFY_DRY_RUN` is added under **Secrets** instead of **Variables**, the workflow's `${{ vars.NOTIFY_DRY_RUN }}` reference reads from the wrong namespace and resolves to an empty string. The flag silently has no effect.
 
 ---
@@ -224,5 +226,6 @@ If GitHub secret scanning and push protection are enabled (**Settings → Code s
 - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — `notify` job; artifact upload step in `api` job
 - [`quality_gates.md`](quality_gates.md) — Notification Delivery section; CI job structure table
 - [`security_and_branch_protection.md`](security_and_branch_protection.md) — Notification secrets section
+- [`architecture_decision_log.md` — ADR-018](architecture_decision_log.md#adr-018-failure-only-aggregate-notification-on-push-to-main)
 - [`architecture_decision_log.md` — ADR-016](architecture_decision_log.md#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete)
 - [`architecture_decision_log.md` — ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent)

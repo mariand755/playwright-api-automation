@@ -257,7 +257,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test, api, ui]
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: >-
+      always() && (
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (needs.test.result != 'success' || needs.api.result != 'success' || needs.ui.result != 'success')))
 
     steps:
       - name: Checkout code

@@ -66,6 +66,12 @@ Reviewer should evaluate:
 - Does the plan break the taint chain at the variable level, not delegate it to a helper function? A helper function that transforms a secret value is not a CodeQL sanitizer — the taint follows the argument, not the return value.
 - What CodeQL findings would this code be likely to generate? See `failure_evidence.md — CodeQL: secret-taint in logging` for the specific patterns.
 
+### Data handling and artifact exposure
+
+(Applies when the slice activates a production data path, extends CI artifact production, or changes what external services receive from this framework. Declare N/A if not applicable.)
+
+- If the slice activates a production data path, extends CI artifact production, or changes what external services receive from this framework: assess whether any artifact, notification, or transmitted data could carry regulated or sensitive information in the client's deployment context. Examples include UI screenshots at failure, HTML dumps, API response excerpts in assertions, observability metrics, JUnit XML, GitHub Step Summary content, Slack/email notifications, and future MCP-routed evidence. If yes, the plan must specify what data could be present, whether masking or redaction is required, the appropriate artifact retention period, and which external services will receive that data.
+
 ### Bounded adjacent-risk scan
 
 Scan for risks in files or behaviors adjacent to the slice's changes that the plan does not address — files the implementation might inadvertently affect, or downstream behaviors that depend on files this slice modifies.
@@ -209,6 +215,7 @@ Identify any of the following:
 - Is the taint chain broken at the variable level — not delegated to a helper function? A helper function that transforms a secret value is not a CodeQL sanitizer; CodeQL follows the argument, not the return value.
 - Are log and print statements using hardcoded status strings (`"configured"`, `"set"`, `"not set"`) derived from truthiness checks (`if secret_var:`) rather than from the secret variable's value?
 - Reference: `failure_evidence.md — CodeQL: secret-taint in logging` for the specific patterns CodeQL will flag.
+- If the slice produces or extends CI artifacts, or routes data to external services: verify whether any produced artifact or transmitted data could carry regulated or sensitive information in the client's deployment context. If yes, confirm masking/redaction is in place or explicitly deferred with rationale, and confirm artifact retention and external-service exposure are appropriate for the slice. This check applies regardless of whether the credential-handling questions above are applicable — apply whenever the slice produces new CI artifacts or routes data to external services.
 
 ### 11. Bounded adjacent-risk scan
 

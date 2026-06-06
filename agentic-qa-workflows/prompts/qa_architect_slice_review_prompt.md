@@ -15,6 +15,12 @@ Act as a QA Architect and Solution Architect reviewer. Do not edit files in eith
 
 ---
 
+## Independence preface
+
+Do not treat the review items below as a checklist to confirm — use them as context and known risk areas. Verify the actual repo state before evaluating the plan or implementation. Challenge assumptions, identify missing risks, and propose a better approach or flag a follow-up slice if the plan or implementation is not the best option. Bring in industry judgment around CI/CD reliability, release governance, security, data handling, maintainability, and consulting blueprint value. Both modes apply this framing.
+
+---
+
 ## Context to establish before reviewing
 
 - What slice is this? (name, number, branch)

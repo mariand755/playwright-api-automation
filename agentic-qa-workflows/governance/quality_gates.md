@@ -190,7 +190,7 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks 
 | `Docker Test Suite` | Docker build, Ruff format, Ruff lint, mypy type check, pip-audit, Trivy, pytest collection | All triggers | — |
 | `API Tests` | API test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, release readiness gate (full runs only), release readiness artifact upload | All triggers | `Docker Test Suite` |
 | `UI Tests` | UI test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, failure artifact upload | All triggers | `Docker Test Suite` |
-| `Notify` | Aggregate Slack/SMTP notification with overall CI status and release readiness | `schedule` and `workflow_dispatch` only | `Docker Test Suite`, `API Tests`, `UI Tests` |
+| `Notify` | Aggregate Slack/SMTP notification with overall CI status and release readiness | `schedule` and `workflow_dispatch` always; `push` to `main` when any required job is not `success` | `Docker Test Suite`, `API Tests`, `UI Tests` |
 
 `API Tests` and `UI Tests` run in parallel after `Docker Test Suite` passes. `Notify` runs after all three required jobs complete. `Docker Test Suite`, `API Tests`, and `UI Tests` are required status checks for merge to `main`. `Notify` is not a required check — it is advisory delivery and must never block merges.
 
@@ -210,7 +210,7 @@ The `Notify` job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` all
 
 | Property | Value |
 | --- | --- |
-| Triggers | `schedule` and `workflow_dispatch` only — not on push or pull request |
+| Triggers | `schedule` and `workflow_dispatch` always; `push` to `main` when any required job is not `success` — not on `pull_request` or feature branch push |
 | Blocking | Never — script always exits 0 |
 | Required check | No — no branch protection change required |
 | Implementation | `scripts/notify.py` — stdlib only, zero new dependencies |

@@ -93,7 +93,7 @@ The `Analyze Python` job (`.github/workflows/codeql.yml`) runs CodeQL static sec
 | CodeQL findings | Advisory | No — Security tab | GitHub Security tab | PR / push / weekly |
 | Dependabot updates | Update visibility | No — creates PRs | Dependabot PRs | Weekly |
 | GitHub secret scanning | Platform protection | Yes (push protection enabled) | Git push rejection | Push |
-| Notification delivery | Advisory | No — exits 0 always | CI step output | schedule / workflow_dispatch |
+| Notification delivery | Advisory | No — exits 0 always | CI step output | schedule / workflow_dispatch / push to main (on failure) |
 
 ---
 

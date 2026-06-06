@@ -28,6 +28,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-016](#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete) | Aggregate CI notification job after all required jobs complete | Accepted | 2026-06-03 |
 | [ADR-017](#adr-017-observability-snapshot-populated-via-stub-pending-live-stack-connection) | Observability snapshot populated via stub pending live stack connection | Accepted | 2026-06-03 |
 | [ADR-018](#adr-018-failure-only-aggregate-notification-on-push-to-main) | Failure-only aggregate notification on push to main | Accepted | 2026-06-06 |
+| [ADR-019](#adr-019-independent-judgment-preface-in-qa-reviewer-and-planning-prompts) | Independent judgment preface in QA reviewer and planning prompts | Accepted | 2026-06-06 |
 
 ---
 
@@ -1044,5 +1045,64 @@ No further activation required. The condition is live on push to main immediatel
 **Consulting value:** The "opinionated silence on clean merges" pattern is the answer to the most common notification design question in CI consulting: "how do we get alerted when something breaks on main without getting spammed on every commit?" The implementation is a single `if:` condition change with no new jobs, no new scripts, no new dependencies, and no branch protection changes. The ratio of behavioral capability to structural change is the correct pattern for incremental CI evolution.
 
 The `skipped = BLOCKED` and `cancelled = BLOCKED` semantics are worth documenting explicitly because most teams treat skipped as "not applicable" rather than "interrupted." Making this intent explicit — and encoding it as `!= 'success'` rather than `== 'failure'` — is a reusable architectural teaching point for any client engagement that has multi-job pipelines with downstream notification.
+
+---
+
+## ADR-019: Independent judgment preface in QA reviewer and planning prompts
+
+**Status:** Accepted
+**Date:** 2026-06-06
+
+### Context
+
+ADR-013 (2026-06-02) hardened the QA reviewer prompt framework with technical checks: validation integrity and coverage, security and secret hygiene (Dimension 10), and bounded adjacent-risk scan (Dimension 11). ADR-013 expanded *what* reviewers check — technical dimensions, validation integrity, security/secret hygiene, and bounded adjacent-risk scan — but did not address *how* reviewers should approach the check.
+
+Neither the reviewer prompt (`qa_architect_slice_review_prompt.md`) nor the planning template (`slice_planning_prompt_template.md`) contained any instruction telling the reviewer or planner to act independently. A long checklist without behavioral framing can produce confirmation-loop behavior: the AI reads the listed items and confirms them rather than challenging the underlying plan. This ADR addresses that gap.
+
+### Decision
+
+Add a shared **Independence preface** section to `qa_architect_slice_review_prompt.md`, placed after the existing role declaration ("Act as a QA Architect and Solution Architect reviewer.") and before the "Context to establish" section. The preface applies to both Mode A and Mode B without duplication.
+
+Expand the **Important** section in `slice_planning_prompt_template.md` so planning does not assume the suggested path is automatically correct.
+
+Add a **stop-and-explain** sentence to the Session Constraints in `agentic_workflow_rules.md` so implementation stops and explains rather than silently expanding scope if a better path is discovered mid-edit.
+
+No existing review dimensions, output format sections, or validation/security checks are removed or weakened.
+
+### Independence preface text
+
+> Do not treat the review items below as a checklist to confirm — use them as context and known risk areas. Verify the actual repo state before evaluating the plan or implementation. Challenge assumptions, identify missing risks, and propose a better approach or flag a follow-up slice if the plan or implementation is not the best option. Bring in industry judgment around CI/CD reliability, release governance, security, data handling, maintainability, and consulting blueprint value. Both modes apply this framing.
+
+### Why a shared preface, not per-mode additions
+
+Mode A and Mode B have the same independence gap. A per-mode duplicate would be inconsistent and verbose. The shared preface is placed in the common preamble so both modes inherit it without repetition.
+
+### ADR-013 relationship
+
+ADR-013 changed *what* to check by adding validation integrity, security/secret hygiene, and bounded adjacent-risk scan expectations. ADR-019 changes *how* to approach the review by adding independence framing. Separating them keeps ADR-013 focused on technical review hardening while ADR-019 documents the behavioral framing needed to prevent checklist-confirmation drift.
+
+### Alternatives considered
+
+- **Remove the checklists entirely** — rejected. Known risk areas are still valuable; removing them would make reviews vague and non-repeatable.
+- **Add separate prefaces to Mode A and Mode B** — rejected as unnecessary duplication. Both modes need the same behavioral framing.
+- **Update `CLAUDE.md`** — rejected. Changes to CLAUDE.md affect all sessions globally; this change is scoped to the slice review and planning workflow.
+- **Add a mandatory "assumptions challenged" output section** — deferred. If the preface proves insufficient to shift reviewer behavior, this is the next escalation step (see Activation condition below).
+
+### Consequences
+
+Future Mode A and Mode B reviews should challenge plan assumptions, propose alternatives or follow-up slices when warranted, and verify the actual repo state before evaluating the plan. Future planning prompts should interrogate the suggested path before proposing implementation. Future implementation work should stop and explain before changing scope mid-edit.
+
+All existing validation integrity, security/secret hygiene, and adjacent-risk scan checks (Mode B Dimensions 1–11, Mode A evaluation subsections) remain mandatory and unchanged.
+
+### Activation condition
+
+If reviews still drift into mechanical checklist confirmation despite this preface, add a required "Assumptions challenged" output section to both modes that forces the reviewer to name at least one assumption they tested and either confirmed against the repo or rejected. This escalation is the next step before considering a Mode C (security-only) or Mode D (architectural challenge) review pass.
+
+### Related PRs / Docs
+
+- `agentic-qa-workflows/prompts/qa_architect_slice_review_prompt.md` — v3; primary artifact of this ADR
+- `agentic-qa-workflows/prompts/slice_planning_prompt_template.md` — v2; Important section expanded
+- `agentic-qa-workflows/governance/agentic_workflow_rules.md` — Session Constraints; stop-and-explain addition
+- ADR-013 — predecessor (bounded adjacent-risk scan, validation integrity, security/secret hygiene)
 
 ---

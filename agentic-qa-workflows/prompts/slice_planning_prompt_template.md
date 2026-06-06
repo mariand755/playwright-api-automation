@@ -12,7 +12,7 @@ Goal:
 [SLICE_GOAL — one sentence describing what this slice accomplishes and why it is needed now]
 
 Important:
-Do not edit files yet. First inspect the relevant files and propose the smallest safe implementation plan.
+Do not edit files yet. Think like a QA Architect and Solution Architect before proposing implementation. Do not assume the suggested path is correct — inspect the repo, compare options, challenge the premise, and recommend the smallest safe approach, including doing nothing if deferral is the right call. If there is a better architecture than the one implied by this prompt, say so and explain the trade-off.
 
 Context:
 [CONTEXT_SUMMARY — 2–5 sentences on the current state of the repo, why this slice is needed, and what recent work it builds on. Include any constraints that are not obvious from reading the files.]

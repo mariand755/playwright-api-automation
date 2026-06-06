@@ -40,6 +40,7 @@ Verify against `agentic-qa-workflows/governance/quality_gates.md`:
 ## Session Constraints
 
 - Make one focused change per session. Do not refactor, rename, or restructure code beyond the immediate task.
+- If you discover a better or safer implementation path while editing, stop editing and explain before proceeding. Do not silently expand the slice.
 - After each change, run the smallest relevant test command and report the result.
 - Do not commit or push unless the user explicitly requests it.
 

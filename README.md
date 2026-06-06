@@ -122,6 +122,8 @@ The `ENV` environment variable selects the URL block from `data/test_data/test_u
 
 For live Slack and SMTP notification setup, see [agentic-qa-workflows/governance/notification_wiring.md](agentic-qa-workflows/governance/notification_wiring.md).
 
+For live observability provider setup and activation, see [agentic-qa-workflows/governance/observability_wiring.md](agentic-qa-workflows/governance/observability_wiring.md).
+
 ## Prerequisites
 - Docker — required for CI-parity validation
 - Python 3.9+, pip, Playwright browser binaries — for optional local runs only

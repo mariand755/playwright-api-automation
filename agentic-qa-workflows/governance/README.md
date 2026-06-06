@@ -7,7 +7,7 @@ This folder contains the rules, standards, and architectural records that govern
 ## Files
 
 | File | Purpose | When to read |
-|---|---|---|
+| --- | --- | --- |
 | `qa_standards.md` | Test naming conventions, test case ID format (`TC-UI-NNN`, `TC-API-NNN`), assertion style | Before adding or editing any test |
 | `suite_taxonomy.md` | Marker definitions (`ui`, `api`, `smoke`, `regression`, `negative`, `api_contract`) and when to apply each | Before adding or editing any test |
 | `page_object_api_rules.md` | Page Object Model boundaries; API client boundaries; what belongs in a test vs. a fixture vs. a client | Before adding UI page classes or API client methods |
@@ -18,3 +18,4 @@ This folder contains the rules, standards, and architectural records that govern
 | `security_and_branch_protection.md` | GitHub branch protection required checks; secret scanning guidance; demo credential policy; gate classification | When adding CI jobs; when configuring GitHub repository settings |
 | `notification_wiring.md` | Step-by-step guide for wiring live Slack and SMTP email notifications through GitHub Actions repository secrets | When enabling live notification delivery |
 | `architecture_decision_log.md` | ADR entries for major architectural decisions: what was decided, why, what alternatives were rejected, and what is deferred | When making tooling or architecture decisions; when onboarding to the repo |
+| `observability_wiring.md` | Step-by-step guide for wiring live Datadog/Grafana/PagerDuty observability providers into the release-readiness flow | When enabling live observability data pulls |

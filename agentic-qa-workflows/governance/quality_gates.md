@@ -34,7 +34,7 @@ Before a release build is tagged:
 - If the release run produces failure artifacts, review each screenshot/HTML dump and classify the failure as product, test, or infrastructure before making a release decision.
 - Release may proceed only when failures are fixed, formally waived, or documented as non-blocking with rationale.
 
-`scripts/pull_observability.py` documents the Datadog/Grafana/PagerDuty pull interface; replace the stub bodies and provision credentials (see ADR-017) to populate this file from a live observability stack.
+`scripts/pull_observability.py` documents the Datadog/Grafana/PagerDuty pull interface; replace the stub bodies and provision credentials to populate this file from a live observability stack. See [`observability_wiring.md`](observability_wiring.md) for the step-by-step activation guide and [ADR-017](architecture_decision_log.md#adr-017-observability-snapshot-populated-via-stub-pending-live-stack-connection) for the decision record.
 
 ---
 

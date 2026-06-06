@@ -155,6 +155,30 @@ For step-by-step live Slack and SMTP setup, see [`notification_wiring.md`](notif
 
 ---
 
+### Observability secrets
+
+The following secrets are required for live observability data pulls from `scripts/pull_observability.py`. Store all values in **GitHub Settings → Secrets and variables → Actions → Secrets tab**. Never commit these values to the repository. Rotate and remove from git history if accidentally committed.
+
+| Secret | Provider | Purpose |
+| --- | --- | --- |
+| `DATADOG_API_KEY` | Datadog | Datadog API authentication key |
+| `DATADOG_APP_KEY` | Datadog | Datadog application key (scopes API access) |
+| `GRAFANA_URL` | Grafana | Grafana instance base URL — treat as a secret; reveals infrastructure topology |
+| `GRAFANA_API_KEY` | Grafana | Grafana service account token |
+| `GRAFANA_DASHBOARD_UID` | Grafana | Dashboard UID for panel queries |
+| `PAGERDUTY_API_KEY` | PagerDuty | PagerDuty REST API key |
+| `PAGERDUTY_SERVICE_ID` | PagerDuty | PagerDuty service ID for incident queries |
+
+Provision only the secrets for the chosen provider. `OBSERVABILITY_PROVIDER` (a repository variable, not a secret) selects which provider is active — only one provider runs at a time.
+
+**`OBSERVABILITY_WRITE`** is a GitHub repository variable, not a secret. Add it under **Settings → Secrets and variables → Actions → Variables tab**. Setting `OBSERVABILITY_WRITE=true` without the required credentials for the selected provider still dry-runs — credentials alone do not enable writes.
+
+**`DATADOG_SITE`** is forward-documented in the stub for a real Datadog implementation but is not read by the current stub. It is not an active secret and should not be stored in GitHub Secrets until a real Datadog integration is implemented.
+
+For step-by-step provider activation, variable configuration, and validation commands, see [`observability_wiring.md`](observability_wiring.md).
+
+---
+
 ## Future optional: gitleaks
 
 gitleaks is an open-source secret scanning tool that can be added as a CI step or pre-commit hook to scan git history and staged changes for secrets matching configurable patterns.

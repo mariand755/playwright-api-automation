@@ -19,6 +19,8 @@ The `Notify` CI job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` 
 
 **Implementation:** `scripts/notify.py` — stdlib only; zero new Python dependencies. The script runs directly on the GitHub Actions runner in the `notify` job without a Docker build or pip install.
 
+**Observability data in the release gate line:** The "Release Gate (staging API)" line is derived from `artifacts/release-readiness.json`, which `scripts/release_gate.py` builds from `data/release/observability_snapshot.json`. In the current repo state, that snapshot contains static sample values — the release gate signal in notifications reflects sample data, not live production metrics. When `scripts/pull_observability.py` is activated with a live provider, notifications will reflect real observability evidence. See [`observability_wiring.md`](observability_wiring.md) for provider activation guidance.
+
 For the architectural decision record, see [ADR-016 in architecture_decision_log.md](architecture_decision_log.md#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete) and [ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent).
 
 ---

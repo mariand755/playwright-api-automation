@@ -170,7 +170,8 @@ The `API Tests` and `UI Tests` jobs select their test scope based on the GitHub 
 | `push` to `feature/**` | Smoke only | staging (default) | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
 | `push` to `main` | Full suite | staging (default) | `pytest test/api` / `pytest test/ui` |
 | `schedule` (nightly) | Full suite | staging (default) | `pytest test/api` / `pytest test/ui` |
-| `workflow_dispatch` | Full suite | staging (default) | `pytest test/api` / `pytest test/ui` |
+| `workflow_dispatch` (`test_scope=full`, default) | Full suite | staging (default) | `pytest test/api` / `pytest test/ui` |
+| `workflow_dispatch` (`test_scope=smoke`) | Smoke only | staging (default) | `pytest test/api -m smoke` / `pytest test/ui -m smoke` |
 | Full-suite trigger + `PROD_ENV_ACTIVE=true` | `read_only` subset | prod\_read\_only | `pytest test/api -m read_only` / `pytest test/ui -m read_only` |
 
 **Environment selection:** The `ENV` environment variable selects the URL block from `data/test_data/test_users.json`. When `ENV` is unset, staging is used. Only `staging` and `prod_read_only` are valid values; any other value fails fast at collection time with a clear error.

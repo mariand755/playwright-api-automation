@@ -126,6 +126,18 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 
 **Important:** if `NOTIFY_DRY_RUN` is added under **Secrets** instead of **Variables**, the workflow's `${{ vars.NOTIFY_DRY_RUN }}` reference reads from the wrong namespace and resolves to an empty string. The flag silently has no effect.
 
+### Per-run override via `workflow_dispatch` input
+
+Manual CI runs (`workflow_dispatch`) support a `notification_mode` input that overrides `NOTIFY_DRY_RUN` for that specific run without changing the repo variable:
+
+| `notification_mode` input | Effect |
+|---|---|
+| `repo_default` (default) | Uses `vars.NOTIFY_DRY_RUN` — preserves current behavior |
+| `dry_run` | Forces `NOTIFY_DRY_RUN=true` for this run only |
+| `live` | Clears `NOTIFY_DRY_RUN` for this run only — live delivery if secrets are configured |
+
+The input is available only on `workflow_dispatch`. On `schedule` and `push` to `main`, `vars.NOTIFY_DRY_RUN` is always used. Missing secrets still prevent live delivery regardless of the input value — `notify.py` dry-runs per channel when required env vars are absent.
+
 ---
 
 ## Validating the Wiring

@@ -11,6 +11,24 @@ on:
   schedule:
     - cron: '0 2 * * *'  # Nightly 02:00 UTC — runs on default branch (main)
   workflow_dispatch:
+    inputs:
+      test_scope:
+        description: "Test scope — full runs all tests and the release gate; smoke runs smoke-tagged tests only"
+        required: false
+        default: full
+        type: choice
+        options:
+          - full
+          - smoke
+      notification_mode:
+        description: "Notification mode — repo_default uses NOTIFY_DRY_RUN variable; dry_run/live override for this manual run"
+        required: false
+        default: repo_default
+        type: choice
+        options:
+          - repo_default
+          - dry_run
+          - live
 
 permissions:
   contents: read
@@ -92,9 +110,17 @@ jobs:
 
       - name: Determine test scope
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
-             [[ "${{ github.event_name }}" == "schedule" ]] || \
-             [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SCOPE="${{ inputs.test_scope }}"
+            SCOPE="${SCOPE:-full}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
+               [[ "${{ github.event_name }}" == "schedule" ]]; then
+            SCOPE="full"
+          else
+            SCOPE="smoke"
+          fi
+
+          if [[ "$SCOPE" == "full" ]]; then
             echo "TEST_SCOPE=full" >> "$GITHUB_ENV"
             echo "MARKER_ARGS=" >> "$GITHUB_ENV"
           else
@@ -130,7 +156,7 @@ jobs:
         if: always()
         run: |
           if [ "$TEST_SCOPE" = "smoke" ]; then
-            echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\`, nightly schedule, and \`workflow_dispatch\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\` and nightly schedule." >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -166,7 +192,7 @@ jobs:
           if [ "$TEST_SCOPE" != "full" ]; then
             echo "## Release Readiness Gate" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "> **Smoke run** — release gate skipped. Full release readiness runs on push to \`main\`, nightly schedule, and \`workflow_dispatch\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Smoke run** — release gate skipped. Full release readiness runs on push to \`main\` and nightly schedule." >> "$GITHUB_STEP_SUMMARY"
           elif [ -f artifacts/release-readiness.md ]; then
             cat artifacts/release-readiness.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -207,9 +233,17 @@ jobs:
 
       - name: Determine test scope
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
-             [[ "${{ github.event_name }}" == "schedule" ]] || \
-             [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            SCOPE="${{ inputs.test_scope }}"
+            SCOPE="${SCOPE:-full}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]] || \
+               [[ "${{ github.event_name }}" == "schedule" ]]; then
+            SCOPE="full"
+          else
+            SCOPE="smoke"
+          fi
+
+          if [[ "$SCOPE" == "full" ]]; then
             echo "TEST_SCOPE=full" >> "$GITHUB_ENV"
             echo "MARKER_ARGS=" >> "$GITHUB_ENV"
           else
@@ -245,7 +279,7 @@ jobs:
         if: always()
         run: |
           if [ "$TEST_SCOPE" = "smoke" ]; then
-            echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\`, nightly schedule, and \`workflow_dispatch\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\` and nightly schedule." >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -294,6 +328,20 @@ jobs:
           path: artifacts/
         continue-on-error: true
 
+      - name: Determine notification mode
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.notification_mode }}" == "dry_run" ]]; then
+              echo "NOTIFY_DRY_RUN=true" >> "$GITHUB_ENV"
+            elif [[ "${{ inputs.notification_mode }}" == "live" ]]; then
+              echo "NOTIFY_DRY_RUN=" >> "$GITHUB_ENV"
+            else
+              echo "NOTIFY_DRY_RUN=${{ vars.NOTIFY_DRY_RUN }}" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "NOTIFY_DRY_RUN=${{ vars.NOTIFY_DRY_RUN }}" >> "$GITHUB_ENV"
+          fi
+
       - name: Deliver aggregate CI notification
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -303,7 +351,6 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           NOTIFY_RECIPIENTS: ${{ secrets.NOTIFY_RECIPIENTS }}
-          NOTIFY_DRY_RUN: ${{ vars.NOTIFY_DRY_RUN }}
           DOCKER_TEST_SUITE_RESULT: ${{ needs.test.result }}
           API_TESTS_RESULT: ${{ needs.api.result }}
           UI_TESTS_RESULT: ${{ needs.ui.result }}

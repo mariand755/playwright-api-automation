@@ -1140,7 +1140,7 @@ Add `scripts/__init__.py` to make `scripts/` an explicit Python package and avoi
 - **`build_output()` and `render_markdown()`**: formatting functions with no decision logic; format string assertions are brittle on cosmetic changes; deferred.
 - **`send_slack()` and `send_email()`**: require network calls; no stdlib mocking is added in this slice; deferred to a dedicated notification-delivery test slice.
 - **`pull_observability.py`**: all provider implementations are stubs returning hardcoded sample data; zero decision value until live providers are connected.
-- **JUnit XML reporter for script tests**: `artifacts/scripts-report.xml` and a `dorny/test-reporter` panel are not added in this slice. The `test` job produces verbose output only. Add after the test layer is proven.
+- **JUnit XML reporter for script tests**: deferred in PR #35 (initial script-test slice) pending layer growth. Activated early for blueprint consistency — the `test` job now produces `artifacts/scripts-report.xml` and publishes a `Script Unit Test Results` check via `dorny/test-reporter`. All test layers are now first-class CI reporting signals.
 
 ### Why the Docker Test Suite job, not a new job
 
@@ -1160,7 +1160,7 @@ All target functions (`parse_test_results`, `evaluate_gate`, `summarize`, `compu
 
 `test/scripts/` is the canonical location for offline unit tests of QA platform scripts. Any new decision logic added to `release_gate.py`, `ci_summary.py`, or `notify.py` should be tested here before the function is used in CI. Script tests run on every push, PR, and nightly build. The `test` job gates CI on both quality checks and script test results.
 
-Future work: add `artifacts/scripts-report.xml` and a `dorny/test-reporter` panel after the test layer is proven; add delivery function tests (`send_slack`, `send_email`) in a separate slice with appropriate stdlib mocking.
+Script test reporting activated: `artifacts/scripts-report.xml` is produced by the `test` job and published as `Script Unit Test Results` via `dorny/test-reporter`. `Script Unit Test Results` is advisory only (`fail-on-error: false`) — `Docker Test Suite` remains the required branch-protection gate. Promote `Script Unit Test Results` to a required check only after it consistently passes on main and the team intentionally follows the ADR-010 branch-protection process. Future work: add delivery function tests (`send_slack`, `send_email`) in a separate slice with appropriate stdlib mocking.
 
 ### Trade-offs and cost / benefit
 

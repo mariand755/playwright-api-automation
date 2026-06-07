@@ -54,8 +54,24 @@ jobs:
       - name: Verify test collection
         run: docker run --rm playwright-api-automation pytest --collect-only -q
 
+      - name: Prepare artifacts directory
+        run: mkdir -p artifacts
+
       - name: Run script unit tests
-        run: docker run --rm playwright-api-automation pytest test/scripts/ -v
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            playwright-api-automation pytest test/scripts/ -v --junitxml=artifacts/scripts-report.xml
+
+      - name: Publish Script Unit Test Results
+        if: always()
+        # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        with:
+          name: Script Unit Test Results
+          path: artifacts/scripts-report.xml
+          reporter: java-junit
+          fail-on-error: false
 
   api:
     name: API Tests

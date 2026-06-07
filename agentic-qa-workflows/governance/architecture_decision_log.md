@@ -30,6 +30,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-018](#adr-018-failure-only-aggregate-notification-on-push-to-main) | Failure-only aggregate notification on push to main | Accepted | 2026-06-06 |
 | [ADR-019](#adr-019-independent-judgment-preface-in-qa-reviewer-and-planning-prompts) | Independent judgment preface in QA reviewer and planning prompts | Accepted | 2026-06-06 |
 | [ADR-020](#adr-020-script-unit-test-layer-for-release-readiness-and-notification-decision-logic) | Script unit test layer for release-readiness and notification decision logic | Accepted | 2026-06-06 |
+| [ADR-021](#adr-021-workflow_dispatch-inputs-for-parameterized-manual-ci-runs) | workflow_dispatch inputs for parameterized manual CI runs | Accepted | 2026-06-07 |
 
 ---
 
@@ -1217,5 +1218,136 @@ Script test reporting activated: `artifacts/scripts-report.xml` is produced by t
 - `scripts/__init__.py` — makes `scripts/` an explicit Python package
 - ADR-009 — API-only release gate design (upstream context)
 - ADR-016 — aggregate CI notification job (upstream context)
+
+---
+
+## ADR-021: workflow_dispatch inputs for parameterized manual CI runs
+
+**Status:** Accepted
+**Date:** 2026-06-07
+
+### Context
+
+`workflow_dispatch:` was declared bare in `.github/workflows/ci.yml` — no inputs block. Every manual trigger ran the full test suite with `TEST_SCOPE=full` and read `NOTIFY_DRY_RUN` from the `vars.NOTIFY_DRY_RUN` repository variable. Operators had no per-run control over either behavior.
+
+Two operator needs were identified that the bare dispatch did not support:
+
+1. A fast smoke-only sanity check after a hotfix or recovery — without waiting for a full regression run.
+2. Per-run notification override — an operator who wants a guaranteed dry-run for a specific dispatch (to validate CI scope without notification noise) had to edit and then revert the `NOTIFY_DRY_RUN` repo variable, creating a multi-step process with a window of unexpected behavior.
+
+ADR-014 states that `workflow_dispatch` always triggers a full suite run. This slice amends that decision: `full` remains the default, but operators can now select `smoke`.
+
+### Decision
+
+Add two `workflow_dispatch` inputs. Both are closed `type: choice` selects with safe defaults that preserve existing behavior for all non-dispatch triggers and for dispatch runs that do not change the inputs.
+
+#### Input 1: `test_scope`
+
+```yaml
+test_scope:
+  description: "Test scope — full runs all tests and the release gate; smoke runs smoke-tagged tests only"
+  required: false
+  default: full
+  type: choice
+  options:
+    - full
+    - smoke
+```
+
+Default `full` — all existing dispatch runs that did not set this input continue to run the full suite.
+
+The `Determine test scope` step in both `API Tests` and `UI Tests` jobs is updated to check `github.event_name == 'workflow_dispatch'` first and read `inputs.test_scope` only in that branch. Non-dispatch triggers (`push` to main, `schedule`, PR, feature branch push) continue to use the existing logic without change.
+
+#### Input 2: `notification_mode`
+
+```yaml
+notification_mode:
+  description: "Notification mode — repo_default uses NOTIFY_DRY_RUN variable; dry_run/live override for this manual run"
+  required: false
+  default: repo_default
+  type: choice
+  options:
+    - repo_default
+    - dry_run
+    - live
+```
+
+Default `repo_default` — all existing dispatch runs that did not set this input continue to use `vars.NOTIFY_DRY_RUN`, preserving current behavior. An operator who has `NOTIFY_DRY_RUN=true` set and dispatches with the default input continues to get a dry-run, as before.
+
+Semantics for dispatch runs:
+- `repo_default` → writes `NOTIFY_DRY_RUN=${{ vars.NOTIFY_DRY_RUN }}` to `$GITHUB_ENV`; current repo variable behavior is preserved
+- `dry_run` → writes `NOTIFY_DRY_RUN=true` to `$GITHUB_ENV`; forces dry-run regardless of repo variable
+- `live` → writes `NOTIFY_DRY_RUN=` (empty string) to `$GITHUB_ENV`; forces live delivery regardless of repo variable (delivery still requires secrets to be configured)
+
+For `schedule` and `push` to `main`, `inputs.notification_mode` is inaccessible (returns empty string on non-dispatch events). The "Determine notification mode" step is guarded by `github.event_name == 'workflow_dispatch'` and falls through to `vars.NOTIFY_DRY_RUN` on all other triggers.
+
+`NOTIFY_DRY_RUN` is removed from the `Deliver aggregate CI notification` step's `env:` block. A step-level `env:` key overrides `$GITHUB_ENV` for that step; removing the key allows `$GITHUB_ENV` (set by the prior "Determine notification mode" step) to flow through. All other env vars in the delivery step's `env:` block are unchanged.
+
+### Inputs deferred
+
+**Environment selector (prod_read_only):** Rejected. ADR-015 defines a five-item activation checklist for prod-read-only: real prod URLs, per-environment GitHub Secrets, `read_only` suite safety review, test-reporter publication for prod XML, and optional URL injection. None of these are complete. A dispatch input that can request `prod_read_only` would bypass the ADR-015 checklist — an operator could select it before real prod URLs or credentials exist, producing confusing silent failures. Defer until the ADR-015 checklist is satisfied.
+
+**Free-text marker expression:** Rejected. A free-text input (e.g., `api_contract`) allows mistyped expressions (e.g., `-m regresiion`) that produce passing CI with zero tests collected. No operator use case requires targeting a single marker via dispatch — `smoke` and `full` cover the two documented execution contexts. Targeted marker runs are a developer-only concern handled locally.
+
+**Observability provider selector:** Rejected. All provider implementations in `scripts/pull_observability.py` are stubs returning static sample data. An input selecting between Datadog, Grafana, and PagerDuty stubs has no functional effect. Defer until at least one stub is replaced with a real implementation.
+
+### Impact on existing triggers
+
+| Trigger | TEST_SCOPE | NOTIFY_DRY_RUN source | Changed? |
+|---|---|---|---|
+| `push` to `main` | `full` | `vars.NOTIFY_DRY_RUN` | No |
+| `schedule` (nightly) | `full` | `vars.NOTIFY_DRY_RUN` | No |
+| `pull_request` to main | `smoke` | N/A — notify doesn't fire | No |
+| `push` to `feature/**` | `smoke` | N/A — notify doesn't fire | No |
+| `workflow_dispatch` (default inputs) | `full` | `vars.NOTIFY_DRY_RUN` | Behavior equivalent; now explicit |
+| `workflow_dispatch` (`test_scope=smoke`) | `smoke` | `vars.NOTIFY_DRY_RUN` | New capability |
+| `workflow_dispatch` (`notification_mode=dry_run`) | `full` | `NOTIFY_DRY_RUN=true` | New capability |
+| `workflow_dispatch` (`notification_mode=live`) | `full` | `NOTIFY_DRY_RUN=` (empty) | New capability |
+
+### Smoke dispatch and the release gate
+
+When `test_scope=smoke` is selected, `TEST_SCOPE=smoke` is set and the release gate step exits early ("Smoke-only run — release gate skipped.") via the existing `TEST_SCOPE != 'full'` guard (ADR-014). `release-readiness.json` is not produced. The `notify` job's artifact download step has `continue-on-error: true`; `notify.py` shows UNKNOWN for the release gate. This is accurate — a smoke run does not produce release readiness evidence. No remediation is required; UNKNOWN on a smoke dispatch is the correct signal.
+
+### Alternatives considered
+
+| Option | Why rejected |
+|---|---|
+| Free-text `marker_expression` input | Invalid expressions produce passing CI with zero tests run — no operator use case justifies this risk |
+| Three-choice `test_scope` (full / smoke / api_contract) | `api_contract` is a developer-facing targeted run, not an operator scope; two choices align with the suite taxonomy's two execution contexts |
+| `notification_mode=live` as default | If `NOTIFY_DRY_RUN=true` is set as a repo variable, defaulting to `live` would bypass it and unexpectedly trigger live delivery on dispatch — not backward-compatible |
+| Shell guard in delivery step instead of a separate "Determine notification mode" step | `env:` block values are resolved at step startup before the shell runs; a prior step writing to `$GITHUB_ENV` is the correct cross-step communication pattern |
+| Environment selector for prod_read_only | Bypasses ADR-015 activation checklist; no real prod URLs committed; deferred explicitly |
+
+### Consequences
+
+- Operators can run `workflow_dispatch` with `test_scope=smoke` for a fast post-hotfix sanity check.
+- Operators can run `workflow_dispatch` with `notification_mode=dry_run` to force a dry-run on a specific dispatch without editing the repo variable.
+- Operators can run `workflow_dispatch` with `notification_mode=live` to force live delivery on a specific dispatch when `NOTIFY_DRY_RUN=true` is set as a repo variable.
+- All non-dispatch triggers are unchanged.
+- `NOTIFY_DRY_RUN` is no longer in the `Deliver aggregate CI notification` step's `env:` block; it flows through `$GITHUB_ENV` from the preceding "Determine notification mode" step.
+- ADR-014 is amended: `workflow_dispatch` scope is now `full` by default but selectable.
+
+### Activation condition
+
+No further activation required. Both inputs are live immediately. Revisit deferred inputs (environment selector, observability provider) when their respective prerequisite conditions are met.
+
+### Related PRs / Docs
+
+- `.github/workflows/ci.yml` — `on.workflow_dispatch.inputs` block; updated "Determine test scope" steps × 2; new "Determine notification mode" step; removed `NOTIFY_DRY_RUN` from delivery step `env:`
+- `agentic-qa-workflows/governance/quality_gates.md` — CI test scope by trigger table updated
+- `agentic-qa-workflows/governance/notification_wiring.md` — `notification_mode` input documentation added
+- ADR-011 — `NOTIFY_DRY_RUN` repo variable behavior (unchanged for non-dispatch triggers)
+- ADR-014 — smoke/full trigger scope (amended: `workflow_dispatch` scope is now selectable)
+- ADR-015 — prod-read-only activation gate (environment selector deferred to avoid bypassing this checklist)
+- ADR-016 — aggregate Notify job structure (Determine notification mode step added)
+- ADR-017 — observability stubs (observability provider input deferred)
+
+### Trade-offs and consulting value
+
+**The backward-compatibility constraint on `notification_mode` default is the key decision.** Setting the default to `live` would have been simpler to reason about ("dispatch input overrides the repo variable") but would have silently changed behavior for any team that has `NOTIFY_DRY_RUN=true` in their repo variable. The `repo_default` option preserves the principle that adding an input must not change existing behavior — operators who do not use the input get exactly the same run they had before.
+
+**The closed-select decision for `test_scope` is the most important safety call.** A free-text marker input would allow operators to express targeted runs (`api_contract`, `regression`) without requiring a taxonomy change. The cost is invisible: a mistyped expression passes CI with zero tests collected and no warning in the job summary (pytest exits 0 with an empty collection). For a consulting blueprint, this class of invisible CI pass is worse than a slightly less expressive UI. Two choices are enough.
+
+**For a consulting client**, both inputs demonstrate the correct CI ergonomics pattern: operator-facing controls that expose only safe, well-defined choices, default to preserving existing behavior, and are backed by clear per-run semantics. The `notification_mode` input in particular shows the correct way to provide per-run override capability without requiring repo variable editing — a pattern that recurs in any CI environment where multiple operators need different delivery behavior on specific runs.
 
 ---

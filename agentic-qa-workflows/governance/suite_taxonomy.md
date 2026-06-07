@@ -4,7 +4,7 @@
 
 Markers fall into two categories:
 
-- **Area markers** (`ui`, `api`): identify which layer the test exercises. Apply these first.
+- **Area markers** (`ui`, `api`, `scripts`): identify which layer the test exercises. Apply these first.
 - **Execution-scope markers** (`smoke`, `negative`, `regression`, `api_contract`): identify when and why the test runs. Apply these after the area marker.
 
 Each test should carry its area marker and, where applicable, one or more execution-scope markers:
@@ -31,6 +31,14 @@ Marks tests that drive the browser via Playwright. All tests in `test/ui/` must 
 
 Marks tests that call REST endpoints via `BookingApiClient`. All tests in `test/api/` must carry this marker.
 
+### `scripts`
+
+Marks offline unit tests for QA platform scripts (`release_gate.py`, `ci_summary.py`, `notify.py`). All tests in `test/scripts/` must carry this marker.
+
+- **Purpose:** validates release-readiness decision logic, CI summary parsing, and aggregate notification readiness without network access or external services.
+- **Run trigger:** every CI trigger (script tests run in the Docker Test Suite job, not the API or UI jobs); also selectable with `pytest -m scripts`.
+- **Constraints:** no network calls, no real secrets, no production artifact modification. Fixtures use `tmp_path` and plain dicts only.
+
 ### `smoke`
 
 Fast sanity check that the critical happy path works.
@@ -40,6 +48,7 @@ Fast sanity check that the critical happy path works.
 - Pass requirement for: unblocking further test execution.
 - Target runtime: under 60 seconds.
 - Current tests: `test_user_can_login`, `test_get_all_bookings`, `test_create_booking`, `test_delete_booking`
+- For script-layer smoke tests, see the `scripts` marker section. Script smoke tests run in the Docker Test Suite job and are not part of the API/UI smoke/full scope split.
 
 ### `negative`
 
@@ -113,8 +122,9 @@ Any future marker must be:
 | --- | --- | --- |
 | Browser-driven test | `ui` | — |
 | REST API test | `api` | — |
+| Script/platform decision logic | `scripts` | — |
 | First passing test for a new feature | `ui` or `api` | `smoke` |
-| Error path or invalid input | `ui` or `api` | `negative` |
+| Error path or invalid input | `ui`, `api`, or `scripts` | `negative` |
 | Protecting a shipped feature from regression | `ui` or `api` | `regression` |
 | API response structure must match schema | `api` | `api_contract` |
 

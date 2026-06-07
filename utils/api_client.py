@@ -35,6 +35,16 @@ class BookingApiClient:
             )
         return token
 
+    def update_booking(
+        self, booking_id: int, payload: dict, token: str
+    ) -> requests.Response:
+        return requests.put(
+            f"{self.base_url}/booking/{booking_id}",
+            json=payload,
+            headers={"Cookie": f"token={token}"},
+            timeout=self.timeout,
+        )
+
     def delete_booking(self, booking_id: int, token: str):
         return requests.delete(
             f"{self.base_url}/booking/{booking_id}",

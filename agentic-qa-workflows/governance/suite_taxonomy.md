@@ -72,7 +72,7 @@ Marks tests that validate API response schema against a declared JSON schema con
 
 - Scope: any test that calls `jsonschema.validate()` against a schema file from `data/schemas/`. Must be declared in `pytest.ini` before use.
 - Run trigger: every commit alongside the API area suite; targeted execution via `pytest -m api_contract`.
-- Current tests: `test_get_booking_by_id` (TC-API-002), `test_create_booking` (TC-API-004)
+- Current tests: `test_get_booking_by_id` (TC-API-002), `test_create_booking` (TC-API-004), `test_update_booking` (TC-API-006)
 
 ### `read_only`
 
@@ -90,6 +90,10 @@ Marks tests that are safe to run against production read-only environments.
   - `test_user_can_login_and_add_to_cart` — cart state; not prod-read-only safe
   - `test_locked_out_user_sees_error` — locked-account error state; not a clean prod read signal
   - `test_user_can_complete_checkout` (TC-UI-004) — checkout flow modifies cart and order state; not prod-read-only safe
+  - `test_update_booking` (TC-API-006) — PUT write + uses `created_booking` fixture (POST and DELETE)
+  - `test_update_booking_without_auth` (TC-API-007) — uses `created_booking` fixture (POST and DELETE)
+  - `test_user_can_remove_from_cart` (TC-UI-005) — cart add/remove; not prod-read-only safe
+  - `test_cart_badge_reflects_item_count` (TC-UI-006) — cart add × 2; not prod-read-only safe
 - **Future:** expand `read_only` coverage only after explicit risk review. Any candidate test must have zero write or delete operations, no synthetic setup fixtures, and must produce a meaningful signal about prod health.
 
 ## Traceability Markers

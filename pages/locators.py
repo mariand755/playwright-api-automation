@@ -9,11 +9,13 @@ class LoginPageLocators:
 class InventoryPageLocators:
     ADD_TO_CART_BUTTON = 'text="Add to cart"'
     CART_ICON = ".shopping_cart_link"
+    CART_BADGE = ".shopping_cart_badge"
 
 
 class CartPageLocators:
     CART_ITEM = ".inventory_item_name"
     CHECKOUT_BUTTON = "[data-test='checkout']"
+    REMOVE_FROM_CART_BUTTON = "[data-test^='remove-']"
 
 
 class CheckoutPageLocators:

@@ -54,6 +54,9 @@ jobs:
       - name: Verify test collection
         run: docker run --rm playwright-api-automation pytest --collect-only -q
 
+      - name: Run script unit tests
+        run: docker run --rm playwright-api-automation pytest test/scripts/ -v
+
   api:
     name: API Tests
     runs-on: ubuntu-latest

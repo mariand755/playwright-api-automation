@@ -29,6 +29,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-017](#adr-017-observability-snapshot-populated-via-stub-pending-live-stack-connection) | Observability snapshot populated via stub pending live stack connection | Accepted | 2026-06-03 |
 | [ADR-018](#adr-018-failure-only-aggregate-notification-on-push-to-main) | Failure-only aggregate notification on push to main | Accepted | 2026-06-06 |
 | [ADR-019](#adr-019-independent-judgment-preface-in-qa-reviewer-and-planning-prompts) | Independent judgment preface in QA reviewer and planning prompts | Accepted | 2026-06-06 |
+| [ADR-020](#adr-020-script-unit-test-layer-for-release-readiness-and-notification-decision-logic) | Script unit test layer for release-readiness and notification decision logic | Accepted | 2026-06-06 |
 
 ---
 
@@ -1104,5 +1105,117 @@ If reviews still drift into mechanical checklist confirmation despite this prefa
 - `agentic-qa-workflows/prompts/slice_planning_prompt_template.md` — v2; Important section expanded
 - `agentic-qa-workflows/governance/agentic_workflow_rules.md` — Session Constraints; stop-and-explain addition
 - ADR-013 — predecessor (bounded adjacent-risk scan, validation integrity, security/secret hygiene)
+
+---
+
+## ADR-020: Script unit test layer for release-readiness and notification decision logic
+
+**Status:** Accepted
+**Date:** 2026-06-06
+
+### Context
+
+`scripts/release_gate.py` (321 lines) drives the CI GO/NO_GO decision — the artifact that feeds the notification chain and determines whether a release can proceed. `scripts/ci_summary.py` (86 lines) parses JUnit XML to produce the GitHub Step Summary for each CI job. `compute_overall_readiness()` in `scripts/notify.py` determines BLOCKED/GO/NO_GO/UNKNOWN for notification dispatch based on upstream CI job statuses and the gate decision.
+
+All three had zero test coverage. For a consulting QA architecture blueprint, an untested release decision engine is the largest credibility gap: the QA practice does not apply to itself.
+
+### Decision
+
+Add `test/scripts/` as a new test layer for offline unit tests of QA platform logic. Add a `scripts` pytest marker to identify this layer. Run script tests in the **Docker Test Suite job** (`test` job in `ci.yml`), as a new step after test collection verification. This positions script tests as infrastructure-level gates alongside formatting, linting, type-checking, and security scanning — not as application-level API or UI tests.
+
+Add `scripts/__init__.py` to make `scripts/` an explicit Python package and avoid relying on namespace package behavior for imports in tests.
+
+### What is tested
+
+**Scope note:** These are unit tests for repo-owned QA tooling — `release_gate.py`, `ci_summary.py`, and `notify.py` — not unit tests for the external application under test. This layer does not test SauceDemo, Restful Booker, or any backend we do not own.
+
+- `parse_test_results()` in `release_gate.py`: JUnit XML parsing for the cases that affect CI — valid passing XML, valid XML with failures, missing file (raises `FileNotFoundError`), and malformed XML (raises `ValueError`).
+- `evaluate_gate()` in `release_gate.py`: all 4 hard gate conditions (test failures, test errors, high error rate, open blocker defects) and the warning-only path (p95 latency and defect escape count both over threshold → GO with exactly 2 warnings, no gate failures).
+- `summarize()` in `ci_summary.py`: all 4 branches — missing file returns error string, malformed XML returns error string, all-passing returns `✅` indicator, with-failures returns `❌` indicator and the failed test name.
+- `compute_overall_readiness()` in `notify.py`: all 4 return values (GO, NO_GO, UNKNOWN, BLOCKED), including the documented edge case that absent or empty-string CI status keys do not trigger BLOCKED (only a truthy non-`"success"` value does), and that all three blocking statuses — `failure`, `cancelled`, `skipped` — trigger BLOCKED.
+
+### What is explicitly excluded
+
+- **`main()` entrypoints**: integration-style; require full artifact file tree setup; deferred.
+- **`build_output()` and `render_markdown()`**: formatting functions with no decision logic; format string assertions are brittle on cosmetic changes; deferred.
+- **`send_slack()` and `send_email()`**: require network calls; no stdlib mocking is added in this slice; deferred to a dedicated notification-delivery test slice.
+- **`pull_observability.py`**: all provider implementations are stubs returning hardcoded sample data; zero decision value until live providers are connected.
+- **JUnit XML reporter for script tests**: `artifacts/scripts-report.xml` and a `dorny/test-reporter` panel are not added in this slice. The `test` job produces verbose output only. Add after the test layer is proven.
+
+### Why the Docker Test Suite job, not a new job
+
+Script tests validate CI platform logic, not application behavior. They belong in the same gate that validates the platform itself — alongside formatting, linting, type-checking, and security scanning. A separate job would create unnecessary fan-out for 19 test functions that run in under a second combined.
+
+### Why no production script refactor
+
+All target functions (`parse_test_results`, `evaluate_gate`, `summarize`, `compute_overall_readiness`) accept parameters directly. None require path resolution at import time or network access. Tests construct inputs via `tmp_path` and plain dicts. No refactor is needed to achieve full branch coverage of the decision logic.
+
+### Alternatives considered
+
+- **No new marker — fold into existing test tree without a `scripts` marker**: rejected. The `scripts` marker enables `pytest -m scripts` selection, distinguishes script tests from application tests in CI output, and makes the test layer explicit in governance documentation.
+- **Split into three PRs** (one per script): rejected. All three functions feed the same release readiness pipeline. Combined scope is 19 test functions — still PR-sized. Three PRs add process overhead without architectural benefit.
+- **Subprocess/integration tests for `main()`**: deferred. Subprocess tests require full artifact file tree setup and test integration behavior, not decision logic. Decision logic is covered by unit tests of the underlying functions.
+
+### Consequences
+
+`test/scripts/` is the canonical location for offline unit tests of QA platform scripts. Any new decision logic added to `release_gate.py`, `ci_summary.py`, or `notify.py` should be tested here before the function is used in CI. Script tests run on every push, PR, and nightly build. The `test` job gates CI on both quality checks and script test results.
+
+Future work: add `artifacts/scripts-report.xml` and a `dorny/test-reporter` panel after the test layer is proven; add delivery function tests (`send_slack`, `send_email`) in a separate slice with appropriate stdlib mocking.
+
+### Trade-offs and cost / benefit
+
+#### 1. Dedicated `test/scripts/` layer vs. folding script tests into API/UI tests
+
+| | Dedicated `test/scripts/` | Folded into `test/api/` or `test/ui/` |
+|---|---|---|
+| **Benefit** | Separation of concerns: platform logic tests are clearly distinct from application behavior tests. `pytest -m scripts` targets the layer precisely. CI step is scoped and named for its purpose. | No new directory. Reuses existing conftest. |
+| **Cost / maintenance** | New directory, new conftest, new marker, new CI step, new ADR. | Platform logic tests mixed with application tests. Harder to distinguish in CI output, collection, and governance. Misleading: `test/api/` would contain tests that never call the API. |
+| **Risk** | Minimal. The layer is small and well-bounded. | Taxonomy drift: the `api` or `ui` marker would be misapplied to tests validating offline Python logic. Future contributors would not know which suite these tests belong to. |
+| **Decision** | **Accepted** | **Rejected** |
+
+#### 2. New `scripts` marker vs. no marker (path-only selection)
+
+| | New `scripts` marker | No marker — `pytest test/scripts/` only |
+|---|---|---|
+| **Benefit** | Explicit taxonomy entry. Enables `pytest -m scripts` for targeted execution. Visible in `suite_taxonomy.md` and `pytest.ini` for governance traceability. Cross-marker expressions (`pytest -m "scripts and smoke"`) are possible. | No marker declaration overhead. |
+| **Cost / maintenance** | One marker entry in `pytest.ini`, one `suite_taxonomy.md` section, one decorator per test function. | Selection is brittle if the directory is ever restructured. No taxonomy record of this layer's purpose, constraints, or run trigger. |
+| **Risk** | Low. Declared before use per existing taxonomy governance. | No documented constraint that these tests must have no network calls or secrets. Future contributors have no governance anchor for this layer. |
+| **Decision** | **Accepted** | **Rejected** |
+
+#### 3. One combined script-test PR vs. splitting release_gate / ci_summary / notify into separate PRs
+
+| | Combined PR (all three scripts) | Three separate PRs |
+|---|---|---|
+| **Benefit** | 19 test functions across three scripts is still PR-sized. All three functions feed the same release readiness pipeline — the test layer is coherent as a single deliverable. One ADR. One taxonomy update. One CI step. | Each PR is smaller in isolation. Easier to revert one script's tests independently. |
+| **Cost / maintenance** | Slightly wider review scope than a single-script slice. | Three PRs, three ADR updates, three rounds of Mode A + Mode B review overhead. Risk of shipping half the coverage with no clear "done" state. |
+| **Risk** | Low. The three scripts are tightly coupled: `ci_summary` parses JUnit XML that feeds the release gate context; `notify` aggregates the gate decision. | Mid-pipeline state: one script has tests, adjacent scripts do not, which creates a false sense of coverage completeness and leaves the coupled pipeline partially validated. |
+| **Decision** | **Accepted** | **Rejected** |
+
+#### 4. Testing pure decision logic now vs. testing Slack/SMTP delivery now
+
+| | Pure decision logic (`evaluate_gate`, `compute_overall_readiness`, `summarize`) | Slack/SMTP delivery (`send_slack`, `send_email`) |
+|---|---|---|
+| **Benefit** | Pure functions with no external dependencies. Full branch coverage achievable with plain dicts and `tmp_path`. Zero network calls, zero secrets, zero mocking infrastructure. Highest return per test line written. | Delivery functions are the final output stage; a test that confirms end-to-end delivery closes the full pipeline loop. |
+| **Cost / maintenance** | Delivery behavior remains untested in this slice. A live delivery bug would not be caught here. | Requires stdlib mocking (`unittest.mock.patch` on `urllib.request.urlopen`, `smtplib.SMTP`, `smtplib.SMTP_SSL`) or a live test target. Mock maintenance overhead scales with delivery code path count. Secrets cannot be present in test files under any circumstances. |
+| **Risk** | Delivery-path bugs are not caught until CI live delivery is configured. Known and accepted; deferred to a dedicated notification-delivery test slice. | Mock drift: mocks that do not accurately reflect real `smtplib` or `urllib` behavior can pass tests while real delivery fails. Imprecise mock setup produces false confidence. |
+| **Decision** | **Accepted** — decision logic now | **Deferred** — delivery in a separate slice |
+
+#### 5. Adding script-test JUnit reporting now vs. deferring until the layer is proven
+
+| | JUnit XML + `dorny/test-reporter` now | Defer JUnit reporting |
+|---|---|---|
+| **Benefit** | Script test results appear in the GitHub Actions test panel alongside API and UI results. Full structured visibility from day one. | Simpler CI step. No `--junitxml` flag, no new artifact path, no new `dorny/test-reporter` step, no artifact name collision risk. |
+| **Cost / maintenance** | New `--junitxml` flag, new artifact path (`artifacts/scripts-report.xml`), new `dorny/test-reporter` step in the `test` job, new artifact name to manage across CI re-runs. | Results visible only in raw CI step log with `-v` output. Acceptable for a 21-test layer that runs in 0.05 seconds. |
+| **Risk** | Low, but adds configuration surface to the `test` job before knowing whether the layer will grow. Over-instrumenting a small layer adds maintenance cost that may never be amortized. | Script test failures surface in step logs; verbose output is sufficient at this layer size. |
+| **Decision** | **Deferred** — add when the layer grows past ~50 tests or when a client engagement requires structured test reporting for platform tests |
+
+### Related PRs / Docs
+
+- `test/scripts/test_release_gate.py` — release gate decision logic coverage
+- `test/scripts/test_ci_summary.py` — CI summary parsing coverage
+- `test/scripts/test_notify_readiness.py` — notification readiness coverage
+- `scripts/__init__.py` — makes `scripts/` an explicit Python package
+- ADR-009 — API-only release gate design (upstream context)
+- ADR-016 — aggregate CI notification job (upstream context)
 
 ---

@@ -35,7 +35,7 @@ Analyze Python
 
 #### What `Docker Test Suite` covers
 
-The `Docker Test Suite` job (`.github/workflows/ci.yml`) runs the following gates in order. All seven must pass for the job to succeed:
+The `Docker Test Suite` job (`.github/workflows/ci.yml`) runs the following gates in order. Steps 1–8 must all pass for the job to succeed. Step 9 is an advisory reporting step that does not block the job:
 
 1. Docker build
 2. Ruff format check
@@ -44,6 +44,8 @@ The `Docker Test Suite` job (`.github/workflows/ci.yml`) runs the following gate
 5. Python dependency vulnerability scan (pip-audit)
 6. Container image vulnerability scan (Trivy — fixable HIGH/CRITICAL only)
 7. pytest collection check
+8. Script unit tests (`test/scripts/`) — produces `artifacts/scripts-report.xml`; any test failure fails the `Docker Test Suite` job
+9. `Script Unit Test Results` via dorny/test-reporter — advisory check annotation (`fail-on-error: false`); `Docker Test Suite` is and remains the required branch-protection gate for script unit tests
 
 #### What `API Tests` covers
 
@@ -87,6 +89,8 @@ The `Analyze Python` job (`.github/workflows/codeql.yml`) runs CodeQL static sec
 | pip-audit | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
 | Trivy (fixable HIGH/CRITICAL) | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
 | pytest collection | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| Script unit tests (`test/scripts/`) | Hard CI gate | Yes — fails `Docker Test Suite` | CI step | PR / push / nightly |
+| `Script Unit Test Results` (dorny panel) | Advisory | No — check annotation only; `Docker Test Suite` is the required gate | dorny/test-reporter check | PR / push / nightly |
 | API test suite | Hard CI gate | Yes — fails `API Tests` | CI job | PR / push / nightly |
 | UI test suite | Hard CI gate | Yes — fails `UI Tests` | CI job | PR / push / nightly |
 | Release readiness gate | Hard CI gate | Yes — fails `API Tests` | CI step | PR / push / nightly |

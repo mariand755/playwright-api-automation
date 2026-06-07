@@ -1,4 +1,4 @@
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from pages.locators import InventoryPageLocators
 
@@ -13,6 +13,11 @@ class InventoryPage:
 
     def add_product_to_cart(self):
         self.add_to_cart_button.click()
+
+    def verify_cart_badge_count(self, expected_count: int) -> None:
+        expect(self.page.locator(InventoryPageLocators.CART_BADGE)).to_have_text(
+            str(expected_count)
+        )
 
     def open_cart(self):
         self.cart_icon.click()

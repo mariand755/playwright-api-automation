@@ -207,7 +207,7 @@ The `Notify` job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` all
 - BLOCKED if any required job result is not exactly `success` (failure, cancelled, skipped, and unknown are all BLOCKED)
 - GO if all three jobs succeeded and the release gate decision is GO
 - NO_GO if all three jobs succeeded and the release gate decision is NO_GO
-- UNKNOWN if all three jobs succeeded but release gate data is missing
+- UNKNOWN if all three jobs succeeded but release readiness evidence is intentionally unavailable (smoke-scope run where the release gate was skipped) or gate data is otherwise unavailable
 
 | Property | Value |
 | --- | --- |

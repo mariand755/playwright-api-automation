@@ -1,12 +1,12 @@
-"""Unit tests for compute_overall_readiness() in scripts/notify.py.
+"""Unit tests for compute_overall_readiness() and build_message_lines() in scripts/notify.py.
 
-Covers TC-SCRIPT-014 to TC-SCRIPT-018. Delivery functions (send_slack, send_email)
+Covers TC-SCRIPT-014 to TC-SCRIPT-022. Delivery functions (send_slack, send_email)
 are excluded — they require network calls outside the scope of this slice.
 """
 
 import pytest
 
-from scripts.notify import compute_overall_readiness
+from scripts.notify import build_message_lines, compute_overall_readiness
 
 _ALL_SUCCESS = {
     "docker_test_suite": "success",
@@ -70,4 +70,46 @@ def test_readiness_missing_ci_status_not_blocked():
     result = compute_overall_readiness({}, "GO")
     assert result == "GO", (
         f"Expected GO when ci_status is empty (absent keys ≠ failed), got {result}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# build_message_lines — gate_skipped and data=None paths
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-021 — build_message_lines: gate_skipped artifact emits smoke-skip message
+# Verifies ⚠️ Skipped line appears and no "?" test-count placeholder leaks through.
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-021")
+def test_build_message_lines_gate_skipped():
+    data = {
+        "overall_decision": "UNKNOWN",
+        "gate_skipped": True,
+        "gate_skip_reason": "release_gate_skipped_for_smoke_scope",
+        "gate_failures": [],
+        "warnings": [],
+    }
+    lines = build_message_lines(data, run_url="", ci_status=_ALL_SUCCESS)
+    combined = "\n".join(lines)
+    assert "Skipped" in combined, (
+        f"Expected 'Skipped' in release gate message, got: {combined!r}"
+    )
+    assert "?" not in combined, (
+        f"Expected no '?' (missing test counts) in message when gate_skipped, got: {combined!r}"
+    )
+
+
+# TC-SCRIPT-022 — build_message_lines: data=None still emits the existing no-gate-data message
+# Regression guard: the existing data=None fallback must not be broken by the gate_skipped branch.
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-022")
+def test_build_message_lines_no_gate_data():
+    lines = build_message_lines(None, run_url="", ci_status=_ALL_SUCCESS)
+    combined = "\n".join(lines)
+    assert "No release gate data" in combined, (
+        f"Expected 'No release gate data' in message when data=None, got: {combined!r}"
     )

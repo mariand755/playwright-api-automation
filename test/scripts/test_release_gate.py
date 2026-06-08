@@ -1,11 +1,15 @@
 """Unit tests for scripts/release_gate.py — JUnit XML parsing and gate decision logic.
 
-Covers parse_test_results() (TC-SCRIPT-001 to TC-SCRIPT-003b) and evaluate_gate()
-(TC-SCRIPT-004 to TC-SCRIPT-009). Network calls, file writes, and main() are excluded.
+Covers parse_test_results() (TC-SCRIPT-001 to TC-SCRIPT-003b), evaluate_gate()
+(TC-SCRIPT-004 to TC-SCRIPT-009), and write_skipped_output() (TC-SCRIPT-019 to
+TC-SCRIPT-020). Network calls and main() are excluded.
 """
+
+import json
 
 import pytest
 
+import scripts.release_gate as release_gate
 from scripts.release_gate import evaluate_gate, parse_test_results
 
 
@@ -176,4 +180,61 @@ def test_evaluate_gate_warnings_do_not_block(clean_test_results):
     assert gate_failures == [], f"Expected no gate failures, got {gate_failures}"
     assert len(warnings) == 2, (
         f"Expected exactly 2 warnings (p95 latency + defect escape), got {warnings}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# write_skipped_output
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-019 — write_skipped_output: produces release-readiness.json with correct fields
+@pytest.mark.scripts
+@pytest.mark.smoke
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-019")
+def test_write_skipped_output_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        release_gate, "OUTPUT_JSON", tmp_path / "release-readiness.json"
+    )
+    monkeypatch.setattr(release_gate, "OUTPUT_MD", tmp_path / "release-readiness.md")
+
+    release_gate.write_skipped_output("smoke")
+
+    output_path = tmp_path / "release-readiness.json"
+    assert output_path.exists(), "release-readiness.json was not created"
+    data = json.loads(output_path.read_text())
+    assert data["overall_decision"] == "UNKNOWN", (
+        f"Expected overall_decision=UNKNOWN, got {data['overall_decision']}"
+    )
+    assert data["gate_skipped"] is True, "Expected gate_skipped=true"
+    assert "smoke" in data["gate_skip_reason"], (
+        f"Expected 'smoke' in gate_skip_reason, got {data['gate_skip_reason']}"
+    )
+    assert data["gate_failures"] == [], (
+        f"Expected empty gate_failures, got {data['gate_failures']}"
+    )
+    assert data["warnings"] == [], f"Expected empty warnings, got {data['warnings']}"
+
+
+# TC-SCRIPT-020 — write_skipped_output: produces release-readiness.md with expected content
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-020")
+def test_write_skipped_output_md(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        release_gate, "OUTPUT_JSON", tmp_path / "release-readiness.json"
+    )
+    monkeypatch.setattr(release_gate, "OUTPUT_MD", tmp_path / "release-readiness.md")
+
+    release_gate.write_skipped_output("smoke")
+
+    md_path = tmp_path / "release-readiness.md"
+    assert md_path.exists(), "release-readiness.md was not created"
+    content = md_path.read_text()
+    assert "Release Readiness Gate" in content, (
+        f"Expected 'Release Readiness Gate' heading in MD, got: {content!r}"
+    )
+    assert "intentionally skipped" in content, (
+        f"Expected 'intentionally skipped' in MD, got: {content!r}"
     )

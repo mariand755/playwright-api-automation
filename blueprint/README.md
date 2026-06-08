@@ -60,9 +60,7 @@ A 4-job pipeline (Docker Test Suite → API Tests ∥ UI Tests → Notify) with 
 
 **Reference:** [`../scripts/release_gate.py`](../scripts/release_gate.py) · [`../data/release/observability_snapshot.json`](../data/release/observability_snapshot.json) · [`../data/release/defect_metrics.json`](../data/release/defect_metrics.json)
 
-**Configure for a new repo:** The five path constants at the top of `release_gate.py` (`REPORT_XML`, `OBSERVABILITY_JSON`, `DEFECT_METRICS_JSON`, `OUTPUT_JSON`, `OUTPUT_MD`) must match your project's artifact layout.
-
-> **Prerequisite before extracting this script:** The five path constants are currently hardcoded module-level. A planned cleanup slice will make them configurable via CLI args or environment variables. Until then, any new-repo adaptation requires modifying the script constants directly.
+**Configure for a new repo:** Override input/output paths via CLI args: `--observability-json`, `--defect-metrics-json`, `--output-json`, `--output-md`. The positional XML arg handles the JUnit report path. All args default to this repo's artifact layout — pass your paths explicitly to adapt to a new repo without modifying the script.
 
 ---
 
@@ -149,7 +147,7 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 |---|---|
 | `.github/workflows/ci.yml` | Prod-read-only steps and inline ADR references are repo-specific; adapt the pattern |
 | `agentic-qa-workflows/governance/architecture_decision_log.md` | All ADRs are specific to this repo's decisions; start fresh from the format |
-| `scripts/release_gate.py` | Five path constants are hardcoded; cleanup prerequisite before use in a new repo |
+| `scripts/release_gate.py` | Input/output paths configurable via CLI args; set `--output-json` and `--output-md` to match your artifact layout; `--observability-json` and `--defect-metrics-json` default to this repo's sample data — replace with your own |
 | All test files (`test_booking_api.py`, `test_login_cart.py`, etc.) | SauceDemo / Restful Booker specific; follow the pattern, do not copy |
 | `conftest.py` | `test_users.json` env structure is repo-specific; keep the fixture architecture, replace the data source |
 
@@ -182,6 +180,6 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 |---|---|---|
 | Slice 2 | `blueprint/prompts/` — agentic QA workflow prompts | Decide: keep prompts in `agentic-qa-workflows/prompts/` (link here) or move and update all internal links |
 | Slice 3 | `blueprint/scripts/notify.py` | Slice 2 merged; job-result env var names documented above |
-| Slice 4 | `blueprint/scripts/release_gate.py` | Cleanup slice: make the 5 path constants configurable |
+| Slice 4 | `blueprint/scripts/release_gate.py` | Ready for future extraction: input/output paths are now configurable via CLI args; extract only after confirming template ownership and avoiding a second source of truth. |
 | Slice 5 | `blueprint/governance/` — blank ADR template, suite taxonomy template | Slice 4 merged |
 | Slice 6 | Second repo application + case study | Full `blueprint/` folder stable; a second repo target exists |

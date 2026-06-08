@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Release readiness gate: consumes JUnit XML + observability + defect metrics → GO/NO_GO decision."""
 
+import argparse
 import json
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPORT_XML = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("artifacts/report.xml")
+REPORT_XML = Path("artifacts/report.xml")
 OBSERVABILITY_JSON = Path("data/release/observability_snapshot.json")
 DEFECT_METRICS_JSON = Path("data/release/defect_metrics.json")
 OUTPUT_JSON = Path("artifacts/release-readiness.json")
@@ -271,11 +272,63 @@ def write_error_output(message: str) -> None:
     )
 
 
+def write_skipped_output(test_scope: str) -> None:
+    OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    skipped_output = {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "gate_version": GATE_VERSION,
+        "overall_decision": "UNKNOWN",
+        "gate_skipped": True,
+        "gate_skip_reason": f"release_gate_skipped_for_{test_scope}_scope",
+        "test_scope": test_scope,
+        "gate_failures": [],
+        "warnings": [],
+        "data_note": DATA_NOTE,
+    }
+    OUTPUT_JSON.write_text(json.dumps(skipped_output, indent=2), encoding="utf-8")
+    OUTPUT_MD.write_text(
+        "\n".join(
+            [
+                "## Release Readiness Gate",
+                "",
+                f"> **{test_scope.capitalize()} run** — release gate intentionally skipped."
+                " Full release readiness runs on push to `main` and nightly schedule.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    print(
+        f"Release gate skipped for {test_scope} scope — placeholder artifact written."
+    )
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Release readiness gate: JUnit XML + observability + defect metrics → GO/NO_GO decision."
+    )
+    parser.add_argument(
+        "xml",
+        nargs="?",
+        default=str(REPORT_XML),
+        help="Path to JUnit XML report (default: artifacts/report.xml)",
+    )
+    parser.add_argument(
+        "--skipped",
+        metavar="TEST_SCOPE",
+        help="Write a skipped-gate placeholder artifact for the given test scope and exit 0",
+    )
+    args = parser.parse_args()
+
+    if args.skipped:
+        write_skipped_output(args.skipped)
+        return 0
+
+    report_xml = Path(args.xml)
     OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        test_results = parse_test_results(REPORT_XML)
+        test_results = parse_test_results(report_xml)
     except (FileNotFoundError, ValueError) as exc:
         write_error_output(str(exc))
         print(f"ERROR: {exc}", file=sys.stderr)

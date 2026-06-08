@@ -137,6 +137,10 @@ def build_message_lines(
         lines.append(
             "Release Gate: ⚠️ No release gate data (gate did not run or api job failed)"
         )
+    elif data.get("gate_skipped"):
+        lines.append(
+            "Release Gate (staging API): ⚠️ Skipped — smoke-only run does not produce a release gate decision"
+        )
     else:
         gate_str = str(data.get("overall_decision", "UNKNOWN"))
         gate_emoji = "✅" if gate_str == "GO" else "❌"

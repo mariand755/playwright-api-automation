@@ -168,7 +168,9 @@ jobs:
         if: always()
         run: |
           if [ "$TEST_SCOPE" != "full" ]; then
-            echo "Smoke-only run — release gate skipped."
+            docker run --rm \
+              -v ${{ github.workspace }}/artifacts:/app/artifacts \
+              playwright-api-automation python scripts/release_gate.py --skipped "$TEST_SCOPE"
             exit 0
           fi
           docker run --rm \

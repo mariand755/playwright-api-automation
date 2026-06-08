@@ -1306,7 +1306,9 @@ For `schedule` and `push` to `main`, `inputs.notification_mode` is inaccessible 
 
 ### Smoke dispatch and the release gate
 
-When `test_scope=smoke` is selected, `TEST_SCOPE=smoke` is set and the release gate step exits early ("Smoke-only run — release gate skipped.") via the existing `TEST_SCOPE != 'full'` guard (ADR-014). `release-readiness.json` is not produced. The `notify` job's artifact download step has `continue-on-error: true`; `notify.py` shows UNKNOWN for the release gate. This is accurate — a smoke run does not produce release readiness evidence. No remediation is required; UNKNOWN on a smoke dispatch is the correct signal.
+When `test_scope=smoke` is selected, `TEST_SCOPE=smoke` is set and the release gate step calls `release_gate.py --skipped "$TEST_SCOPE"` instead of exiting without artifacts. `release_gate.py` writes a schema-consistent placeholder: `artifacts/release-readiness.json` with `overall_decision: "UNKNOWN"` and `gate_skipped: true`, and `artifacts/release-readiness.md` with a "release gate intentionally skipped" notice. The upload-artifact step uploads the placeholder; the `notify` job's download step succeeds without error. `notify.py` detects `gate_skipped: true` and displays "Release Gate (staging API): ⚠️ Skipped — smoke-only run does not produce a release gate decision" rather than ❌ UNKNOWN or a missing-data warning. Overall readiness remains UNKNOWN — accurate, because a smoke run does not produce sufficient evidence for a release decision.
+
+**Amendment note:** The initial ADR-021 text stated "No remediation is required; UNKNOWN on a smoke dispatch is the correct signal." Manual validation revealed that the missing artifact produced an "Artifact not found" error in the Notify job log and a misleading "No release gate data (gate did not run or api job failed)" notification message. The behavior was corrected: `release_gate.py` now owns the placeholder output (consistent schema, testable), and `notify.py` handles `gate_skipped: true` explicitly. Full-run paths are unchanged.
 
 ### Alternatives considered
 

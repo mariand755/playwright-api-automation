@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml)
 
-A working, production-style reference implementation of how to design, build, govern, and operationalize a Python QA system. Covers multi-layer testing (API, UI, script unit), a Docker-first CI gate chain with release-readiness governance, a notification delivery layer, and an ADR-backed governance documentation layer. Designed to be adapted to a client codebase — the governance layer, CI structure, and activation-gated features apply to any Python API/UI automation project.
+A working, production-style reference implementation of how to design, build, govern, and operationalize a QA system. Covers multi-layer testing (API, UI, script unit), a Docker-first CI gate chain with release-readiness governance, a notification delivery layer, and an ADR-backed governance documentation layer. Designed to be adapted to a client codebase — the governance layer, CI structure, and activation-gated features apply to any Python API/UI automation project.
 
-Stack: Python, pytest, Playwright, Requests, jsonschema, Docker, GitHub Actions, Ruff, mypy, pip-audit, Trivy, CodeQL, and Dependabot.
+Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions, Ruff, mypy, pip-audit, Trivy, CodeQL, and Dependabot.
 
 ## What This Repo Demonstrates
 
@@ -147,12 +147,3 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | Blueprint extraction | ⏳ Deferred | Phase 8; after README refresh |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.
-
-## GitHub About (Set Manually in GitHub Settings)
-
-**Description:**
-```
-QA Architecture blueprint — Python/Playwright/pytest, Docker-first CI gate chain, release-readiness governance, agentic QA workflow foundation
-```
-
-**Topics:** `pytest` `playwright` `python` `api-testing` `ui-testing` `test-automation` `docker` `ci-cd` `github-actions` `quality-engineering` `release-gate` `governance` `adr` `qa-architecture` `jsonschema` `agentic-qa`

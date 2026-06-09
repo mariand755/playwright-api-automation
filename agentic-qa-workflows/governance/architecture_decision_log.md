@@ -1353,3 +1353,86 @@ No further activation required. Both inputs are live immediately. Revisit deferr
 **For a consulting client**, both inputs demonstrate the correct CI ergonomics pattern: operator-facing controls that expose only safe, well-defined choices, default to preserving existing behavior, and are backed by clear per-run semantics. The `notification_mode` input in particular shows the correct way to provide per-run override capability without requiring repo variable editing — a pattern that recurs in any CI environment where multiple operators need different delivery behavior on specific runs.
 
 ---
+
+## ADR-022: Blueprint prompt packaging — link to working prompt files, do not copy
+
+**Status:** Accepted
+**Date:** 2026-06-09
+
+### Context
+
+`blueprint/README.md` Section 5 (Agentic QA Workflow Pattern) linked to three prompt files under `agentic-qa-workflows/prompts/` but did not document the 4-step slice workflow or cover all five prompts. A dedicated `blueprint/prompts/` folder was identified as the next extraction slice, with the ownership question deferred: keep prompts in `agentic-qa-workflows/prompts/` (link from blueprint) or move them to `blueprint/prompts/`.
+
+Two structural options were evaluated:
+- **Copy or move** prompt files into `blueprint/prompts/` — gives blueprint consumers a self-contained folder but creates two sources of truth
+- **Link only** — create `blueprint/prompts/README.md` as a workflow guide that links to source files; source files remain in `agentic-qa-workflows/prompts/`
+
+### Decision
+
+Keep reusable prompt source files under `agentic-qa-workflows/prompts/`. Add `blueprint/prompts/README.md` as a standalone workflow guide that links to those files. Do not copy or move prompt files.
+
+### Rationale
+
+- `agentic-qa-workflows/prompts/README.md` already holds operational context (versioning notes, revision history, usage instructions) that would have to be duplicated or summarized in a copied version
+- The ADR log (this file) references prompt file paths at ADR-013 and ADR-019 — moving files would require retroactively updating ADR artifacts
+- Prompt files are actively versioned (v2, v3 with dated revision notes); a copied version is stale from the moment it is written and would diverge within a few PRs
+- The blueprint's own design principle: "Every blueprint area points to working source files. Use them as the reference, not as files to copy." Prompts are working source files.
+
+### Consequences
+
+- `blueprint/prompts/README.md` must be updated when new prompts are added to `agentic-qa-workflows/prompts/` (one table row per new file)
+- Blueprint documentation must link to source prompt files rather than reproducing their content
+- This ADR establishes the ownership pattern for future blueprint extraction decisions: assets that are actively used and versioned in the working repo should be linked from `blueprint/`, not copied
+
+### Related files
+
+- `blueprint/prompts/README.md` — new file; primary artifact of this ADR
+- `blueprint/README.md` — Section 5 updated; Slice 2 row in extraction table resolved
+
+---
+
+## ADR-023: Dependency update triage workflow
+
+**Status:** Accepted
+**Date:** 2026-06-08
+
+### Context
+
+Dependabot creates pull requests weekly for both `pip` and `github-actions` ecosystems. Without a documented triage workflow, PRs accumulate: no agreed merge cadence means no one merges them, newer updates arrive on top of unprocessed older ones, and the version gap grows until a multi-major jump requires substantial review.
+
+By June 2026, five GitHub Actions PRs had been open for 7+ days, with version jumps ranging from +1 to +4 major versions. The root cause was not the updates themselves — all five had full CI green — but the absence of a process for deciding when and how to merge them.
+
+A second structural issue: CI passing on a Dependabot PR confirms the existing test suite runs with the updated action. It does not confirm that the action's behavioral contract (output variables, permission model, edge-case behavior) is unchanged. GitHub Actions are CI infrastructure, not just code dependencies, and must be reviewed accordingly.
+
+### Decision
+
+1. **Adopt a three-checker triage model**: Dependabot creates candidate PRs → CI/security gates validate them → a human reviewer decides to merge, defer, or investigate.
+
+2. **No auto-merge for GitHub Actions major version updates.** A broken action update disables the ability to detect regressions in the product under test. Multi-major version jumps require human changelog review. The `actions/upload-artifact` and `actions/download-artifact` interaction requires coordinated merging that auto-merge cannot enforce.
+
+3. **Require human review before merging any GitHub Actions major version update.** The reviewer checklist in `dependency_update_triage.md` defines the minimum review for Tier 1, 2, and 3 (coordinated) updates.
+
+4. **Coordinate artifact-actions updates.** `actions/upload-artifact` and `actions/download-artifact` interact in the same pipeline (API Tests uploads, Notify downloads). Group them in `dependabot.yml` so they arrive as a single PR. For PRs that arrived before the group was configured, review and merge both in the same review window.
+
+5. **Cap open GitHub Actions PRs at 3.** Set `open-pull-requests-limit: 3` for the `github-actions` ecosystem. This prevents more than 3 updates from queuing simultaneously, forcing older ones to be processed before new ones arrive.
+
+6. **Set a Monday schedule for GitHub Actions updates.** PRs arriving at the start of the work week receive more review attention than those arriving mid-week or on Friday.
+
+7. **Document cadence expectations.** GitHub Actions updates: review within 7 days. Python pip patch/minor: review within 14 days. Security-labeled PRs: review within 24 hours.
+
+### Consequences
+
+- Dependency PRs will accumulate less because the cap and Monday schedule align arrival with review bandwidth.
+- Human review effort increases slightly: major version bumps require changelog review before merging. This is the correct tradeoff — the alternative (merging without review) creates invisible CI infrastructure risk.
+- The triage workflow must be applied to the current backlog of open PRs (PR #14, #15, #16, #17, #40) before the next Dependabot cycle.
+- Python pip patch/minor auto-merge is a future option if desired; it requires a separate ADR and `dependabot.yml` configuration change.
+- The playwright ignore rule (ADR-007) is unaffected.
+- `actions/dependency-review-action` was evaluated and deferred to a future slice. It will be considered after the triage workflow has been applied to at least one real update cycle and its advisory gate behavior can be validated against this repo's PR patterns.
+
+### Related files
+
+- `agentic-qa-workflows/governance/dependency_update_triage.md` — full triage workflow, risk tiers, reviewer checklist, cadence; primary artifact of this ADR
+- `.github/dependabot.yml` — `artifact-actions` group; `open-pull-requests-limit: 3`; Monday schedule; playwright ignore rule unchanged
+- ADR-007 — playwright ignore rule; activation condition for removing the ignore rule
+
+---

@@ -1,222 +1,149 @@
-# Playwright API Automation
+# QA Architecture Blueprint — Python/Playwright/pytest
 
 [![CI](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/mariand755/playwright-api-automation/actions/workflows/ci.yml)
 
-A Python test automation framework that covers both UI testing (via Playwright) and REST API testing (via Requests), targeting two separate applications. The framework is designed to be simple, maintainable, and reproducible across local and Docker environments.
+A working, production-style reference implementation of how to design, build, govern, and operationalize a QA system. Covers multi-layer testing (API, UI, script unit), a Docker-first CI gate chain with release-readiness governance, a notification delivery layer, and an ADR-backed governance documentation layer. Designed to be adapted to a client codebase — the governance layer, CI structure, and activation-gated features apply to any Python API/UI automation project.
 
+Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions, Ruff, mypy, pip-audit, Trivy, CodeQL, and Dependabot.
+
+## What This Repo Demonstrates
+
+- Multi-layer test suite: API (CRUD + contract validation), UI (page-object flows), and script unit tests covering QA tooling logic
+- 4-job CI pipeline with smoke/full test-scope gating, code quality gates, JUnit reporting, and nightly regression
+- Multi-signal release readiness gate: test results + observability signals + defect metrics → GO/NO_GO decision
+- Notification delivery infrastructure: Slack and SMTP channels, dry-run by default, activation-gated by secrets
+- ADR-backed governance documentation layer: suite taxonomy, quality gate definitions, notification and observability activation guides
+- Consulting-style delivery pattern: dry-run defaults, activation-gated features with documented conditions, explicit deferral rationale
+
+## Test Layers
+
+| Layer | Tests | Framework | Coverage |
+|---|---|---|---|
+| API | 7 | pytest + Requests | CRUD + auth + contract validation — Restful Booker |
+| UI | 6 | pytest + Playwright | Login, cart, checkout, negative paths — SauceDemo |
+| Script unit | 25 | pytest | Release gate, CI summary, notification decision logic |
 
 ## Target Applications
-- SauceDemo (https://www.saucedemo.com) — UI test target (e-commerce demo site)
-- Restful Booker (https://restful-booker.herokuapp.com) — API test target (hotel booking REST API)
 
+- [Restful Booker](https://restful-booker.herokuapp.com) — API test target (hotel booking REST API)
+- [SauceDemo](https://www.saucedemo.com) — UI test target (e-commerce demo site)
 
-## Scope Implemented
-- UI smoke flow
-- API test suite
-- Page Object Model with separate locator classes
-- Failure diagnostics (screenshot + HTML dump)
-- Docker is the recommended validation path; local runs are supported as optional fast feedback
+## CI Quality Gate Pipeline
 
-## Architecture Overview
-Tests are organized in layers:
+### Job structure
 
-```text
-UI Tests (Playwright + Page Objects)
-	↓
-Test Layer (pytest test cases)
-	↓
-Utility Layer (API client, helpers, fixtures)
-	↓
-External Systems (Restful Booker API / SauceDemo UI)
+| Job | Runs | Depends on |
+|---|---|---|
+| Docker Test Suite | Builds image, validates pytest collection | — |
+| API Tests | Full API suite, JUnit report, dorny test panel | Docker Test Suite |
+| UI Tests | Full UI suite, JUnit report, dorny test panel, failure artifacts | Docker Test Suite |
+| Notify | Builds release readiness notification and delivers to configured channels | API Tests + UI Tests |
+
+### Test scope by trigger
+
+| Trigger | Scope | Release gate |
+|---|---|---|
+| Push to feature branch / PR | Smoke | Skipped — placeholder artifact written |
+| Push to `main` | Full | GO / NO_GO decision |
+| Nightly (02:00 UTC) | Full | GO / NO_GO decision |
+| `workflow_dispatch` | `test_scope` input: full or smoke | GO / NO_GO if full; skipped if smoke |
+
+`workflow_dispatch` also accepts a `notification_mode` input (`repo_default` / `dry_run` / `live`) for manual notification control during a run.
+
+## Code Quality and Supply-Chain Gates
+
+- **Ruff** — formatting and linting (CI-enforced in Docker)
+- **mypy** — static type checking (CI-enforced in Docker)
+- **pip-audit** — Python dependency vulnerability scanning
+- **Trivy** — container image vulnerability scanning
+- **CodeQL** — static security analysis (GitHub Advanced Security)
+- **Dependabot** — automated dependency updates
+- **pre-commit** — local advisory guardrails (formatting, lint, type check before push); Docker CI is source of truth
+
+See [agentic-qa-workflows/governance/quality_gates.md](agentic-qa-workflows/governance/quality_gates.md) for full gate definitions and what pre-commit does not cover (CodeQL, pip-audit, Trivy).
+
+## Release Readiness Gate
+
+`scripts/release_gate.py` consumes three signal sources:
+
+- JUnit XML from the API test job
+- Observability signals via `pull_observability.py` (error rate, p95/p99 latency, incident count)
+- Defect metrics (open blockers, escape count)
+
+It produces a `GO` / `NO_GO` / `UNKNOWN` decision written to `artifacts/release-readiness.json` and `artifacts/release-readiness.md`. On smoke runs, the gate writes a schema-consistent `gate_skipped: true` placeholder so the Notify job always has an artifact to consume.
+
+Observability providers are currently stub-backed — Datadog, Grafana, and PagerDuty interfaces are documented; stub bodies return sample data. See [agentic-qa-workflows/governance/observability_wiring.md](agentic-qa-workflows/governance/observability_wiring.md) for activation steps when a live observability stack is available.
+
+## Notification Delivery
+
+Notifications are built and delivered after each CI run. Both channels dry-run by default — CI never fails due to missing credentials.
+
+**Slack:** dry-run by default. Activate by adding a `SLACK_WEBHOOK_URL` GitHub Actions secret.
+
+**SMTP/email:** infrastructure-ready; dry-run by default. Live delivery requires SMTP environment validation — runner outbound SMTP restrictions may require port 465 or a transactional email API.
+
+See [agentic-qa-workflows/governance/notification_wiring.md](agentic-qa-workflows/governance/notification_wiring.md) for full activation steps for both channels.
+
+## Governance and ADR-Backed Decision Layer
+
+`agentic-qa-workflows/` contains the full governance layer:
+
+- **Architecture Decision Log** — ADR-backed rationale for every structural decision (framework choices, scope gating, notification model, environment strategy, quality gate thresholds)
+- **Suite Taxonomy** — test IDs, layers, markers, and coverage intent
+- **Quality Gates** — full gate definitions for CI and pre-commit
+- **Notification Wiring** — live activation guide for Slack and SMTP
+- **Observability Wiring** — interface definitions and provider activation guide
+- **Prompt templates and audit workflows** — for AI-assisted QA work under review
+
+See [agentic-qa-workflows/README.md](agentic-qa-workflows/README.md) for the full index.
+
+## How to Run
+
+### Docker (source of truth)
+
+```bash
+docker build -t playwright-api-automation .
+docker run --rm playwright-api-automation
 ```
 
-## Test Coverage Summary
+Run a specific layer:
 
-### UI
-Smoke flow:
-- Login with valid credentials
-- Add product to cart
-- Validate cart contents
-
-Primary journey selected for this assessment: login + add-to-cart (checkout completion is listed in Next Steps).
-
-### API
-Endpoints covered:
-- GET /booking
-- GET /booking/{id}
-- POST /booking
-
-Coverage types:
-- Positive tests
-- Negative tests
-- Schema validation
-- Data-driven tests using external JSON
-
-## Repo Structure
-```text
-playwright-api-automation/
-│
-├── conftest.py              # Global pytest fixtures (shared between UI & API tests)
-├── pytest.ini               # Pytest config: test paths, markers, default options
-├── requirements.txt         # Dependencies: pytest, playwright, requests, jsonschema
-├── Dockerfile               # Docker image for running tests in isolation
-│
-├── test/                    # All test cases organized by type
-│   ├── api/
-│   │   └── test_booking_api.py   # API tests against Restful Booker
-│   └── ui/
-│       └── test_login_cart.py    # UI tests against SauceDemo
-│
-├── pages/                   # Page Object Model (POM) classes
-│   ├── locators.py          # All CSS/text selectors, centralized
-│   ├── login_page.py        # LoginPage: navigate, login, verify_login_success
-│   └── inventory_page.py    # InventoryPage: add to cart, open cart, verify
-│
-├── utils/                   # Shared utilities
-│   ├── api_client.py        # BookingApiClient: wraps Requests calls to Restful Booker
-│   ├── helpers.py           # load_json() and get_schema() for loading test data/schemas
-│   └── timeouts.py          # Central timeout constants (UI in ms, API in seconds)
-│
-├── data/
-│   ├── test_data/
-│   │   └── test_users.json  # URLs + test credentials (SauceDemo standard_user)
-│   └── schemas/
-│       ├── booking_schema.json          # JSON Schema: create booking response
-│       └── booking_details_schema.json  # JSON Schema: get booking by ID response
-│
-├── agentic-qa-workflows/    # QA governance, prompts, workflows, and audit outputs
-│   ├── governance/
-│   ├── prompts/
-│   ├── workflows/
-│   └── outputs/
-│
-└── artifacts/               # Auto-generated: screenshots + HTML on UI test failure
+```bash
+docker run --rm playwright-api-automation pytest test/api -v
+docker run --rm playwright-api-automation pytest test/ui -v
+docker run --rm playwright-api-automation pytest test/scripts -v
 ```
 
-## Agentic QA Governance
+### Local (optional fast feedback)
 
-This repo includes a governance layer for AI-assisted QA work under `agentic-qa-workflows/`.
-
-It defines standards, prompt templates, audit workflows, and repeatable output patterns
-that keep AI-driven changes controlled and reviewable.
-
-See [agentic-qa-workflows/README.md](agentic-qa-workflows/README.md) for details.
-
-## Tooling Rationale
-This framework uses:
-
-- **pytest** for lightweight and readable test execution
-- **Playwright** for reliable browser automation with built-in waiting
-- **requests** for API interactions
-- **jsonschema** for API contract validation
-- **Docker** for consistent execution across environments
-- **Ruff** for code formatting and linting (enforced in CI via Docker)
-
-The goal is to keep the framework simple, maintainable, and reproducible across local and containerized environments.
-
-## CI
-
-GitHub Actions runs a Docker-first workflow that builds the image and verifies pytest collection. On PRs and feature branch pushes, CI runs the smoke subset for fast feedback. On push to `main`, nightly schedule, and `workflow_dispatch`, CI runs the full suite and produces a release readiness decision. Failure artifacts are uploaded when UI test evidence is present.
-
-The `ENV` environment variable selects the URL block from `data/test_data/test_users.json`. `staging` is the default and is used for all standard CI runs. A `prod_read_only` environment block is defined as an activation-ready stub: prod-read-only steps run `read_only`-marked tests only and are gated by `PROD_ENV_ACTIVE=true` (a GitHub repository variable). See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for activation conditions.
-
-For live Slack and SMTP notification setup, see [agentic-qa-workflows/governance/notification_wiring.md](agentic-qa-workflows/governance/notification_wiring.md).
-
-For live observability provider setup and activation, see [agentic-qa-workflows/governance/observability_wiring.md](agentic-qa-workflows/governance/observability_wiring.md).
-
-## Prerequisites
-- Docker — required for CI-parity validation
-- Python 3.9+, pip, Playwright browser binaries — for optional local runs only
-
-## Local Setup (optional)
 ```bash
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 playwright install
-```
-
-## Optional: Pre-commit Guardrails
-
-Pre-commit hooks provide optional fast feedback before push — catching formatting issues, lint violations, and type errors in seconds without a Docker build. This is advisory; Docker CI remains the gate.
-
-```bash
-pip install pre-commit   # or: brew install pre-commit
-pre-commit install       # registers the hook — runs automatically on git commit
-pre-commit run --all-files  # optional: run on all files immediately
-```
-
-See [agentic-qa-workflows/governance/quality_gates.md](agentic-qa-workflows/governance/quality_gates.md) for the full hook list and what pre-commit does not cover (CodeQL, pip-audit, Trivy).
-
-## Run Tests (Local — optional fast feedback)
-Run all tests:
-```bash
 pytest -v
 ```
 
-Run UI smoke only:
+### Pre-commit guardrails (optional)
+
 ```bash
-pytest test/ui -v
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
 ```
-
-Run API tests only:
-```bash
-pytest test/api -v
-```
-
-## Run with Docker
-
-Docker is the source-of-truth path for full-suite validation and CI parity.
-
-Build image:
-```bash
-docker build -t playwright-api-automation .  #build the Docker image
-```
-
-Run tests:
-```bash
-docker run --rm playwright-api-automation  #run all tests, container removed after completion
-```
-
-Run UI tests only in Docker:
-```bash
-docker run --rm playwright-api-automation pytest test/ui -v  #run only UI tests
-
-```
-
-Run API tests only in Docker:
-```bash
-docker run --rm playwright-api-automation pytest test/api -v  #run only API tests
-```
-
-## UI Smoke Coverage
-Implemented in `test/ui/test_login_cart.py` using:
-- `pages/login_page.py`
-- `pages/inventory_page.py`
-- `pages/locators.py`
 
 ## Failure Diagnostics
 
-On any UI test failure, the framework automatically captures:
+On any UI test failure, the framework captures a screenshot (`artifacts/failures/<test_name>.png`) and HTML dump (`artifacts/failures/<test_name>.html`) via the `pytest_runtest_makereport` hook in `conftest.py`. In CI these are uploaded as the `failure-artifacts` artifact; the upload is skipped silently when no files are present. API failures surface diagnostic context (URL, status code, response body excerpt) directly in the pytest traceback.
 
-- Screenshot: `artifacts/failures/<test_name>.png`
-- HTML dump: `artifacts/failures/<test_name>.html`
+## Planned / Deferred Capabilities
 
-Capture is handled by the `pytest_runtest_makereport` hook in `conftest.py`. API test failures surface diagnostic context (URL, status code, response body excerpt) directly in the pytest traceback — no separate artifact file.
+| Capability | Status | Notes |
+|---|---|---|
+| SMTP/email live delivery validation | ⏳ Deferred | Runner SMTP restrictions; may need port 465 or transactional API |
+| Forced-live critical failure alerts | ⏳ Deferred | Needs ADR before activation |
+| Live observability API integration | ⏳ Deferred | Replace stub bodies when live observability stack is available |
+| pytest-xdist parallelization | ⏳ Deferred | Gate: >30 tests or >2 min runtime (not yet met) |
+| Blueprint extraction | ⏳ Deferred | Phase 8; after README refresh |
 
-**In CI:** The workflow volume-mounts `artifacts/` into the Docker container so evidence written inside the container persists on the runner. On failure, GitHub Actions uploads `artifacts/failures/` as the `failure-artifacts` artifact. The upload is skipped silently when no files are present (API-only failures produce no screenshot).
-
-## Assessment Artifacts
-- Source code: repository root
-- Decision log: `DecisionLog.md`
-- Full local run output: `artifacts/local-run-output.txt`
-- Local UI-only run output: `artifacts/local-ui-run-output.txt`
-- Local API-only run output: `artifacts/local-api-run-output.txt`
-- Docker UI-only run output: `artifacts/docker-ui-run-output.txt`
-- Docker API-only run output: `artifacts/docker-api-run-output.txt`
-
-## Execution Time
-Typical runtime observed from current local logs:
-- UI smoke: ~1.5 to 2 seconds
-- API suite: ~1 to 2 seconds
-- Full suite: ~3 to 4 seconds
+Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.

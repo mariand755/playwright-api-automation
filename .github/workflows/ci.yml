@@ -83,13 +83,14 @@ jobs:
 
       - name: Publish Script Unit Test Results
         if: always()
-        # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
           name: Script Unit Test Results
           path: artifacts/scripts-report.xml
           reporter: java-junit
           fail-on-error: false
+          use-actions-summary: false  # v3.0.0 changed default to true; preserve GitHub Check Run panels
 
   api:
     name: API Tests
@@ -205,13 +206,14 @@ jobs:
 
       - name: Publish API test report
         if: always()
-        # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
           name: API Test Results
           path: artifacts/api-report.xml
           reporter: java-junit
           fail-on-error: false
+          use-actions-summary: false  # v3.0.0 changed default to true; preserve GitHub Check Run panels
 
   ui:
     name: UI Tests
@@ -291,13 +293,14 @@ jobs:
 
       - name: Publish UI test report
         if: always()
-        # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
           name: UI Test Results
           path: artifacts/ui-report.xml
           reporter: java-junit
           fail-on-error: false
+          use-actions-summary: false  # v3.0.0 changed default to true; preserve GitHub Check Run panels
 
       - name: Upload failure artifacts
         if: failure()

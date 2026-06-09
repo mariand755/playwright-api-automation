@@ -84,7 +84,7 @@ jobs:
       - name: Publish Script Unit Test Results
         if: always()
         # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
           name: Script Unit Test Results
           path: artifacts/scripts-report.xml
@@ -206,7 +206,7 @@ jobs:
       - name: Publish API test report
         if: always()
         # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
           name: API Test Results
           path: artifacts/api-report.xml
@@ -292,7 +292,7 @@ jobs:
       - name: Publish UI test report
         if: always()
         # dorny/test-reporter pinned to v1.9.1 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
           name: UI Test Results
           path: artifacts/ui-report.xml

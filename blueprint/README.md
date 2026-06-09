@@ -171,6 +171,7 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 3. **Follow governance rules, don't copy governance content.** `page_object_api_rules.md`, `test_data_env_rules.md`, and `failure_evidence.md` transfer directly; the ADR log does not.
 4. **Do not skip Mode A plan review.** Use `slice_planning_prompt_template.md` before editing files.
 5. **Validate with Docker.** Local pytest is advisory only; Docker CI is the source of truth.
+6. **Review data flows before activating external channels.** See [`data_handling_guide.md`](data_handling_guide.md) for a consolidated view of what data this framework produces, where it goes, and what controls to evaluate before enabling notifications, observability, or prod-read-only testing.
 
 ---
 

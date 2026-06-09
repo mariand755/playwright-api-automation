@@ -1390,3 +1390,49 @@ Keep reusable prompt source files under `agentic-qa-workflows/prompts/`. Add `bl
 - `blueprint/README.md` — Section 5 updated; Slice 2 row in extraction table resolved
 
 ---
+
+## ADR-023: Dependency update triage workflow
+
+**Status:** Accepted
+**Date:** 2026-06-08
+
+### Context
+
+Dependabot creates pull requests weekly for both `pip` and `github-actions` ecosystems. Without a documented triage workflow, PRs accumulate: no agreed merge cadence means no one merges them, newer updates arrive on top of unprocessed older ones, and the version gap grows until a multi-major jump requires substantial review.
+
+By June 2026, five GitHub Actions PRs had been open for 7+ days, with version jumps ranging from +1 to +4 major versions. The root cause was not the updates themselves — all five had full CI green — but the absence of a process for deciding when and how to merge them.
+
+A second structural issue: CI passing on a Dependabot PR confirms the existing test suite runs with the updated action. It does not confirm that the action's behavioral contract (output variables, permission model, edge-case behavior) is unchanged. GitHub Actions are CI infrastructure, not just code dependencies, and must be reviewed accordingly.
+
+### Decision
+
+1. **Adopt a three-checker triage model**: Dependabot creates candidate PRs → CI/security gates validate them → a human reviewer decides to merge, defer, or investigate.
+
+2. **No auto-merge for GitHub Actions major version updates.** A broken action update disables the ability to detect regressions in the product under test. Multi-major version jumps require human changelog review. The `actions/upload-artifact` and `actions/download-artifact` interaction requires coordinated merging that auto-merge cannot enforce.
+
+3. **Require human review before merging any GitHub Actions major version update.** The reviewer checklist in `dependency_update_triage.md` defines the minimum review for Tier 1, 2, and 3 (coordinated) updates.
+
+4. **Coordinate artifact-actions updates.** `actions/upload-artifact` and `actions/download-artifact` interact in the same pipeline (API Tests uploads, Notify downloads). Group them in `dependabot.yml` so they arrive as a single PR. For PRs that arrived before the group was configured, review and merge both in the same review window.
+
+5. **Cap open GitHub Actions PRs at 3.** Set `open-pull-requests-limit: 3` for the `github-actions` ecosystem. This prevents more than 3 updates from queuing simultaneously, forcing older ones to be processed before new ones arrive.
+
+6. **Set a Monday schedule for GitHub Actions updates.** PRs arriving at the start of the work week receive more review attention than those arriving mid-week or on Friday.
+
+7. **Document cadence expectations.** GitHub Actions updates: review within 7 days. Python pip patch/minor: review within 14 days. Security-labeled PRs: review within 24 hours.
+
+### Consequences
+
+- Dependency PRs will accumulate less because the cap and Monday schedule align arrival with review bandwidth.
+- Human review effort increases slightly: major version bumps require changelog review before merging. This is the correct tradeoff — the alternative (merging without review) creates invisible CI infrastructure risk.
+- The triage workflow must be applied to the current backlog of open PRs (PR #14, #15, #16, #17, #40) before the next Dependabot cycle.
+- Python pip patch/minor auto-merge is a future option if desired; it requires a separate ADR and `dependabot.yml` configuration change.
+- The playwright ignore rule (ADR-007) is unaffected.
+- `actions/dependency-review-action` was evaluated and deferred to a future slice. It will be considered after the triage workflow has been applied to at least one real update cycle and its advisory gate behavior can be validated against this repo's PR patterns.
+
+### Related files
+
+- `agentic-qa-workflows/governance/dependency_update_triage.md` — full triage workflow, risk tiers, reviewer checklist, cadence; primary artifact of this ADR
+- `.github/dependabot.yml` — `artifact-actions` group; `open-pull-requests-limit: 3`; Monday schedule; playwright ignore rule unchanged
+- ADR-007 — playwright ignore rule; activation condition for removing the ignore rule
+
+---

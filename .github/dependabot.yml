@@ -14,3 +14,10 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      artifact-actions:
+        patterns:
+          - "actions/upload-artifact"
+          - "actions/download-artifact"

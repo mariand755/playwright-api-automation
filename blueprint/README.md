@@ -112,7 +112,7 @@ A governance-first agentic workflow where every implementation slice gets a Mode
 | [`slice_planning_prompt_template.md`](../agentic-qa-workflows/prompts/slice_planning_prompt_template.md) | Planning template — fill in `[PLACEHOLDER]` values for your repo |
 | [`governance_compliance_audit_prompt.md`](../agentic-qa-workflows/prompts/governance_compliance_audit_prompt.md) | Governance audit — adapt the file list section to your repo |
 
-These prompts work today for any Python automation repo. Copy them to your project's `agentic-qa-workflows/prompts/` directory.
+See [`prompts/README.md`](prompts/README.md) for the complete 4-step workflow guide and full prompt inventory. Source files stay in `agentic-qa-workflows/prompts/` — the blueprint guide links to them rather than copying them.
 
 ---
 
@@ -178,8 +178,8 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 
 | Slice | Content | Prerequisite |
 |---|---|---|
-| Slice 2 | `blueprint/prompts/` — agentic QA workflow prompts | Decide: keep prompts in `agentic-qa-workflows/prompts/` (link here) or move and update all internal links |
+| Slice 2 | `blueprint/prompts/README.md` — agentic QA workflow guide | Guide at `blueprint/prompts/README.md`; source prompts stay in `agentic-qa-workflows/prompts/` to avoid drift |
 | Slice 3 | `blueprint/scripts/notify.py` | Slice 2 merged; job-result env var names documented above |
-| Slice 4 | `blueprint/scripts/release_gate.py` | Ready for future extraction: input/output paths are now configurable via CLI args; extract only after confirming template ownership and avoiding a second source of truth. |
+| Slice 4 | `blueprint/scripts/release_gate.py` | Ready for future extraction: input/output paths are now configurable via CLI args. Extract only after deciding template ownership and avoiding a second source of truth |
 | Slice 5 | `blueprint/governance/` — blank ADR template, suite taxonomy template | Slice 4 merged |
 | Slice 6 | Second repo application + case study | Full `blueprint/` folder stable; a second repo target exists |

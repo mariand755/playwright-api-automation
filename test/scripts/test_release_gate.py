@@ -1,11 +1,13 @@
 """Unit tests for scripts/release_gate.py — JUnit XML parsing and gate decision logic.
 
 Covers parse_test_results() (TC-SCRIPT-001 to TC-SCRIPT-003b), evaluate_gate()
-(TC-SCRIPT-004 to TC-SCRIPT-009), and write_skipped_output() (TC-SCRIPT-019 to
-TC-SCRIPT-020). Network calls and main() are excluded.
+(TC-SCRIPT-004 to TC-SCRIPT-009), write_skipped_output() (TC-SCRIPT-019 to
+TC-SCRIPT-020), write_error_output() (TC-SCRIPT-023), and main() custom output
+paths (TC-SCRIPT-024).
 """
 
 import json
+import sys
 
 import pytest
 
@@ -193,17 +195,14 @@ def test_evaluate_gate_warnings_do_not_block(clean_test_results):
 @pytest.mark.smoke
 @pytest.mark.regression
 @pytest.mark.tc_id("TC-SCRIPT-019")
-def test_write_skipped_output_json(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        release_gate, "OUTPUT_JSON", tmp_path / "release-readiness.json"
-    )
-    monkeypatch.setattr(release_gate, "OUTPUT_MD", tmp_path / "release-readiness.md")
+def test_write_skipped_output_json(tmp_path):
+    out_json = tmp_path / "release-readiness.json"
+    out_md = tmp_path / "release-readiness.md"
 
-    release_gate.write_skipped_output("smoke")
+    release_gate.write_skipped_output("smoke", output_json=out_json, output_md=out_md)
 
-    output_path = tmp_path / "release-readiness.json"
-    assert output_path.exists(), "release-readiness.json was not created"
-    data = json.loads(output_path.read_text())
+    assert out_json.exists(), "release-readiness.json was not created"
+    data = json.loads(out_json.read_text())
     assert data["overall_decision"] == "UNKNOWN", (
         f"Expected overall_decision=UNKNOWN, got {data['overall_decision']}"
     )
@@ -221,20 +220,86 @@ def test_write_skipped_output_json(tmp_path, monkeypatch):
 @pytest.mark.scripts
 @pytest.mark.regression
 @pytest.mark.tc_id("TC-SCRIPT-020")
-def test_write_skipped_output_md(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        release_gate, "OUTPUT_JSON", tmp_path / "release-readiness.json"
-    )
-    monkeypatch.setattr(release_gate, "OUTPUT_MD", tmp_path / "release-readiness.md")
+def test_write_skipped_output_md(tmp_path):
+    out_json = tmp_path / "release-readiness.json"
+    out_md = tmp_path / "release-readiness.md"
 
-    release_gate.write_skipped_output("smoke")
+    release_gate.write_skipped_output("smoke", output_json=out_json, output_md=out_md)
 
-    md_path = tmp_path / "release-readiness.md"
-    assert md_path.exists(), "release-readiness.md was not created"
-    content = md_path.read_text()
+    assert out_md.exists(), "release-readiness.md was not created"
+    content = out_md.read_text()
     assert "Release Readiness Gate" in content, (
         f"Expected 'Release Readiness Gate' heading in MD, got: {content!r}"
     )
     assert "intentionally skipped" in content, (
         f"Expected 'intentionally skipped' in MD, got: {content!r}"
+    )
+
+
+# TC-SCRIPT-023 — write_error_output: writes NO_GO decision to custom output paths
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-023")
+def test_write_error_output_custom_paths(tmp_path):
+    out_json = tmp_path / "custom-error.json"
+    out_md = tmp_path / "custom-error.md"
+
+    release_gate.write_error_output(
+        "test failure message", output_json=out_json, output_md=out_md
+    )
+
+    assert out_json.exists(), "custom error JSON was not created"
+    data = json.loads(out_json.read_text())
+    assert data["overall_decision"] == "NO_GO", (
+        f"Expected NO_GO, got {data['overall_decision']}"
+    )
+    assert any("test failure message" in f for f in data["gate_failures"]), (
+        f"Expected 'test failure message' in gate_failures, got {data['gate_failures']}"
+    )
+    assert out_md.exists(), "custom error MD was not created"
+    content = out_md.read_text()
+    assert "NO_GO" in content, f"Expected 'NO_GO' in MD output, got: {content!r}"
+    assert "test failure message" in content, (
+        f"Expected 'test failure message' in MD output, got: {content!r}"
+    )
+
+
+# TC-SCRIPT-024 — main() honors --output-json and --output-md; writes to custom paths
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-024")
+def test_main_honors_custom_output_paths(
+    tmp_path, monkeypatch, clean_junit_xml, clean_obs, clean_defects
+):
+    out_json = tmp_path / "gate-output.json"
+    out_md = tmp_path / "gate-output.md"
+    obs_file = tmp_path / "obs.json"
+    defect_file = tmp_path / "defects.json"
+    obs_file.write_text(json.dumps(clean_obs), encoding="utf-8")
+    defect_file.write_text(json.dumps(clean_defects), encoding="utf-8")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "release_gate.py",
+            str(clean_junit_xml),
+            "--observability-json",
+            str(obs_file),
+            "--defect-metrics-json",
+            str(defect_file),
+            "--output-json",
+            str(out_json),
+            "--output-md",
+            str(out_md),
+        ],
+    )
+    rc = release_gate.main()
+
+    assert rc == 0, f"Expected exit code 0 (GO), got {rc}"
+    assert out_json.exists(), "Custom output JSON was not created"
+    assert out_md.exists(), "Custom output MD was not created"
+    data = json.loads(out_json.read_text())
+    assert data["overall_decision"] == "GO", (
+        f"Expected GO with clean inputs, got {data['overall_decision']}"
     )

@@ -244,8 +244,12 @@ def render_markdown(output: dict) -> str:
     return "\n".join(lines)
 
 
-def write_error_output(message: str) -> None:
-    OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+def write_error_output(
+    message: str,
+    output_json: Path = OUTPUT_JSON,
+    output_md: Path = OUTPUT_MD,
+) -> None:
+    output_json.parent.mkdir(parents=True, exist_ok=True)
     error_output = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "gate_version": GATE_VERSION,
@@ -254,8 +258,8 @@ def write_error_output(message: str) -> None:
         "warnings": [],
         "data_note": DATA_NOTE,
     }
-    OUTPUT_JSON.write_text(json.dumps(error_output, indent=2), encoding="utf-8")
-    OUTPUT_MD.write_text(
+    output_json.write_text(json.dumps(error_output, indent=2), encoding="utf-8")
+    output_md.write_text(
         "\n".join(
             [
                 "## Release Readiness Gate",
@@ -272,8 +276,12 @@ def write_error_output(message: str) -> None:
     )
 
 
-def write_skipped_output(test_scope: str) -> None:
-    OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+def write_skipped_output(
+    test_scope: str,
+    output_json: Path = OUTPUT_JSON,
+    output_md: Path = OUTPUT_MD,
+) -> None:
+    output_json.parent.mkdir(parents=True, exist_ok=True)
     skipped_output = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "gate_version": GATE_VERSION,
@@ -285,8 +293,8 @@ def write_skipped_output(test_scope: str) -> None:
         "warnings": [],
         "data_note": DATA_NOTE,
     }
-    OUTPUT_JSON.write_text(json.dumps(skipped_output, indent=2), encoding="utf-8")
-    OUTPUT_MD.write_text(
+    output_json.write_text(json.dumps(skipped_output, indent=2), encoding="utf-8")
+    output_md.write_text(
         "\n".join(
             [
                 "## Release Readiness Gate",
@@ -318,41 +326,70 @@ def main() -> int:
         metavar="TEST_SCOPE",
         help="Write a skipped-gate placeholder artifact for the given test scope and exit 0",
     )
+    parser.add_argument(
+        "--observability-json",
+        default=str(OBSERVABILITY_JSON),
+        metavar="PATH",
+        help=f"Path to observability snapshot JSON (default: {OBSERVABILITY_JSON})",
+    )
+    parser.add_argument(
+        "--defect-metrics-json",
+        default=str(DEFECT_METRICS_JSON),
+        metavar="PATH",
+        help=f"Path to defect metrics JSON (default: {DEFECT_METRICS_JSON})",
+    )
+    parser.add_argument(
+        "--output-json",
+        default=str(OUTPUT_JSON),
+        metavar="PATH",
+        help=f"Path for release readiness JSON output (default: {OUTPUT_JSON})",
+    )
+    parser.add_argument(
+        "--output-md",
+        default=str(OUTPUT_MD),
+        metavar="PATH",
+        help=f"Path for release readiness Markdown output (default: {OUTPUT_MD})",
+    )
     args = parser.parse_args()
 
+    obs_path = Path(args.observability_json)
+    defect_path = Path(args.defect_metrics_json)
+    output_json = Path(args.output_json)
+    output_md = Path(args.output_md)
+
     if args.skipped:
-        write_skipped_output(args.skipped)
+        write_skipped_output(args.skipped, output_json=output_json, output_md=output_md)
         return 0
 
     report_xml = Path(args.xml)
-    OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    output_json.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         test_results = parse_test_results(report_xml)
     except (FileNotFoundError, ValueError) as exc:
-        write_error_output(str(exc))
+        write_error_output(str(exc), output_json=output_json, output_md=output_md)
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
     try:
-        obs = load_json(OBSERVABILITY_JSON)
+        obs = load_json(obs_path)
     except (FileNotFoundError, ValueError) as exc:
-        write_error_output(str(exc))
+        write_error_output(str(exc), output_json=output_json, output_md=output_md)
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
     try:
-        defects = load_json(DEFECT_METRICS_JSON)
+        defects = load_json(defect_path)
     except (FileNotFoundError, ValueError) as exc:
-        write_error_output(str(exc))
+        write_error_output(str(exc), output_json=output_json, output_md=output_md)
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
     decision, gate_failures, warnings = evaluate_gate(test_results, obs, defects)
     output = build_output(test_results, obs, defects, decision, gate_failures, warnings)
 
-    OUTPUT_JSON.write_text(json.dumps(output, indent=2), encoding="utf-8")
-    OUTPUT_MD.write_text(render_markdown(output), encoding="utf-8")
+    output_json.write_text(json.dumps(output, indent=2), encoding="utf-8")
+    output_md.write_text(render_markdown(output), encoding="utf-8")
 
     status = "✅ GO" if decision == "GO" else "❌ NO_GO"
     print(f"Release gate decision: {status}")
@@ -364,7 +401,7 @@ def main() -> int:
         print("Warnings:")
         for w in warnings:
             print(f"  - {w}")
-    print(f"Outputs: {OUTPUT_JSON}, {OUTPUT_MD}")
+    print(f"Outputs: {output_json}, {output_md}")
 
     return 0 if decision == "GO" else 1
 

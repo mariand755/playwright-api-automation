@@ -14,6 +14,8 @@ These are not copies of any specific repo's governance documents. They represent
 |---|---|
 | [`adr_template.md`](adr_template.md) | You need to record a significant architectural or tooling decision |
 | [`suite_taxonomy_template.md`](suite_taxonomy_template.md) | You are defining your test marker taxonomy for the first time |
+| [`qa_standards_template.md`](qa_standards_template.md) | You are establishing naming conventions, assertion standards, DRY rules, and coverage expectations |
+| [`failure_evidence_template.md`](failure_evidence_template.md) | You are defining failure artifact standards and CI gate failure triage protocol |
 
 ---
 
@@ -28,7 +30,6 @@ Some governance patterns are best read from the reference implementation directl
 | [`../agentic-qa-workflows/governance/observability_wiring.md`](../agentic-qa-workflows/governance/observability_wiring.md) | 5-condition activation checklist for live observability providers | The wiring guide itself is designed to be copied; see blueprint/README.md Section 7 |
 | [`../agentic-qa-workflows/governance/page_object_api_rules.md`](../agentic-qa-workflows/governance/page_object_api_rules.md) | POM boundaries, API client ownership | Fully transferable as-is; no adaptation needed beyond renaming the example client class |
 | [`../agentic-qa-workflows/governance/test_data_env_rules.md`](../agentic-qa-workflows/governance/test_data_env_rules.md) | Test data isolation, environment variable handling, credential storage | Mostly transferable; replace the environment JSON structure with your own |
-| [`../agentic-qa-workflows/governance/failure_evidence.md`](../agentic-qa-workflows/governance/failure_evidence.md) | Failure artifact standards, CI gate failure analysis checklist | Directly applicable; adapt artifact paths to your project layout |
 | [`../agentic-qa-workflows/governance/security_and_branch_protection.md`](../agentic-qa-workflows/governance/security_and_branch_protection.md) | Branch protection settings, secret scanning guidance, gate classification | Adapt the required status check job names to your CI pipeline |
 
 ---
@@ -49,8 +50,6 @@ These templates are planned for future extraction slices. Use the live source fi
 
 | Template | Source to read now |
 |---|---|
-| QA standards template (TC-ID system, assertion standards) | [`../agentic-qa-workflows/governance/qa_standards.md`](../agentic-qa-workflows/governance/qa_standards.md) |
-| Failure evidence template (CI gate failure checklist) | [`../agentic-qa-workflows/governance/failure_evidence.md`](../agentic-qa-workflows/governance/failure_evidence.md) |
 | Dependency update triage template | [`../agentic-qa-workflows/governance/dependency_update_triage.md`](../agentic-qa-workflows/governance/dependency_update_triage.md) |
 | Security and branch protection checklist | [`../agentic-qa-workflows/governance/security_and_branch_protection.md`](../agentic-qa-workflows/governance/security_and_branch_protection.md) |
 

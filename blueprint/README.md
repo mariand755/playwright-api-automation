@@ -96,6 +96,8 @@ An ADR-backed governance layer that documents every structural decision, defines
 |---|---|
 | [`governance/adr_template.md`](governance/adr_template.md) | Recording any architectural or tooling decision — blank template, zero repo-specific content |
 | [`governance/suite_taxonomy_template.md`](governance/suite_taxonomy_template.md) | Defining your test marker taxonomy — generic rewrite with `[your marker]` placeholders |
+| [`governance/qa_standards_template.md`](governance/qa_standards_template.md) | Establishing naming conventions, assertion standards, DRY rules, and coverage expectations |
+| [`governance/failure_evidence_template.md`](governance/failure_evidence_template.md) | Defining failure artifact standards and CI gate failure triage protocol |
 
 See [`governance/README.md`](governance/README.md) for the full governance adoption guide, link-only decisions, and deferred templates.
 
@@ -198,5 +200,6 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 | Data handling guide | [`blueprint/data_handling_guide.md`](data_handling_guide.md) — data flows, sensitivity notes, activation checklist | Done — PR #45 (out-of-sequence) |
 | Slice 3 | [`blueprint/scripts/notify.py`](scripts/notify.py) — stdlib-only notification script with adaptation notes | Done — PR #49 |
 | Slice 4 | [`blueprint/scripts/release_gate.py`](scripts/release_gate.py) — release readiness gate with adaptation points annotated | Done — PR #50 |
-| Slice 5 | [`blueprint/governance/`](governance/) — blank ADR template, suite taxonomy template, governance index | Done — this PR |
-| Slice 6 | Second repo application + case study | Future — after full `blueprint/` folder stable |
+| Slice 5 | [`blueprint/governance/`](governance/) — blank ADR template, suite taxonomy template, governance index | Done — PR #51 |
+| Slice 6 | [`blueprint/governance/qa_standards_template.md`](governance/qa_standards_template.md) + [`blueprint/governance/failure_evidence_template.md`](governance/failure_evidence_template.md) — QA standards and failure evidence templates | Done — this PR |
+| Slice 7 | Second repo application + case study | Future — after full `blueprint/` folder stable |

@@ -42,3 +42,20 @@ agentic-qa-workflows/
 
 ## Design Principle
 AI can assist with analysis, test design, and implementation, but governance controls the workflow.
+
+## Workflow Capability Statement
+
+This is a **governance-first, AI-assisted, human-gated** QA workflow. What that means in practice:
+
+- Every implementation slice is reviewed in two stages (Mode A plan review before editing; Mode B implementation review before committing). Both stages are invoked manually by the engineer in an AI session.
+- A human approves scope, reviews diffs, approves commits, pushes branches, and merges PRs. The AI does not take autonomous action on the repository.
+- CI, release readiness gates, and notifications are fully automated — no human trigger is required once a PR is merged.
+
+**What this repo does not yet provide:**
+
+- Autonomous agent orchestration (no scheduled AI agents, no CI-triggered review loops)
+- Claude Code skills (two are deferred for post-second-repo adoption; governance audit and TC-ID suggestion are the first candidates)
+- MCP integrations (deferred; evaluate after second-repo establishes which external system connections add practical value)
+- Self-healing or remediation automation
+
+The label "agentic" describes governance-enforced, prompt-driven AI assistance — not unsupervised autonomy. Future slices may package repeated workflows as Claude Code skills once second-repo adoption identifies which workflows are reused often enough to justify it.

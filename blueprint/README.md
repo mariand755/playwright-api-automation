@@ -68,7 +68,9 @@ A 4-job pipeline (Docker Test Suite → API Tests ∥ UI Tests → Notify) with 
 
 `scripts/notify.py` is a stdlib-only script (zero dependencies). Both Slack and SMTP/email dry-run by default — CI never fails due to missing credentials. Each channel checks its own env vars independently. The script runs directly on the GitHub Actions runner without a Docker build.
 
-**Reference:** [`../scripts/notify.py`](../scripts/notify.py) · [`../agentic-qa-workflows/governance/notification_wiring.md`](../agentic-qa-workflows/governance/notification_wiring.md)
+**Blueprint asset:** [`scripts/notify.py`](scripts/notify.py) — extracted reusable template with adaptation points annotated; start here for new projects.
+
+**Live source reference:** [`../scripts/notify.py`](../scripts/notify.py) · [`../agentic-qa-workflows/governance/notification_wiring.md`](../agentic-qa-workflows/governance/notification_wiring.md) — working implementation used by this repo's CI.
 
 **Configure for a new repo:** Rename the three job-result env var names in your `ci.yml` notify step to match your actual job names — `DOCKER_TEST_SUITE_RESULT`, `API_TESTS_RESULT`, `UI_TESTS_RESULT` are this repo's names.
 
@@ -175,12 +177,13 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 
 ---
 
-## Recommended Next Extraction Slices
+## Extraction Slices
 
-| Slice | Content | Prerequisite |
+| Slice | Content | Status |
 |---|---|---|
-| Slice 2 | `blueprint/prompts/README.md` — agentic QA workflow guide | Guide at `blueprint/prompts/README.md`; source prompts stay in `agentic-qa-workflows/prompts/` to avoid drift |
-| Slice 3 | `blueprint/scripts/notify.py` | Slice 2 merged; job-result env var names documented above |
-| Slice 4 | `blueprint/scripts/release_gate.py` | Ready for future extraction: input/output paths are now configurable via CLI args. Extract only after deciding template ownership and avoiding a second source of truth |
-| Slice 5 | `blueprint/governance/` — blank ADR template, suite taxonomy template | Slice 4 merged |
-| Slice 6 | Second repo application + case study | Full `blueprint/` folder stable; a second repo target exists |
+| Slice 2 | [`blueprint/prompts/README.md`](prompts/README.md) — agentic QA workflow guide | Done — PR #44 |
+| Data handling guide | [`blueprint/data_handling_guide.md`](data_handling_guide.md) — data flows, sensitivity notes, activation checklist | Done — PR #45 (out-of-sequence) |
+| Slice 3 | [`blueprint/scripts/notify.py`](scripts/notify.py) — stdlib-only notification script with adaptation notes | Done — this PR |
+| Slice 4 | `blueprint/scripts/release_gate.py` | Future — input/output paths configurable via CLI args; extract after deciding template ownership |
+| Slice 5 | `blueprint/governance/` — blank ADR template, suite taxonomy template | Future — after Slice 4 |
+| Slice 6 | Second repo application + case study | Future — after full `blueprint/` folder stable |

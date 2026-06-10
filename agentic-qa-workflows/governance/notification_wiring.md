@@ -4,7 +4,21 @@
 
 The `Notify` CI job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` all complete. It downloads `artifacts/release-readiness.json` from the `API Tests` artifact upload, receives each required job's outcome via `needs.*.result` env vars, and delivers an aggregate message to Slack and email.
 
-**When it runs:** `schedule` (nightly) and `workflow_dispatch` (manual) triggers always. `push` to `main` when any required job (`Docker Test Suite`, `API Tests`, `UI Tests`) result is not exactly `success` — failure, cancelled, and skipped all produce a BLOCKED notification. Clean pushes to main (all jobs success) run silently with no notification. Not on pull request or feature branch push.
+**When it runs:**
+
+| Trigger | Outcome | Notify? |
+|---|---|---|
+| `schedule` (nightly) | any | Yes — always |
+| `workflow_dispatch` | any | Yes — always |
+| `push` to `main` | any required job not `success` | Yes — BLOCKED notification |
+| `push` to `main` | all required jobs `success` | No — opinionated silence on clean merges |
+| `pull_request` | any required job not `success` AND `NOTIFY_PR_FAILURES=true` | Yes — BLOCKED notification |
+| `pull_request` | all required jobs `success`, or `NOTIFY_PR_FAILURES` unset | No |
+| feature branch push | any | No |
+
+PR failure notification is opt-in via the `NOTIFY_PR_FAILURES` repository variable (see below). When unset, PR failures are silent — only the GitHub PR status panel shows the result. When set to `true`, the `Notify` job fires on PR failures using the same BLOCKED semantics as push-to-main failures.
+
+**Fork PR note:** Pull requests from forks do not have access to repository secrets. When `NOTIFY_PR_FAILURES=true` is set and a fork PR fails, the `Notify` job will start but channels that require secrets (Slack, SMTP) will dry-run — no live delivery occurs. This is the correct safe default.
 
 **Message structure:** Each notification includes:
 - **Overall Release Readiness** — the aggregate verdict: GO, NO_GO, BLOCKED, or UNKNOWN. BLOCKED if any required job result is not exactly `success` (failure, cancelled, skipped, and unknown are all BLOCKED).
@@ -126,6 +140,33 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 
 **Important:** if `NOTIFY_DRY_RUN` is added under **Secrets** instead of **Variables**, the workflow's `${{ vars.NOTIFY_DRY_RUN }}` reference reads from the wrong namespace and resolves to an empty string. The flag silently has no effect.
 
+---
+
+## NOTIFY_PR_FAILURES (Repository Variable, not a Secret)
+
+`NOTIFY_PR_FAILURES` is a **GitHub repository variable** — not a secret.
+
+Add it under: **Settings → Secrets and variables → Actions → Variables tab** (not the Secrets tab).
+
+| Value | Effect |
+|---|---|
+| `true` | The `Notify` job fires on PR failures when any required job is not `success` |
+| Unset or any other value | PR failures are silent — only the GitHub PR status panel shows the result |
+
+**Default behavior:** When `NOTIFY_PR_FAILURES` is unset, PR failures do not trigger the `Notify` job. This matches the "opinionated silence" policy from ADR-018 — teams receive a notification only when they have explicitly opted in.
+
+**Fork PRs:** Pull requests from forks do not have access to repository secrets. When `NOTIFY_PR_FAILURES=true` is set and a fork PR fails, the `Notify` job will start but Slack and email channels will dry-run — no live delivery occurs. This is the correct safe default.
+
+**Interaction with `NOTIFY_DRY_RUN`:** `NOTIFY_PR_FAILURES` controls job eligibility (does the job start on PR events?). `NOTIFY_DRY_RUN` controls channel delivery (does live delivery happen when the job runs?). Both can be set independently:
+
+| `NOTIFY_PR_FAILURES` | `NOTIFY_DRY_RUN` | Effect on PR failure |
+|---|---|---|
+| unset | any | Notify job does not start — PR failure is silent |
+| `true` | `true` | Notify job starts — all channels dry-run (useful for wiring validation) |
+| `true` | unset or `false` | Notify job starts — live delivery if secrets are configured |
+
+---
+
 ### Per-run override via `workflow_dispatch` input
 
 Manual CI runs (`workflow_dispatch`) support a `notification_mode` input that overrides `NOTIFY_DRY_RUN` for that specific run without changing the repo variable:
@@ -181,29 +222,69 @@ Expected output when no secrets are configured:
 - Recipient email addresses or recipient lists
 - Auth tokens or secret values of any kind
 
-### Step 2 — Optional live Slack validation
+### Step 2 — Live Slack validation
 
 After adding `SLACK_WEBHOOK_URL` to GitHub Secrets:
 
 1. Confirm `NOTIFY_DRY_RUN` is unset or `false` (check **Settings → Secrets and variables → Actions → Variables tab**).
-2. Trigger a `workflow_dispatch` run on `main`.
-3. Open the `Notify` job and expand **Deliver aggregate CI notification**.
+2. Go to **GitHub → Actions → CI → Run workflow**, select branch `main`.
+3. Set **Notification mode** to `live` and click **Run workflow**.
+4. Open the `Notify` job and expand **Deliver aggregate CI notification**.
 
 Expected in step logs: `Slack: delivered (HTTP 200)`
 
 Expected in the Slack channel: a message with Overall Release Readiness, CI Status rows, Release Gate status, test counts, and a link to the CI run.
 
-### Step 3 — Optional live email validation
+**What must not appear in logs:**
 
-After adding all SMTP secrets and `NOTIFY_RECIPIENTS`:
+- Webhook URLs or any portion of `SLACK_WEBHOOK_URL`
+- SMTP passwords, app passwords, or auth tokens
+- Recipient email addresses
 
-1. Confirm `NOTIFY_DRY_RUN` is unset or `false`.
-2. Trigger a `workflow_dispatch` run on `main`.
-3. Open the `Notify` job and expand **Deliver aggregate CI notification**.
+After confirming live delivery, you may set `NOTIFY_DRY_RUN=true` to revert to dry-run without removing the secret.
 
-Expected in step logs: `Email: delivered to N recipient(s)`
+### Step 3 — PR failure notification validation
 
-Expected in the recipient inbox: an email with subject `Release Readiness: ✅ GO — <repository-name>`.
+After confirming live Slack delivery (Step 2), validate the `NOTIFY_PR_FAILURES` gate:
+
+1. Confirm `NOTIFY_PR_FAILURES=true` is set under **Settings → Secrets and variables → Actions → Variables tab**.
+2. Confirm `SLACK_WEBHOOK_URL` is provisioned as a GitHub Actions secret (done in Step 2).
+3. Confirm `NOTIFY_DRY_RUN` is unset or `false` so live Slack delivery is active.
+4. Create a controlled failing PR — for example, introduce a Ruff lint violation or a deliberate test failure on a feature branch and open a PR to main.
+5. Wait for the CI jobs to complete. Open the PR's **Checks** panel.
+6. Confirm the `Notify` job appears in the PR CI panel. It must show as **advisory** — it must not appear in the list of required checks blocking merge.
+7. Expand the `Notify` job → **Deliver aggregate CI notification** step.
+
+Expected in step logs:
+```text
+Slack: delivered (HTTP 200)
+```
+
+Expected overall readiness in the Slack message:
+```text
+Overall Release Readiness: ❌ BLOCKED
+CI Status: ❌ Required job(s) failed
+  · <failing job name>: failure
+```
+
+8. Fix the PR (remove the lint error or revert the test change) and push. Confirm the CI jobs pass.
+9. Confirm the `Notify` job does **not** appear or does not run on the clean PR run — clean PRs must remain silent.
+
+**What must not appear in logs:**
+
+- Webhook URLs or any portion of `SLACK_WEBHOOK_URL`
+- SMTP passwords, app passwords, or auth tokens
+- Recipient email addresses
+
+After validating, you may optionally remove `NOTIFY_PR_FAILURES` from repo variables to revert to silent PR behavior.
+
+### Step 4 — Live email validation (deferred)
+
+SMTP/Gmail live delivery validation is deferred to a separate slice. Known considerations when that slice is implemented:
+
+- Try port 465 (`SMTP_SSL`) first — `smtplib.SMTP_SSL` is already implemented; GitHub Actions runners are more likely to allow outbound port 465 than STARTTLS on port 587.
+- If both ports 465 and 587 fail due to runner outbound SMTP restrictions, a transactional email API (SendGrid, AWS SES, Postmark) is the fallback — this would require a non-stdlib dependency and a new ADR.
+- All required SMTP secrets (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_RECIPIENTS`) are already documented in this file and in `security_and_branch_protection.md`. Provision them when the SMTP validation slice is approved.
 
 ### Reverting to dry-run
 
@@ -238,6 +319,7 @@ If GitHub secret scanning and push protection are enabled (**Settings → Code s
 - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — `notify` job; artifact upload step in `api` job
 - [`quality_gates.md`](quality_gates.md) — Notification Delivery section; CI job structure table
 - [`security_and_branch_protection.md`](security_and_branch_protection.md) — Notification secrets section
+- [`architecture_decision_log.md` — ADR-024](architecture_decision_log.md#adr-024-pr-failure-notifications-behind-notify_pr_failures-activation-gate)
 - [`architecture_decision_log.md` — ADR-018](architecture_decision_log.md#adr-018-failure-only-aggregate-notification-on-push-to-main)
 - [`architecture_decision_log.md` — ADR-016](architecture_decision_log.md#adr-016-aggregate-ci-notification-job-after-all-required-jobs-complete)
 - [`architecture_decision_log.md` — ADR-011](architecture_decision_log.md#adr-011-notification-delivery-defaults-to-dry-run-when-secrets-are-absent)

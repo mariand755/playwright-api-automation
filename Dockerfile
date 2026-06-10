@@ -5,8 +5,9 @@ FROM mcr.microsoft.com/playwright/python:v1.60.0-noble
 # Set the working directory in the container
 WORKDIR /app
 
-# Install python3-venv so pip-audit can create isolated resolution environments
+# Upgrade OS packages to remediate fixable base-image CVEs before installing project deps
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends python3.12-venv \
     && rm -rf /var/lib/apt/lists/*
 

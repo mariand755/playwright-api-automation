@@ -90,19 +90,28 @@ An ADR-backed governance layer that documents every structural decision, defines
 
 **Reference:** [`../agentic-qa-workflows/governance/`](../agentic-qa-workflows/governance/)
 
+**Template starting points in [`blueprint/governance/`](governance/):**
+
+| Template | Use when |
+|---|---|
+| [`governance/adr_template.md`](governance/adr_template.md) | Recording any architectural or tooling decision — blank template, zero repo-specific content |
+| [`governance/suite_taxonomy_template.md`](governance/suite_taxonomy_template.md) | Defining your test marker taxonomy — generic rewrite with `[your marker]` placeholders |
+
+See [`governance/README.md`](governance/README.md) for the full governance adoption guide, link-only decisions, and deferred templates.
+
 **Key files to read and adapt (do not copy verbatim):**
 
 | File | What transfers |
 |---|---|
-| [`architecture_decision_log.md`](../agentic-qa-workflows/governance/architecture_decision_log.md) | ADR format: title, status, context, decision, consequences, activation conditions |
-| [`suite_taxonomy.md`](../agentic-qa-workflows/governance/suite_taxonomy.md) | Marker taxonomy (area + scope + traceability), TC-ID prefix conventions |
+| [`architecture_decision_log.md`](../agentic-qa-workflows/governance/architecture_decision_log.md) | ADR format reference — use `blueprint/governance/adr_template.md` to start fresh |
+| [`suite_taxonomy.md`](../agentic-qa-workflows/governance/suite_taxonomy.md) | Full marker taxonomy reference — use `blueprint/governance/suite_taxonomy_template.md` as starting point |
 | [`quality_gates.md`](../agentic-qa-workflows/governance/quality_gates.md) | PR gate / merge gate / release gate philosophy |
 | [`page_object_api_rules.md`](../agentic-qa-workflows/governance/page_object_api_rules.md) | POM and API client ownership — fully transferable as-is |
 | [`test_data_env_rules.md`](../agentic-qa-workflows/governance/test_data_env_rules.md) | Data isolation and environment selection rules — mostly transferable |
 | [`failure_evidence.md`](../agentic-qa-workflows/governance/failure_evidence.md) | Screenshot/HTML capture, API failure context, CodeQL secret-taint rules |
 | [`agentic_workflow_rules.md`](../agentic-qa-workflows/governance/agentic_workflow_rules.md) | AI-assisted workflow constraints — fully transferable as-is |
 
-**Do not copy the ADRs.** Every ADR in this repo is specific to its own decisions. Start fresh from the ADR format.
+**Do not copy the ADRs.** Every ADR in this repo is specific to its own decisions. Use [`blueprint/governance/adr_template.md`](governance/adr_template.md) to start fresh.
 
 ---
 
@@ -188,6 +197,6 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 | Slice 2 | [`blueprint/prompts/README.md`](prompts/README.md) — agentic QA workflow guide | Done — PR #44 |
 | Data handling guide | [`blueprint/data_handling_guide.md`](data_handling_guide.md) — data flows, sensitivity notes, activation checklist | Done — PR #45 (out-of-sequence) |
 | Slice 3 | [`blueprint/scripts/notify.py`](scripts/notify.py) — stdlib-only notification script with adaptation notes | Done — PR #49 |
-| Slice 4 | [`blueprint/scripts/release_gate.py`](scripts/release_gate.py) — release readiness gate with adaptation points annotated | Done — this PR |
-| Slice 5 | `blueprint/governance/` — blank ADR template, suite taxonomy template | Future — after Slice 4 |
+| Slice 4 | [`blueprint/scripts/release_gate.py`](scripts/release_gate.py) — release readiness gate with adaptation points annotated | Done — PR #50 |
+| Slice 5 | [`blueprint/governance/`](governance/) — blank ADR template, suite taxonomy template, governance index | Done — this PR |
 | Slice 6 | Second repo application + case study | Future — after full `blueprint/` folder stable |

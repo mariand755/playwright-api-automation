@@ -1436,3 +1436,82 @@ A second structural issue: CI passing on a Dependabot PR confirms the existing t
 - ADR-007 — playwright ignore rule; activation condition for removing the ignore rule
 
 ---
+
+## ADR-024: PR failure notifications behind NOTIFY_PR_FAILURES activation gate
+
+**Status:** Accepted
+**Date:** 2026-06-10
+
+### Context
+
+A real PR check failure exposed a gap in the notification policy: the `Notify` job was not configured to run on `pull_request` events. The failure was visible in the GitHub PR status panel but no Slack or email notification was delivered. Teams relying on Slack for CI awareness had no active alert.
+
+The existing trigger policy (ADR-016, ADR-018) covered `schedule`, `workflow_dispatch`, and push-to-main failures. ADR-011 explicitly excluded `pull_request` events ("not on pull request or feature branch push"). That exclusion was correct as a starting default — PR failures during active development are frequent and noisy — but is now worth overriding with an opt-in gate.
+
+### Decision
+
+Expand the `notify` job `if:` condition in `.github/workflows/ci.yml` to include pull request failures when the `NOTIFY_PR_FAILURES` repository variable is set to `true`:
+
+```yaml
+(github.event_name == 'pull_request' && vars.NOTIFY_PR_FAILURES == 'true' &&
+(needs.test.result != 'success' || needs.api.result != 'success' || needs.ui.result != 'success'))
+```
+
+`NOTIFY_PR_FAILURES` is a **repository variable** (Settings → Secrets and variables → Actions → Variables tab), not a secret. When unset or any value other than `'true'`, PR failures remain silent — the GitHub PR status panel is the only CI signal.
+
+No changes to `scripts/notify.py`. The script already handles all PR edge cases correctly:
+- Smoke runs produce `release-readiness.json` with `gate_skipped: true` (ADR-021 amendment) — the artifact exists even when tests fail.
+- `notify.py` reads `gate_skipped: true` and displays "Release Gate: ⚠️ Skipped — smoke-only run".
+- A failed required job makes overall readiness `BLOCKED` via the existing `compute_overall_readiness()` logic.
+- If `Docker Test Suite` fails, downstream jobs are skipped; `notify.py` handles empty `needs.*.result` env vars gracefully.
+
+### Alternatives rejected
+
+**Notify all PR failures (no gate):** Rejected. PR failures during active development are frequent — WIP branches, iterative fixes, experiments. Notifying on every failure without an opt-in would generate more noise than signal and defeat the "opinionated silence" principle from ADR-018. Teams should receive a notification only when they have chosen to receive it.
+
+**Label-based notification (`notify-on-failure` PR label):** Rejected. Requires per-PR label management — authors must remember to add the label, and the label must be present before the failure occurs. A single repo variable is simpler to reason about and easier to toggle without touching individual PRs.
+
+**Defer PR notification entirely:** Rejected. A real PR failure proved the gap has operational impact. The fix is one condition clause and no script changes — the risk is low and the value is immediate.
+
+### Consequences
+
+- PR failures produce active Slack/email notification when `NOTIFY_PR_FAILURES=true`. When unset, behavior is unchanged.
+- Fork PRs do not have access to repository secrets — Slack and email channels dry-run for fork-origin PR failures even when `NOTIFY_PR_FAILURES=true`. This is the correct safe default.
+- `NOTIFY_DRY_RUN` and `NOTIFY_PR_FAILURES` operate independently: `NOTIFY_PR_FAILURES` controls job eligibility; `NOTIFY_DRY_RUN` controls channel delivery. Both can be set independently to stage validation.
+- The `Notify` job remains non-blocking and advisory. It is not a required status check. Branch protection is unchanged.
+- `scripts/notify.py`, `blueprint/scripts/notify.py`, and all other files are unchanged.
+
+### Activation condition
+
+1. Add `SLACK_WEBHOOK_URL` to GitHub Settings → Secrets → Actions (Slack live delivery).
+2. Confirm `NOTIFY_DRY_RUN` is unset or `false` in repository variables.
+3. Add `NOTIFY_PR_FAILURES=true` to GitHub Settings → Secrets and variables → Actions → Variables tab.
+4. Validate: create a failing PR and confirm the `Notify` job appears in the PR CI panel and delivers to Slack.
+
+### Deferred
+
+- SMTP/Gmail live delivery validation — runner SMTP restrictions may require port 465 or a transactional email API; deferred to a separate slice.
+- Forced-live critical failure notifications — deferred until live delivery is reliably validated end-to-end.
+- Transactional email API (SendGrid, AWS SES, Postmark) — would require a non-stdlib dependency and a new ADR; deferred.
+- Blueprint asset updates — `blueprint/scripts/notify.py` adaptation notes do not need updating until the production script changes; reassess after second-repo adoption.
+
+### Related PRs / Docs
+
+- `.github/workflows/ci.yml` — `notify` job `if:` condition
+- `agentic-qa-workflows/governance/notification_wiring.md` — trigger table; `NOTIFY_PR_FAILURES` section; Slack live validation steps; SMTP deferred note
+- `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table Notify row; Notification Delivery trigger table
+- `agentic-qa-workflows/governance/security_and_branch_protection.md` — gate classification table Notification delivery row
+- ADR-011 — notification dry-run default; PR exclusion was the original policy; this ADR fulfills ADR-011 activation condition ("Expand the notification step's trigger condition to additional triggers if broader notification coverage is needed")
+- ADR-016 — aggregate Notify job structure; `if:` condition being extended
+- ADR-018 — failure-only push-to-main notification; "opinionated silence" principle extended to PR events with opt-in gate
+- ADR-021 — smoke dispatch placeholder artifact; ensures `release-readiness.json` exists on PR runs so the `Notify` job can download it without error
+
+### Trade-offs and consulting value
+
+**The opt-in gate is the key design decision.** Notifying on all PR failures by default produces a team that ignores notifications — exactly the failure mode the notification infrastructure was built to avoid. An opt-in variable requires a deliberate choice, which means teams that enable it have already decided they want the signal. The cost of the gate is one extra setup step; the benefit is a notification channel that teams actually read.
+
+**The fork PR behavior is worth documenting explicitly.** Open-source contributors and collaborators working from forks will not receive live notifications even when `NOTIFY_PR_FAILURES=true` is set. This is a GitHub Actions platform constraint (fork PRs cannot access repo secrets), not a bug. Documenting it prevents false assumptions about notification completeness.
+
+**The "no script changes" outcome is the correct architecture validation.** Adding PR failure support required only a CI condition change — no new logic in `notify.py`, no new env vars in the delivery step, no new artifact handling. This confirms that the aggregate notification architecture (ADR-016) was designed with sufficient generality to accommodate new trigger types without structural changes.
+
+---

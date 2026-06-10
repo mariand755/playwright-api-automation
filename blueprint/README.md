@@ -58,9 +58,13 @@ A 4-job pipeline (Docker Test Suite → API Tests ∥ UI Tests → Notify) with 
 
 `scripts/release_gate.py` consumes JUnit XML + observability snapshot + defect metrics and produces a GO / NO_GO / UNKNOWN decision as JSON and Markdown artifacts. On smoke runs, it writes a `gate_skipped: true` placeholder so the Notify job always has an artifact to consume.
 
-**Reference:** [`../scripts/release_gate.py`](../scripts/release_gate.py) · [`../data/release/observability_snapshot.json`](../data/release/observability_snapshot.json) · [`../data/release/defect_metrics.json`](../data/release/defect_metrics.json)
+**Blueprint asset:** [`scripts/release_gate.py`](scripts/release_gate.py) — extracted reusable template with adaptation points annotated; start here for new projects.
+
+**Live source reference:** [`../scripts/release_gate.py`](../scripts/release_gate.py) · [`../data/release/observability_snapshot.json`](../data/release/observability_snapshot.json) · [`../data/release/defect_metrics.json`](../data/release/defect_metrics.json) — working implementation used by this repo's CI.
 
 **Configure for a new repo:** Override input/output paths via CLI args: `--observability-json`, `--defect-metrics-json`, `--output-json`, `--output-md`. The positional XML arg handles the JUnit report path. All args default to this repo's artifact layout — pass your paths explicitly to adapt to a new repo without modifying the script.
+
+**Release gate semantics:** The gate exits `1` on `NO_GO`, which blocks CI; use `continue-on-error: true` if the gate should be advisory only. Running the gate before live observability is connected can produce `GO` from clean sample data — that is not production release evidence. Review ADR-017 activation conditions before using this gate for production release decisions.
 
 ---
 
@@ -183,7 +187,7 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 |---|---|---|
 | Slice 2 | [`blueprint/prompts/README.md`](prompts/README.md) — agentic QA workflow guide | Done — PR #44 |
 | Data handling guide | [`blueprint/data_handling_guide.md`](data_handling_guide.md) — data flows, sensitivity notes, activation checklist | Done — PR #45 (out-of-sequence) |
-| Slice 3 | [`blueprint/scripts/notify.py`](scripts/notify.py) — stdlib-only notification script with adaptation notes | Done — this PR |
-| Slice 4 | `blueprint/scripts/release_gate.py` | Future — input/output paths configurable via CLI args; extract after deciding template ownership |
+| Slice 3 | [`blueprint/scripts/notify.py`](scripts/notify.py) — stdlib-only notification script with adaptation notes | Done — PR #49 |
+| Slice 4 | [`blueprint/scripts/release_gate.py`](scripts/release_gate.py) — release readiness gate with adaptation points annotated | Done — this PR |
 | Slice 5 | `blueprint/governance/` — blank ADR template, suite taxonomy template | Future — after Slice 4 |
 | Slice 6 | Second repo application + case study | Future — after full `blueprint/` folder stable |

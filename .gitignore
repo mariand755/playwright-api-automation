@@ -59,6 +59,7 @@ artifacts/ui-prod-report.xml
 artifacts/scripts-report.xml
 artifacts/release-readiness.json
 artifacts/release-readiness.md
+artifacts/*-run-output.txt
 *.png
 *.html
 

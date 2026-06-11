@@ -31,6 +31,10 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-019](#adr-019-independent-judgment-preface-in-qa-reviewer-and-planning-prompts) | Independent judgment preface in QA reviewer and planning prompts | Accepted | 2026-06-06 |
 | [ADR-020](#adr-020-script-unit-test-layer-for-release-readiness-and-notification-decision-logic) | Script unit test layer for release-readiness and notification decision logic | Accepted | 2026-06-06 |
 | [ADR-021](#adr-021-workflow_dispatch-inputs-for-parameterized-manual-ci-runs) | workflow_dispatch inputs for parameterized manual CI runs | Accepted | 2026-06-07 |
+| [ADR-022](#adr-022-blueprint-prompt-packaging--link-to-working-prompt-files-do-not-copy) | Blueprint prompt packaging — link to working prompt files, do not copy | Accepted | 2026-06-09 |
+| [ADR-023](#adr-023-dependency-update-triage-workflow) | Dependency update triage workflow | Accepted | 2026-06-08 |
+| [ADR-024](#adr-024-pr-failure-notifications-behind-notify_pr_failures-activation-gate) | PR failure notifications behind NOTIFY_PR_FAILURES activation gate | Accepted | 2026-06-10 |
+| [ADR-025](#adr-025-dockerfile-os-package-upgrade-for-cve-remediation) | Dockerfile OS package upgrade for CVE remediation | Accepted | 2026-06-10 |
 
 ---
 
@@ -1513,5 +1517,50 @@ No changes to `scripts/notify.py`. The script already handles all PR edge cases 
 **The fork PR behavior is worth documenting explicitly.** Open-source contributors and collaborators working from forks will not receive live notifications even when `NOTIFY_PR_FAILURES=true` is set. This is a GitHub Actions platform constraint (fork PRs cannot access repo secrets), not a bug. Documenting it prevents false assumptions about notification completeness.
 
 **The "no script changes" outcome is the correct architecture validation.** Adding PR failure support required only a CI condition change — no new logic in `notify.py`, no new env vars in the delivery step, no new artifact handling. This confirms that the aggregate notification architecture (ADR-016) was designed with sufficient generality to accommodate new trigger types without structural changes.
+
+---
+
+## ADR-025: Dockerfile OS package upgrade for CVE remediation
+
+**Status:** Accepted
+**Date:** 2026-06-10
+
+### Context
+
+During base-image drift in June 2026, the Docker image scan surfaced a fixable HIGH OpenSSL CVE (CVE-2026-45447) in the Ubuntu 24.04 OS layer of the Playwright base image. The vulnerable packages were Ubuntu OS packages (`libssl3t64`, `openssl`) — not Python dependencies and not Playwright test code. Patched Ubuntu packages were available before a newer Playwright base image was published. The Trivy advisory database had been updated to flag the CVE, but the Playwright base image had not yet been rebuilt with the patch.
+
+The Trivy step is a hard gate that exits 1 on fixable HIGH/CRITICAL findings. The CI failure was real and blocking.
+
+### Decision
+
+Add `apt-get upgrade -y --no-install-recommends` to the Dockerfile apt step, before project dependency installation. This ensures every `docker build` pulls the latest patched OS packages from the Ubuntu package repository, resolving fixable OS-layer CVEs without requiring a Playwright base image version bump.
+
+```dockerfile
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends python3.12-venv \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+### Alternatives rejected
+
+- **Suppress the CVE with `--ignore-unfixed`** — rejected. This flag only suppresses findings with no available fix. CVE-2026-45447 had a patched package available, so `--ignore-unfixed` did not suppress it.
+- **Immediately bump the Playwright base image** — rejected for OS-layer CVEs when patched OS packages are already available. A base image bump introduces Playwright/browser/Node version changes that require coordinated testing. OS package patches can be applied without changing the browser runtime.
+- **Accept the CVE temporarily** — rejected. The Trivy gate is a hard CI gate for fixable HIGH/CRITICAL findings. Bypassing it undermines the security posture the gate was designed to enforce.
+
+### Consequences
+
+- OS-layer CVEs with available Ubuntu package fixes are remediated during `docker build`.
+- The Docker layer may change as Ubuntu publishes security updates between base image releases. This is acceptable for a QA automation image rebuilt on every CI run.
+- This does not remediate Playwright, browser, or Node CVEs embedded in the base image. Those require a coordinated base image tag bump and Playwright pip package update (see ADR-007).
+- `apt-get upgrade` is a broad OS upgrade. Running before project dependency installation ensures the OS layer is patched before project code is added.
+
+### Related PRs / Docs
+
+- PR #55 — OpenSSL CVE fix implementation
+- `Dockerfile` — `apt-get upgrade` step
+- `security_and_branch_protection.md` — Docker base image lifecycle section
+- `dependency_update_triage.md` — OS-layer CVEs versus Playwright version updates; ADR-007 relationship
+- ADR-007 — Dependabot with Playwright version ignored; coordinated base image update policy
 
 ---

@@ -31,6 +31,10 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-019](#adr-019-independent-judgment-preface-in-qa-reviewer-and-planning-prompts) | Independent judgment preface in QA reviewer and planning prompts | Accepted | 2026-06-06 |
 | [ADR-020](#adr-020-script-unit-test-layer-for-release-readiness-and-notification-decision-logic) | Script unit test layer for release-readiness and notification decision logic | Accepted | 2026-06-06 |
 | [ADR-021](#adr-021-workflow_dispatch-inputs-for-parameterized-manual-ci-runs) | workflow_dispatch inputs for parameterized manual CI runs | Accepted | 2026-06-07 |
+| [ADR-022](#adr-022-blueprint-prompt-packaging--link-to-working-prompt-files-do-not-copy) | Blueprint prompt packaging — link to working prompt files, do not copy | Accepted | 2026-06-09 |
+| [ADR-023](#adr-023-dependency-update-triage-workflow) | Dependency update triage workflow | Accepted | 2026-06-08 |
+| [ADR-024](#adr-024-pr-failure-notifications-behind-notify_pr_failures-activation-gate) | PR failure notifications behind NOTIFY_PR_FAILURES activation gate | Accepted | 2026-06-10 |
+| [ADR-025](#adr-025-dockerfile-os-package-upgrade-for-cve-remediation) | Dockerfile OS package upgrade for CVE remediation | Accepted | 2026-06-10 |
 
 ---
 

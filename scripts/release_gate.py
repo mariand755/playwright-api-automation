@@ -357,8 +357,9 @@ def main() -> int:
     output_json = Path(args.output_json)
     output_md = Path(args.output_md)
 
-    if args.skipped:
-        write_skipped_output(args.skipped, output_json=output_json, output_md=output_md)
+    if args.skipped is not None:
+        scope = args.skipped.strip() or "unknown"
+        write_skipped_output(scope, output_json=output_json, output_md=output_md)
         return 0
 
     report_xml = Path(args.xml)

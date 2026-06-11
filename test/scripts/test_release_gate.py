@@ -303,3 +303,80 @@ def test_main_honors_custom_output_paths(
     assert data["overall_decision"] == "GO", (
         f"Expected GO with clean inputs, got {data['overall_decision']}"
     )
+
+
+# TC-SCRIPT-021 — main() with --skipped "" exits 0 and writes UNKNOWN with unknown scope
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-021")
+def test_main_skipped_empty_string_writes_unknown_scope(tmp_path, monkeypatch):
+    out_json = tmp_path / "release-readiness.json"
+    out_md = tmp_path / "release-readiness.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "release_gate.py",
+            "--skipped",
+            "",
+            "--output-json",
+            str(out_json),
+            "--output-md",
+            str(out_md),
+        ],
+    )
+
+    rc = release_gate.main()
+
+    assert rc == 0, f"Expected exit 0, got {rc}"
+    data = json.loads(out_json.read_text(encoding="utf-8"))
+    assert data["overall_decision"] == "UNKNOWN", (
+        f"Expected UNKNOWN, got {data['overall_decision']}"
+    )
+    assert data["gate_skipped"] is True, "Expected gate_skipped=true"
+    assert data["test_scope"] == "unknown", (
+        f"Expected test_scope='unknown', got {data['test_scope']!r}"
+    )
+    assert data["gate_skip_reason"] == "release_gate_skipped_for_unknown_scope", (
+        f"Expected unknown scope reason, got {data['gate_skip_reason']!r}"
+    )
+    content = out_md.read_text(encoding="utf-8")
+    assert "Unknown run" in content, f"Expected 'Unknown run' in MD, got: {content!r}"
+    assert "release gate intentionally skipped" in content, (
+        f"Expected 'release gate intentionally skipped' in MD, got: {content!r}"
+    )
+
+
+# TC-SCRIPT-022 — main() with no --skipped arg and missing XML exits 1 (regression guard)
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-022")
+def test_main_no_skipped_arg_missing_xml_exits_no_go(tmp_path, monkeypatch):
+    missing_xml = tmp_path / "nonexistent.xml"
+    out_json = tmp_path / "release-readiness.json"
+    out_md = tmp_path / "release-readiness.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "release_gate.py",
+            str(missing_xml),
+            "--output-json",
+            str(out_json),
+            "--output-md",
+            str(out_md),
+        ],
+    )
+
+    rc = release_gate.main()
+
+    assert rc == 1, f"Expected exit 1 for missing XML, got {rc}"
+    data = json.loads(out_json.read_text(encoding="utf-8"))
+    assert data["overall_decision"] == "NO_GO", (
+        f"Expected NO_GO, got {data['overall_decision']}"
+    )
+    assert data["gate_failures"], "Expected non-empty gate_failures"
+    assert "not found" in data["gate_failures"][0], (
+        f"Expected 'not found' in gate_failures[0], got {data['gate_failures'][0]!r}"
+    )

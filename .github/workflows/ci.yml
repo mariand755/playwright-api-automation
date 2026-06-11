@@ -190,6 +190,17 @@ jobs:
       - name: Run release readiness gate
         if: always()
         run: |
+          if [ -z "${TEST_SCOPE:-}" ]; then
+            mkdir -p artifacts
+            if [ -f scripts/release_gate.py ]; then
+              python scripts/release_gate.py --skipped "unknown"
+            else
+              echo "## Release Readiness Gate" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "> Release gate skipped — repository checkout was unavailable and TEST_SCOPE was not set." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
           if [ "$TEST_SCOPE" != "full" ]; then
             docker run --rm \
               -v ${{ github.workspace }}/artifacts:/app/artifacts \

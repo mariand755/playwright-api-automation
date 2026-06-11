@@ -81,8 +81,19 @@ jobs:
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
             playwright-api-automation pytest test/scripts/ -v --junitxml=artifacts/scripts-report.xml
 
-      - name: Publish Script Unit Test Results
+      - name: Check script test report exists
+        id: script_report
         if: always()
+        run: |
+          if [[ -f artifacts/scripts-report.xml ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Script test report not found — upstream step did not produce artifacts/scripts-report.xml" >> "$GITHUB_STEP_SUMMARY"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish Script Unit Test Results
+        if: always() && steps.script_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
@@ -161,8 +172,19 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Write dynamic API test summary
+      - name: Check API test report exists
+        id: api_report
         if: always()
+        run: |
+          if [[ -f artifacts/api-report.xml ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "API test report not found — upstream step did not produce artifacts/api-report.xml" >> "$GITHUB_STEP_SUMMARY"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write dynamic API test summary
+        if: always() && steps.api_report.outputs.exists == 'true'
         run: python scripts/ci_summary.py artifacts/api-report.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run release readiness gate
@@ -205,7 +227,7 @@ jobs:
           fi
 
       - name: Publish API test report
-        if: always()
+        if: always() && steps.api_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
@@ -287,12 +309,23 @@ jobs:
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Write dynamic UI test summary
+      - name: Check UI test report exists
+        id: ui_report
         if: always()
+        run: |
+          if [[ -f artifacts/ui-report.xml ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "UI test report not found — upstream step did not produce artifacts/ui-report.xml" >> "$GITHUB_STEP_SUMMARY"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write dynamic UI test summary
+        if: always() && steps.ui_report.outputs.exists == 'true'
         run: python scripts/ci_summary.py artifacts/ui-report.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish UI test report
-        if: always()
+        if: always() && steps.ui_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:

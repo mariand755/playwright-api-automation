@@ -77,6 +77,33 @@ The `Analyze Python` job (`.github/workflows/codeql.yml`) runs CodeQL static sec
 
 **Note:** Requiring `Analyze Python` ensures the CodeQL analysis has run and completed successfully — not that zero findings exist. Findings are published to the GitHub Security tab (Security → Code scanning alerts) and are advisory by default. In the rare event of a CodeQL infrastructure failure (workflow error, not a finding), this required check would block merges until the failure is resolved.
 
+#### Docker base image lifecycle
+
+The Docker base image is pinned by explicit version tag: `mcr.microsoft.com/playwright/python:v1.60.0-noble`. CVE remediation operates at two distinct layers:
+
+| CVE layer | Normal remediation path | Notes |
+|---|---|---|
+| OS package CVEs (Ubuntu) | `apt-get upgrade -y --no-install-recommends` during `docker build` | Covers fixable Ubuntu packages such as OpenSSL/libssl when patched packages are available before a newer base image is released |
+| Playwright/browser/Node CVEs | Coordinated base image tag bump + Playwright pip package update | Requires updating the `FROM` tag and the `playwright` entry in `requirements.txt` together; Dependabot does not automate this (see ADR-007) |
+
+`apt-get upgrade` runs before project dependency installation so Trivy scans the built image against patched OS packages. It does not remediate CVEs embedded in Playwright or the browser binaries — those require a base image version bump.
+
+**Activation condition for base image bump:** when Trivy reports fixable HIGH/CRITICAL findings in Playwright, browser, or Node packages that `apt-get upgrade` cannot resolve. See ADR-025 for the decision record and trade-offs.
+
+**Cross-references:** ADR-025 (OS upgrade decision), ADR-007 (Playwright Dependabot ignore rule), `dependency_update_triage.md` (Playwright coordinated update workflow).
+
+#### GitHub Automatic Dependency Submission platform pitfall
+
+GitHub offers an **Automatic Dependency Submission** setting (**Settings → Code security and analysis → Dependency graph**) that injects a hidden platform-managed workflow (`actions/component-detection-dependency-submission-action`) into the repository.
+
+This workflow requires `contents: write` permission. If it runs and fails (for example, `HttpError: Requires authentication` when the permission is absent), it can become a silent merge blocker — especially if branch protection is configured to require all checks rather than explicitly named checks.
+
+**Operating rule:** This repo's branch protection names exactly four required checks: `Docker Test Suite`, `API Tests`, `UI Tests`, and `Analyze Python`. Hidden platform-managed checks should not become required checks without explicit adoption. If Automatic Dependency Submission is not actively used for dependency graph submission, disable it:
+
+> **Settings → Code security and analysis → Dependency graph → Automatic dependency submission → Disable**
+
+This prevents a hidden workflow from appearing as a required check and blocking merges when it fails.
+
 ---
 
 ## Gate classification
@@ -150,7 +177,7 @@ The following secrets are required for live notification delivery from `scripts/
 
 **Gmail configuration:** set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`. `SMTP_PASSWORD` must be a **Gmail App Password** (Google Account → Security → App passwords) — not the Google account password. App passwords are 16-character codes generated per application.
 
-**No branch protection change required.** The notification step runs inside the existing `API Tests` job (not a new CI job), so the four required checks remain unchanged.
+**No branch protection change required.** `Notify` is a separate advisory job that depends on `Docker Test Suite`, `API Tests`, and `UI Tests`, but it is not a required branch-protection check. The four required checks remain `Docker Test Suite`, `API Tests`, `UI Tests`, and `Analyze Python`.
 
 **`NOTIFY_DRY_RUN`.** Set to `true` or `1` as a GitHub repository variable (Settings → Variables → Actions, not Secrets) to force dry-run for all channels without removing the secrets. Useful for temporarily pausing live delivery without credential changes.
 

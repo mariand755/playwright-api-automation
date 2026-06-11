@@ -273,6 +273,8 @@ ignore:
 
 The grouping, cadence, and open-PR-limit changes introduced alongside this doc do not affect the playwright ignore rule or the ADR-007 activation condition ("Remove the ignore rule once playwright is no longer coupled to a base image that pins the version").
 
+**OS-layer CVEs are handled separately.** The Playwright ignore rule applies to Python package version tracking only. CVEs in OS packages inside the Docker base image — for example Ubuntu packages such as OpenSSL/libssl, curl, or system libraries — are remediated by `apt-get upgrade -y --no-install-recommends` during `docker build` when patched packages are available from the Ubuntu package repository. This is independent of Dependabot and independent of the Playwright package version pin. Playwright, browser, and Node CVEs embedded in the base image still require a coordinated base image tag and Playwright package update. See ADR-025 and the Docker base image lifecycle section in `security_and_branch_protection.md`.
+
 ---
 
 ## References

@@ -104,6 +104,8 @@ This workflow requires `contents: write` permission. If it runs and fails (for e
 
 This prevents a hidden workflow from appearing as a required check and blocking merges when it fails.
 
+**Dependency Review advisory gate:** The `Dependency Review` workflow (`.github/workflows/dependency-review.yml`) is intentionally not listed as a required branch-protection check during the first validation cycle. It is visible in PR checks, but the four required checks remain `Docker Test Suite`, `API Tests`, `UI Tests`, and `Analyze Python`. See ADR-026 for promotion conditions.
+
 ---
 
 ## Gate classification
@@ -125,6 +127,7 @@ This prevents a hidden workflow from appearing as a required check and blocking 
 | Dependabot updates | Update visibility | No — creates PRs | Dependabot PRs | Weekly |
 | GitHub secret scanning | Platform protection | Yes (push protection enabled) | Git push rejection | Push |
 | Notification delivery | Advisory | No — exits 0 always | CI step output | schedule / workflow_dispatch / push to main (on failure) / pull_request (on failure, when `NOTIFY_PR_FAILURES=true`) |
+| Dependency Review (PR diff) | Advisory | No — non-required workflow | Dependency Review workflow | pull_request only |
 
 ---
 

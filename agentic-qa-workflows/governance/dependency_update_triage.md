@@ -257,6 +257,15 @@ CodeQL findings are advisory (Security → Code scanning alerts). A CodeQL findi
 
 For the full required checks configuration and post-merge update instructions, see [`security_and_branch_protection.md`](security_and_branch_protection.md).
 
+**Dependency Review** runs on pull requests as an advisory PR-diff gate. It complements, but does not replace, Dependabot, pip-audit, and Trivy:
+
+- Dependabot creates dependency update PRs.
+- Dependency Review evaluates dependency changes introduced by a PR before merge.
+- pip-audit scans installed Python dependencies during Docker CI.
+- Trivy scans the built Docker image, including OS packages.
+
+Dependency Review is not required in branch protection during the first validation cycle. Promotion to required status requires ADR-026 activation conditions to be met.
+
 ---
 
 ## Relationship to ADR-007

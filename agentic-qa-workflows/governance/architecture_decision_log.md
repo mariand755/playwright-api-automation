@@ -35,6 +35,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-023](#adr-023-dependency-update-triage-workflow) | Dependency update triage workflow | Accepted | 2026-06-08 |
 | [ADR-024](#adr-024-pr-failure-notifications-behind-notify_pr_failures-activation-gate) | PR failure notifications behind NOTIFY_PR_FAILURES activation gate | Accepted | 2026-06-10 |
 | [ADR-025](#adr-025-dockerfile-os-package-upgrade-for-cve-remediation) | Dockerfile OS package upgrade for CVE remediation | Accepted | 2026-06-10 |
+| [ADR-026](#adr-026-dependency-review-action-as-advisory-pr-dependency-diff-gate) | Dependency Review Action as advisory PR dependency-diff gate | Accepted | 2026-06-11 |
 
 ---
 
@@ -1564,3 +1565,71 @@ RUN apt-get update \
 - ADR-007 — Dependabot with Playwright version ignored; coordinated base image update policy
 
 ---
+
+## ADR-026: Dependency Review Action as advisory PR dependency-diff gate
+
+**Status:** Accepted
+**Date:** 2026-06-11
+
+### Context
+
+ADR-023 established dependency update triage governance and deferred `actions/dependency-review-action` until the repo had a clearer dependency-review operating model.
+
+The repo already has several complementary dependency and security controls:
+
+- Dependabot opens scheduled dependency update PRs.
+- pip-audit scans installed Python dependencies during Docker CI.
+- Trivy scans the built Docker image for fixable HIGH/CRITICAL CVEs.
+- CodeQL runs static security analysis.
+- ADR-025 documents OS-layer CVE remediation through Docker build package upgrades.
+
+Dependency Review adds a different signal: it evaluates dependency changes introduced by a pull request before merge using GitHub's dependency comparison and advisory data.
+
+### Decision
+
+Add `actions/dependency-review-action` as a separate pull-request-only workflow.
+
+Initial configuration:
+
+- separate `.github/workflows/dependency-review.yml`
+- `pull_request` trigger only
+- `permissions: contents: read`
+- `actions/dependency-review-action@v5`
+- `fail-on-severity: high`
+- `comment-summary-in-pr: never`
+- `license-check: false`
+- not added to branch protection required checks
+
+This makes the check visible on PRs without making it a required merge gate during the first validation cycle.
+
+### Rejected alternatives
+
+- **Add the job to `ci.yml`** — rejected. `ci.yml` has push, pull_request, schedule, and workflow_dispatch triggers. Dependency Review is PR-diff-specific and is clearer as a separate purpose-scoped workflow with its own narrow permissions.
+- **Make Dependency Review required immediately** — rejected. ADR-023 called for observing advisory behavior first. Promoting an unobserved gate to required status risks making noisy or misunderstood findings into merge blockers.
+- **Enable PR comments immediately** — rejected. PR comments require `pull-requests: write`. The first pass keeps permissions minimal and relies on job logs and check summaries.
+- **Enable license enforcement immediately** — rejected. The repo has not defined an allow/deny license policy. Enforcing licenses without a policy creates noise instead of governance.
+
+### Consequences
+
+- Pull requests that introduce vulnerable dependencies at high severity or above will show a failing advisory Dependency Review check.
+- Because the check is not required in branch protection, it does not block merges during the first validation cycle.
+- Dependency Review complements pip-audit and Trivy; it does not replace either.
+- License policy enforcement is explicitly deferred.
+
+### Activation condition
+
+Revisit promotion to a required gate only after all of the following are true:
+
+1. At least one complete post-ADR-023 Dependabot cycle has run with Dependency Review enabled.
+2. Advisory behavior has been observed against real PRs.
+3. Noise level and failure modes are understood.
+4. A license policy has been defined if license checks are desired.
+5. A separate Mode A review approves promotion to required status.
+
+### Related PRs / Docs
+
+- ADR-023 — Dependency update triage workflow
+- ADR-025 — Dockerfile OS package upgrade for CVE remediation
+- `dependency_update_triage.md`
+- `security_and_branch_protection.md`
+- `.github/workflows/dependency-review.yml`

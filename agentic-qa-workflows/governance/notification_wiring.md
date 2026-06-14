@@ -335,11 +335,31 @@ WARNING: Email delivery failed: <ExceptionClassName>
 | Log output | Classification | Next action |
 |---|---|---|
 | `Email: delivered to N recipient(s)` on port 587 | PASS — Gmail STARTTLS 587 works | Document result in ADR-027 |
+| `Email: delivered to N recipient(s)` but message appears in Spam | PASS with deliverability caveat | Mark as not spam; document outcome in ADR-027 |
 | `SMTPAuthenticationError` on any port | CONFIG — Gmail App Password issue | Verify App Password; 2-Step Verification must be on; retest |
 | `gaierror` | CONFIG/DNS — SMTP host could not be resolved | Verify `SMTP_HOST` is exactly `smtp.gmail.com`; do not include protocol, port, quotes, or spaces; rerun 587 |
 | `TimeoutError`, `ConnectionRefusedError`, or `SMTPConnectError` on port 587 | NETWORK — runner likely blocks 587 | Switch `SMTP_PORT` secret to `465` and rerun |
 | `Email: delivered to N recipient(s)` on port 465 | PASS — Gmail SMTP_SSL 465 works | Document result in ADR-027 |
 | Network/connect failure on both 587 and 465 | FAIL — GitHub-hosted runner blocks outbound SMTP | Recommend transactional email API in ADR-027 |
+
+#### Validated outcome — Gmail STARTTLS 587
+
+On 2026-06-14, Gmail SMTP delivery was validated from GitHub Actions using STARTTLS on port `587`.
+
+Observed result:
+
+- Slack delivered with HTTP 200.
+- Email attempted delivery via STARTTLS on port `587`.
+- Email delivered to one recipient.
+- Gmail placed the message in Spam.
+- Notify job succeeded.
+- No secrets appeared in logs.
+
+Classification: **PASS — Gmail STARTTLS 587 works, with Spam-placement caveat.**
+
+During first-time setup, check Spam and mark the message as **Not spam** if Gmail classifies the automation email incorrectly.
+
+See ADR-027 for the full decision record.
 
 #### What must not appear in logs
 
@@ -357,7 +377,7 @@ WARNING: Email delivery failed: <ExceptionClassName>
 
 #### ADR-027
 
-ADR-027 is written after the live run result is observed. Do not pre-write a speculative decision. The ADR records the actual classification, the validated port and transport mode (if any), and the recommended path forward.
+See [ADR-027 in architecture_decision_log.md](architecture_decision_log.md#adr-027-gmail-smtp-live-delivery-validation-outcome) for the full live validation decision record.
 
 ### Reverting to dry-run
 

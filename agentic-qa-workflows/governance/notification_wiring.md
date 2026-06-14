@@ -278,13 +278,85 @@ CI Status: ❌ Required job(s) failed
 
 After validating, you may optionally remove `NOTIFY_PR_FAILURES` from repo variables to revert to silent PR behavior.
 
-### Step 4 — Live email validation (deferred)
+### Step 4 — Live email validation
 
-SMTP/Gmail live delivery validation is deferred to a separate slice. Known considerations when that slice is implemented:
+#### Required secrets and variables
 
-- Try port 465 (`SMTP_SSL`) first — `smtplib.SMTP_SSL` is already implemented; GitHub Actions runners are more likely to allow outbound port 465 than STARTTLS on port 587.
-- If both ports 465 and 587 fail due to runner outbound SMTP restrictions, a transactional email API (SendGrid, AWS SES, Postmark) is the fallback — this would require a non-stdlib dependency and a new ADR.
-- All required SMTP secrets (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_RECIPIENTS`) are already documented in this file and in `security_and_branch_protection.md`. Provision them when the SMTP validation slice is approved.
+Provision the following in **GitHub → Settings → Secrets and variables → Actions → Secrets tab** before running:
+
+| Secret / Variable | Value |
+|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `587` (first attempt); switch to `465` if 587 fails |
+| `SMTP_USER` | Sending Gmail address |
+| `SMTP_PASSWORD` | Gmail App Password — not the account password (see Gmail setup above) |
+| `EMAIL_FROM` | Sending address or display name — optional; defaults to `SMTP_USER` |
+| `NOTIFY_RECIPIENTS` | Recipient email address(es), comma-separated |
+| `NOTIFY_DRY_RUN` | Must be **unset or `false`** in the Variables tab |
+
+#### Running the first live test
+
+1. Go to **GitHub → Actions → CI → Run workflow**, select the branch.
+2. Set **Notification mode** to `live`.
+3. Click **Run workflow** and wait for all jobs to complete.
+4. Open the `Notify` job → expand **Deliver aggregate CI notification**.
+5. Confirm no secrets appear in the logs (see "What must not appear" below).
+6. Confirm the `Notify` job exits `0` regardless of email outcome.
+7. Confirm Slack behavior is unchanged (dry-runs or delivers per existing config).
+
+#### Expected diagnostic output
+
+`notify.py` emits a transport-mode line before each attempt:
+
+```text
+Email: attempting delivery via STARTTLS on port 587
+```
+
+or, when port 465 is configured:
+
+```text
+Email: attempting delivery via SMTP_SSL on port 465
+```
+
+Followed by one of:
+
+```text
+Email: delivered to N recipient(s)
+```
+
+or:
+
+```text
+WARNING: Email delivery failed: <ExceptionClassName>
+```
+
+#### Classification table
+
+| Log output | Classification | Next action |
+|---|---|---|
+| `Email: delivered to N recipient(s)` on port 587 | PASS — Gmail STARTTLS 587 works | Document result in ADR-027 |
+| `SMTPAuthenticationError` on any port | CONFIG — Gmail App Password issue | Verify App Password; 2-Step Verification must be on; retest |
+| `TimeoutError`, `ConnectionRefusedError`, or `SMTPConnectError` on port 587 | NETWORK — runner likely blocks 587 | Switch `SMTP_PORT` secret to `465` and rerun |
+| `Email: delivered to N recipient(s)` on port 465 | PASS — Gmail SMTP_SSL 465 works | Document result in ADR-027 |
+| Network/connect failure on both 587 and 465 | FAIL — GitHub-hosted runner blocks outbound SMTP | Recommend transactional email API in ADR-027 |
+
+#### What must not appear in logs
+
+- `SMTP_PASSWORD` or App Password value
+- `SLACK_WEBHOOK_URL` or any portion of the webhook URL
+- `SMTP_USER` address or `NOTIFY_RECIPIENTS` addresses
+- Full SMTP server error messages (exception class name only is logged)
+
+#### Safety notes
+
+- Do not paste secrets, App Passwords, or recipient addresses into PRs, issues, screenshots, logs, or documentation.
+- Email remains advisory — `notify.py` returns `0` even when delivery fails.
+- Slack remains the primary validated live channel until email is confirmed working.
+- If both SMTP ports fail due to runner restrictions, do not retry blindly. Document the outcome in ADR-027 and evaluate a transactional email API in a separate PR with a separate Mode A review.
+
+#### ADR-027
+
+ADR-027 is written after the live run result is observed. Do not pre-write a speculative decision. The ADR records the actual classification, the validated port and transport mode (if any), and the recommended path forward.
 
 ### Reverting to dry-run
 

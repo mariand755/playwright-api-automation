@@ -6,7 +6,11 @@ are excluded — they require network calls outside the scope of this slice.
 
 import pytest
 
-from scripts.notify import build_message_lines, compute_overall_readiness
+from scripts.notify import (
+    build_message_lines,
+    compute_overall_readiness,
+    get_smtp_transport_mode,
+)
 
 _ALL_SUCCESS = {
     "docker_test_suite": "success",
@@ -113,3 +117,32 @@ def test_build_message_lines_no_gate_data():
     assert "No release gate data" in combined, (
         f"Expected 'No release gate data' in message when data=None, got: {combined!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# get_smtp_transport_mode
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-023 — port 465 → SMTP_SSL
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-023")
+def test_smtp_transport_mode_465():
+    assert get_smtp_transport_mode(465) == "SMTP_SSL"
+
+
+# TC-SCRIPT-024 — port 587 → STARTTLS
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-024")
+def test_smtp_transport_mode_587():
+    assert get_smtp_transport_mode(587) == "STARTTLS"
+
+
+# TC-SCRIPT-025 — any non-465 port → STARTTLS (e.g. 2525)
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-025")
+def test_smtp_transport_mode_non_465():
+    assert get_smtp_transport_mode(2525) == "STARTTLS"

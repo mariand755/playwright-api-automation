@@ -36,6 +36,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-024](#adr-024-pr-failure-notifications-behind-notify_pr_failures-activation-gate) | PR failure notifications behind NOTIFY_PR_FAILURES activation gate | Accepted | 2026-06-10 |
 | [ADR-025](#adr-025-dockerfile-os-package-upgrade-for-cve-remediation) | Dockerfile OS package upgrade for CVE remediation | Accepted | 2026-06-10 |
 | [ADR-026](#adr-026-dependency-review-action-as-advisory-pr-dependency-diff-gate) | Dependency Review Action as advisory PR dependency-diff gate | Accepted | 2026-06-11 |
+| [ADR-027](#adr-027-gmail-smtp-live-delivery-validation-outcome) | Gmail SMTP live delivery validation outcome | Accepted | 2026-06-14 |
 
 ---
 
@@ -1633,3 +1634,64 @@ Revisit promotion to a required gate only after all of the following are true:
 - `dependency_update_triage.md`
 - `security_and_branch_protection.md`
 - `.github/workflows/dependency-review.yml`
+
+---
+
+## ADR-027: Gmail SMTP live delivery validation outcome
+
+**Status:** Accepted
+**Date:** 2026-06-14
+
+### Context
+
+Slack live delivery had already been validated for aggregate CI notifications. Gmail/SMTP email delivery remained open after aggregate notification wiring was added.
+
+`notify.py` already supported generic SMTP delivery using `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, and `NOTIFY_RECIPIENTS`. It supported Gmail App Password configuration, STARTTLS on port `587`, and SMTP_SSL on port `465`.
+
+PR #60 added safe SMTP diagnostics before live validation so the selected transport path would be visible without printing secrets.
+
+### Validation
+
+A manual `workflow_dispatch` run was executed on the PR branch with `test_scope=full` and `notification_mode=live`, using Gmail App Password credentials configured through GitHub Actions secrets.
+
+Observed result:
+
+- Required CI jobs passed.
+- Release readiness was `GO`.
+- Slack delivered successfully with HTTP 200.
+- Email attempted delivery via STARTTLS on port `587`.
+- Email delivered to one recipient.
+- Gmail placed the message in Spam.
+- The `Notify` job succeeded.
+- No secrets were printed in logs.
+
+### Decision
+
+Gmail SMTP using STARTTLS on port `587` is validated as a working live email delivery path from GitHub Actions for this repo.
+
+Email delivery remains advisory and secondary. Slack remains the primary validated live notification channel because Gmail may classify automation-generated messages as Spam.
+
+The documented Gmail path remains `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_PASSWORD=<Gmail App Password>`.
+
+Port `465` remains documented as a fallback path for network/connectivity failures on port `587`, but it was not needed for this validation.
+
+### Rejected alternatives
+
+- **Treat Spam placement as delivery failure** — rejected. The SMTP server accepted the message and the recipient received it. Spam placement is a deliverability caveat, not an SMTP delivery failure.
+- **Switch to port 465 after successful 587 delivery** — rejected. Port `587` successfully delivered, so there is no evidence-based reason to change ports.
+- **Make email delivery a hard CI gate** — rejected. Notifications are operational signals and must remain advisory.
+- **Add a transactional email provider immediately** — rejected. Gmail SMTP is validated. A transactional provider may still be useful later for stronger inbox placement, but that requires a separate Mode A review.
+- **Print full SMTP exception messages** — rejected. SMTP server responses may include email addresses or provider-specific details. The script continues logging exception class names only.
+
+### Consequences
+
+- The repo now has two validated live notification channels: Slack (primary) and Gmail SMTP (secondary, with Spam-placement caveat).
+- Teams using Gmail should check Spam during initial setup and mark the message as not spam.
+- Email remains advisory; failed or delayed email delivery must not fail CI.
+- Transactional email API integration remains a future option only if stronger deliverability is required.
+
+### Related PRs / Docs
+
+- `scripts/notify.py`
+- `notification_wiring.md`
+- PR #60 — SMTP live delivery diagnostics and validation procedure

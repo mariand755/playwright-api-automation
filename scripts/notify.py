@@ -228,6 +228,10 @@ def send_slack(
         return False
 
 
+def get_smtp_transport_mode(port: int) -> str:
+    return "SMTP_SSL" if port == 465 else "STARTTLS"
+
+
 def send_email(
     data: dict[str, object] | None,
     run_url: str,
@@ -278,6 +282,9 @@ def send_email(
     except ValueError:
         print("WARNING: SMTP_PORT is not a valid integer — skipping email")
         return False
+
+    transport_mode = get_smtp_transport_mode(port)
+    print(f"Email: attempting delivery via {transport_mode} on port {port}")
 
     gate_decision = str(data.get("overall_decision", "")) if data is not None else None
     overall = compute_overall_readiness(ci_status, gate_decision)

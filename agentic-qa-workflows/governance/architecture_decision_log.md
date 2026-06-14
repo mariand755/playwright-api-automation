@@ -1695,6 +1695,7 @@ Port `465` remains documented as a fallback path for network/connectivity failur
 
 - `scripts/notify.py`
 - `notification_wiring.md`
+- PR #60 — SMTP live delivery diagnostics and validation procedure
 
 ---
 
@@ -1775,4 +1776,3 @@ A separate Mode A review should evaluate UI xdist when either:
 - `parallelization_readiness.md` — fixture isolation audit details and future activation conditions
 - `requirements.txt` — `pytest-xdist` dependency
 - `.github/workflows/ci.yml` — `Run API test suite` step
-- PR #60 — SMTP live delivery diagnostics and validation procedure

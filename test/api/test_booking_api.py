@@ -220,3 +220,26 @@ def test_update_booking_without_auth(
     )
     assert body["lastname"] == created_booking["booking"]["lastname"]
     assert body["totalprice"] == created_booking["booking"]["totalprice"]
+
+
+# TC-API-008
+@pytest.mark.api
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-API-008")
+def test_create_booking_missing_required_field(booking_api):
+    payload = {
+        # firstname intentionally omitted — required field
+        "lastname": "MissingFirst",
+        "totalprice": 100,
+        "depositpaid": False,
+        "bookingdates": {"checkin": "2024-01-01", "checkout": "2024-01-02"},
+    }
+
+    response = booking_api.create_booking(payload)
+
+    # Restful Booker returns 400 or 500 for malformed payloads; both indicate rejection.
+    assert response.status_code in {400, 500}, (
+        f"POST {response.url} with missing 'firstname' expected 400 or 500: "
+        f"status={response.status_code}, body={response.text[:200]}"
+    )

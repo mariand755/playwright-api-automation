@@ -25,3 +25,4 @@ class CheckoutPageLocators:
     CONTINUE_BUTTON = "[data-test='continue']"
     FINISH_BUTTON = "[data-test='finish']"
     COMPLETE_HEADER = "[data-test='complete-header']"
+    ERROR_MESSAGE = "[data-test='error']"

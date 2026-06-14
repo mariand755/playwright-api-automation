@@ -32,3 +32,26 @@ def test_user_can_complete_checkout(page, base_url, credentials, checkout_data):
     checkout.continue_checkout()
     checkout.finish_checkout()
     checkout.verify_order_complete()
+
+
+# TC-UI-007
+@pytest.mark.ui
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-UI-007")
+def test_checkout_required_field_validation(page, base_url, credentials):
+    login = LoginPage(page)
+    inventory = InventoryPage(page)
+    cart = CartPage(page)
+    checkout = CheckoutPage(page)
+
+    login.navigate(base_url)
+    login.login(credentials["username"], credentials["password"])
+    login.verify_login_success()
+
+    inventory.add_product_to_cart()
+    inventory.open_cart()
+    cart.proceed_to_checkout()
+
+    checkout.continue_checkout()
+    checkout.verify_error_message("Error: First Name is required")

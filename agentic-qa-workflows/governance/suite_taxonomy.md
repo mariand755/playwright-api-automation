@@ -72,7 +72,7 @@ Marks tests that validate API response schema against a declared JSON schema con
 
 - Scope: any test that calls `jsonschema.validate()` against a schema file from `data/schemas/`. Must be declared in `pytest.ini` before use.
 - Run trigger: every commit alongside the API area suite; targeted execution via `pytest -m api_contract`.
-- Current tests: `test_get_booking_by_id` (TC-API-002), `test_create_booking` (TC-API-004), `test_update_booking` (TC-API-006)
+- Current tests: `test_get_all_bookings` (TC-API-001 — list item schema only), `test_get_booking_by_id` (TC-API-002), `test_create_booking` (TC-API-004), `test_update_booking` (TC-API-006), `test_get_bookings_filtered_by_firstname` (TC-API-011)
 
 ### `read_only`
 

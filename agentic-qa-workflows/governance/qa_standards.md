@@ -30,16 +30,17 @@ Use pytest markers such as `smoke`, `negative`, `regression`, or `api_contract` 
 All markers must be declared in `pytest.ini` before use.
 
 **Current state:**
-- TC-ID comments (`# TC-UI-001`) provide human-readable traceability above the decorator stack.
-- `@pytest.mark.tc_id("TC-UI-001")` markers provide machine-readable traceability. Both forms are the current standard.
-- A `pytest_collection_modifyitems` hook in `conftest.py` reads each `tc_id` marker and appends `("tc_id", value)` to `item.user_properties`, which pytest writes as `<property name="tc_id" value="TC-UI-001"/>` inside a `<properties>` block in each `<testcase>` element of the JUnit XML.
-- TC-ID enforcement is not yet implemented. A test without a `tc_id` marker silently produces no property in the XML. Collection does not fail or warn.
 
-**Future state (not yet implemented):**
-- Collection enforcement: fail or warn when a test is missing a `tc_id` marker.
+- TC-ID comments (`# TC-UI-001`) provide human-readable traceability above the decorator stack.
+- `@pytest.mark.tc_id("TC-UI-001")` markers provide machine-readable traceability.
+- A `pytest_collection_modifyitems` hook in `conftest.py` reads each `tc_id` marker and appends it to JUnit XML user properties.
+- TC-ID uniqueness validation is enforced by `test/scripts/test_tc_id_uniqueness.py`, which fails the script test suite if duplicate `@pytest.mark.tc_id(...)` markers are found.
+
+**Future state:**
+
+- Missing TC-ID enforcement: fail or warn when a test has no `tc_id` marker.
 - Optional TC-ID display in the CI step summary (`scripts/ci_summary.py`).
 - Targeted execution by TC-ID if test-management integration is added.
-- TC-ID uniqueness validation tooling (suggest next available `TC-UI` / `TC-API` ID, validate no duplicates).
 
 ## DRY Rules
 - All URLs and credentials come from fixtures — never inline strings in tests.

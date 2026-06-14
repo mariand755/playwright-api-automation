@@ -336,6 +336,7 @@ WARNING: Email delivery failed: <ExceptionClassName>
 |---|---|---|
 | `Email: delivered to N recipient(s)` on port 587 | PASS — Gmail STARTTLS 587 works | Document result in ADR-027 |
 | `SMTPAuthenticationError` on any port | CONFIG — Gmail App Password issue | Verify App Password; 2-Step Verification must be on; retest |
+| `gaierror` | CONFIG/DNS — SMTP host could not be resolved | Verify `SMTP_HOST` is exactly `smtp.gmail.com`; do not include protocol, port, quotes, or spaces; rerun 587 |
 | `TimeoutError`, `ConnectionRefusedError`, or `SMTPConnectError` on port 587 | NETWORK — runner likely blocks 587 | Switch `SMTP_PORT` secret to `465` and rerun |
 | `Email: delivered to N recipient(s)` on port 465 | PASS — Gmail SMTP_SSL 465 works | Document result in ADR-027 |
 | Network/connect failure on both 587 and 465 | FAIL — GitHub-hosted runner blocks outbound SMTP | Recommend transactional email API in ADR-027 |

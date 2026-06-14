@@ -26,3 +26,4 @@ class CheckoutPageLocators:
     FINISH_BUTTON = "[data-test='finish']"
     COMPLETE_HEADER = "[data-test='complete-header']"
     ERROR_MESSAGE = "[data-test='error']"
+    INVENTORY_ITEM_NAME = "[data-test='inventory-item-name']"

@@ -243,3 +243,133 @@ def test_create_booking_missing_required_field(booking_api):
         f"POST {response.url} with missing 'firstname' expected 400 or 500: "
         f"status={response.status_code}, body={response.text[:200]}"
     )
+
+
+# TC-API-009
+@pytest.mark.api
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-API-009")
+def test_delete_booking_without_auth(booking_api, created_booking):
+    booking_id = created_booking["bookingid"]
+
+    response = booking_api.delete_booking(booking_id, "invalid_token")
+
+    assert response.status_code in {401, 403}, (
+        f"DELETE /booking/{booking_id} with invalid token expected 401 or 403: "
+        f"status={response.status_code}, body={response.text[:200]}"
+    )
+
+    get_response = booking_api.get_booking_by_id(booking_id)
+    assert get_response.status_code == 200, (
+        f"GET /booking/{booking_id} after rejected DELETE expected 200: "
+        f"status={get_response.status_code}, body={get_response.text[:200]}"
+    )
+    body = get_response.json()
+    assert body["firstname"] == created_booking["booking"]["firstname"], (
+        f"Booking was modified by unauthorized DELETE: "
+        f"expected firstname={created_booking['booking']['firstname']!r}, "
+        f"got {body.get('firstname')!r}"
+    )
+
+
+# TC-API-010
+@pytest.mark.api
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-API-010")
+def test_create_token_with_invalid_credentials(booking_api):
+    with pytest.raises(ValueError):
+        booking_api.create_token("wrong_user", "wrong_pass")
+
+
+# TC-API-011
+@pytest.mark.api
+@pytest.mark.regression
+@pytest.mark.api_contract
+@pytest.mark.tc_id("TC-API-011")
+def test_get_bookings_filtered_by_firstname(booking_api, created_booking):
+    expected_firstname = created_booking["booking"]["firstname"]
+    booking_id = created_booking["bookingid"]
+
+    response = booking_api.get_all_bookings(params={"firstname": expected_firstname})
+
+    assert response.status_code == 200, (
+        f"GET /booking?firstname={expected_firstname} failed: "
+        f"status={response.status_code}, body={response.text[:200]}"
+    )
+    results = response.json()
+    assert isinstance(results, list), (
+        f"Expected a list from filtered GET /booking, got {type(results).__name__}"
+    )
+    returned_ids = {b["bookingid"] for b in results}
+    assert booking_id in returned_ids, (
+        f"Created booking ID {booking_id} not found in filtered results "
+        f"for firstname={expected_firstname!r}: {returned_ids}"
+    )
+
+    detail = booking_api.get_booking_by_id(booking_id)
+    assert detail.status_code == 200, (
+        f"GET /booking/{booking_id} expected 200: "
+        f"status={detail.status_code}, body={detail.text[:200]}"
+    )
+    assert detail.json()["firstname"] == expected_firstname
+
+
+# TC-API-012
+@pytest.mark.api
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-API-012")
+def test_patch_booking_updates_single_field(booking_api, created_booking, auth_token):
+    booking_id = created_booking["bookingid"]
+    original = created_booking["booking"]
+
+    response = booking_api.patch_booking(
+        booking_id, {"firstname": "Patched"}, auth_token
+    )
+
+    assert response.status_code == 200, (
+        f"PATCH /booking/{booking_id} failed: "
+        f"status={response.status_code}, body={response.text[:200]}"
+    )
+    body = response.json()
+    assert body["firstname"] == "Patched", (
+        f"Expected firstname='Patched', got {body.get('firstname')!r}"
+    )
+    assert body["lastname"] == original["lastname"]
+    assert body["totalprice"] == original["totalprice"]
+    assert body["depositpaid"] == original["depositpaid"]
+
+    detail = booking_api.get_booking_by_id(booking_id)
+    assert detail.status_code == 200, (
+        f"GET /booking/{booking_id} after PATCH expected 200: "
+        f"status={detail.status_code}, body={detail.text[:200]}"
+    )
+    assert detail.json()["firstname"] == "Patched"
+
+
+# TC-API-013
+@pytest.mark.api
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-API-013")
+def test_patch_booking_without_auth(booking_api, created_booking):
+    booking_id = created_booking["bookingid"]
+    original_firstname = created_booking["booking"]["firstname"]
+
+    response = booking_api.patch_booking(
+        booking_id, {"firstname": "ShouldNotPatch"}, "invalid_token"
+    )
+
+    assert response.status_code in {401, 403}, (
+        f"PATCH /booking/{booking_id} with invalid token expected 401 or 403: "
+        f"status={response.status_code}, body={response.text[:200]}"
+    )
+
+    get_response = booking_api.get_booking_by_id(booking_id)
+    assert get_response.status_code == 200
+    assert get_response.json()["firstname"] == original_firstname, (
+        f"Booking was modified by unauthorized PATCH: "
+        f"expected firstname={original_firstname!r}, "
+        f"got {get_response.json().get('firstname')!r}"
+    )

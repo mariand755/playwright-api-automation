@@ -8,8 +8,14 @@ class BookingApiClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
-    def get_all_bookings(self):
-        return requests.get(f"{self.base_url}/booking", timeout=self.timeout)
+    def get_all_bookings(
+        self, params: dict[str, str] | None = None
+    ) -> requests.Response:
+        return requests.get(
+            f"{self.base_url}/booking",
+            params=params,
+            timeout=self.timeout,
+        )
 
     def get_booking_by_id(self, booking_id: int):
         return requests.get(
@@ -39,6 +45,16 @@ class BookingApiClient:
         self, booking_id: int, payload: dict, token: str
     ) -> requests.Response:
         return requests.put(
+            f"{self.base_url}/booking/{booking_id}",
+            json=payload,
+            headers={"Cookie": f"token={token}"},
+            timeout=self.timeout,
+        )
+
+    def patch_booking(
+        self, booking_id: int, payload: dict, token: str
+    ) -> requests.Response:
+        return requests.patch(
             f"{self.base_url}/booking/{booking_id}",
             json=payload,
             headers={"Cookie": f"token={token}"},

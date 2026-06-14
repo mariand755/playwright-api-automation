@@ -19,5 +19,8 @@ class InventoryPage:
             str(expected_count)
         )
 
+    def add_product_to_cart_by_index(self, index: int) -> None:
+        self.page.locator(InventoryPageLocators.ADD_TO_CART_BUTTON).nth(index).click()
+
     def open_cart(self):
         self.cart_icon.click()

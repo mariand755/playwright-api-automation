@@ -4,19 +4,19 @@ This document records the current pytest parallelization baseline, identifies wh
 
 ---
 
-## Current State (as of PR #61)
+## Current State (as of PR #62)
 
-Current pytest collection after PR #61:
+Current pytest collection after PR #62:
 
 | Category | Count |
 |---|---|
-| API behavioral tests | 8 |
-| UI behavioral tests | 7 |
-| Behavioral total | 15 |
+| API behavioral tests | 13 |
+| UI behavioral tests | 9 |
+| Behavioral total | 22 |
 | Script test nodes collected | 33 |
-| Total collected pytest nodes | 48 |
+| Total collected pytest nodes | 55 |
 
-`pytest-xdist` remains deferred because behavioral test count is still below the `>20` activation threshold.
+The behavioral test count now exceeds the `>20` activation threshold. `pytest-xdist` is still deferred in this PR because activation requires a separate fixture isolation audit, runtime measurement, and explicit Mode A approval for the parallelization strategy.
 
 ---
 
@@ -30,7 +30,7 @@ Adding `pytest-xdist` (process-level parallelism within a single job) would prov
 
 ## Why `pytest-xdist` Is Deferred
 
-**Test count is below threshold.** At 15 behavioral tests (8 API + 7 UI), the parallel overhead from xdist worker startup, fixture isolation enforcement, and ordering constraints is not offset by runtime savings.
+**Threshold is now met, but activation is separate.** At 22 behavioral tests (13 API + 9 UI), the suite is ready for a dedicated `pytest-xdist` activation review. This PR only grows coverage and updates readiness evidence; it does not activate process-level parallelism.
 
 **Runtime has not been measured.** The activation decision requires observed runtime data, not estimated savings.
 

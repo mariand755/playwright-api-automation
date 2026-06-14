@@ -12,6 +12,7 @@ class CheckoutPage:
         self.continue_button = page.locator(CheckoutPageLocators.CONTINUE_BUTTON)
         self.finish_button = page.locator(CheckoutPageLocators.FINISH_BUTTON)
         self.complete_header = page.locator(CheckoutPageLocators.COMPLETE_HEADER)
+        self.error_message = page.locator(CheckoutPageLocators.ERROR_MESSAGE)
 
     def fill_information(self, first_name: str, last_name: str, postal_code: str):
         self.first_name.fill(first_name)
@@ -26,3 +27,7 @@ class CheckoutPage:
 
     def verify_order_complete(self):
         expect(self.complete_header).to_contain_text("Thank you for your order!")
+
+    def verify_error_message(self, expected_text: str) -> None:
+        expect(self.error_message).to_be_visible()
+        expect(self.error_message).to_contain_text(expected_text)

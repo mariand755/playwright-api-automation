@@ -3,7 +3,7 @@
 ## Naming Conventions
 
 ### Files
-- Test files: `test_<feature>.py` (e.g. `test_login_cart.py`, `test_booking_api.py`)
+- Test files: `test_<feature>.py` (e.g. `test_login_cart.py`, `test_booking_read_api.py`)
 - Page classes: `<feature>_page.py` (e.g. `login_page.py`, `inventory_page.py`)
 - API clients: `<domain>_client.py` (e.g. `api_client.py`)
 

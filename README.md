@@ -143,7 +143,7 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | SMTP/email live delivery validation | ✅ Validated | Gmail SMTP STARTTLS on port `587` works from GitHub Actions; Gmail may place first-time automation emails in Spam |
 | Forced-live critical failure alerts | ⏳ Deferred | Needs ADR before activation |
 | Live observability API integration | ⏳ Deferred | Replace stub bodies when live observability stack is available |
-| pytest-xdist parallelization | ⏳ Deferred | Gate: >20 behavioral tests, >5 min full Docker runtime, or explicit Mode A approval after fixture isolation review |
+| pytest-xdist parallelization | ✅ Activated for API | API Tests run with `-n auto`; UI and script suites remain serial pending separate isolation review |
 | Blueprint extraction | ⏳ Deferred | Phase 8; after README refresh |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.

@@ -1,12 +1,12 @@
 # Parallelization Readiness
 
-This document records the current pytest parallelization baseline, identifies what must be true before `pytest-xdist` is activated, and explains why the decision is deferred.
+This document records the pytest parallelization baseline, the fixture isolation audit result, and the activation decision for `pytest-xdist`.
 
 ---
 
-## Current State (as of PR #62)
+## Current State (as of PR #64)
 
-Current pytest collection after PR #62:
+Current pytest collection after PR #63:
 
 | Category | Count |
 |---|---|
@@ -16,63 +16,83 @@ Current pytest collection after PR #62:
 | Script test nodes collected | 33 |
 | Total collected pytest nodes | 55 |
 
-The behavioral test count now exceeds the `>20` activation threshold. `pytest-xdist` is still deferred in this PR because activation requires a separate fixture isolation audit, runtime measurement, and explicit Mode A approval for the parallelization strategy.
+**API xdist activated.** UI tests remain serial. Script tests remain serial.
+
+See [ADR-028](architecture_decision_log.md#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) for the full decision record.
 
 ---
 
 ## Existing CI-Level Parallelism
 
-The repo already achieves job-level parallelism. `API Tests` and `UI Tests` run as separate parallel jobs in `ci.yml` — they start simultaneously after `Docker Test Suite` passes. This provides the largest share of wall-clock savings available to this suite at its current size.
+The repo already achieves job-level parallelism. `API Tests` and `UI Tests` run as separate parallel jobs in `ci.yml` — they start simultaneously after `Docker Test Suite` passes. This provides the largest share of wall-clock savings available at the current suite size.
 
-Adding `pytest-xdist` (process-level parallelism within a single job) would provide diminishing returns until the per-job test count is high enough that job runtime is the bottleneck.
-
----
-
-## Why `pytest-xdist` Is Deferred
-
-**Threshold is now met, but activation is separate.** At 22 behavioral tests (13 API + 9 UI), the suite is ready for a dedicated `pytest-xdist` activation review. This PR only grows coverage and updates readiness evidence; it does not activate process-level parallelism.
-
-**Runtime has not been measured.** The activation decision requires observed runtime data, not estimated savings.
-
-**Fixture isolation risks exist.** Before xdist can be enabled safely:
-
-| Fixture | Risk |
-|---|---|
-| `created_booking` (function scope, finalizer) | Concurrent teardowns on the same booking API could race on DELETE; each worker would need its own booking |
-| `auth_token` (session scope) | Safe to share across workers only if never mutated; verify no test writes to the token |
-| Playwright `page` / `browser_context` (function scope) | Not xdist-safe by default; requires `--dist=no` for UI tests or explicit `browser_type` fixture isolation per worker |
+`pytest-xdist` adds process-level parallelism within the API Tests job, further reducing per-job test execution time.
 
 ---
 
-## Runtime Measurement Command
+## Activation Outcome — API xdist (PR #64)
 
-To measure full Docker suite runtime before activating xdist:
+**Command (API Tests job, standard run):**
 
 ```bash
-time docker run --rm playwright-api-automation pytest -q
+pytest test/api $MARKER_ARGS -v -n auto --junitxml=artifacts/api-report.xml
 ```
 
-Run this at least twice and take the median. Record the result in an ADR or as a note here when measured.
+- `-n auto` resolves to 2 workers on a standard GitHub Actions `ubuntu-latest` runner (2 vCPU).
+- `--dist=load` (xdist default) distributes tests dynamically across workers.
+- UI tests and script tests remain serial — no `-n` flag on those steps.
+- Prod-read-only API step remains serial (small gated subset).
+
+**Rollback:** Remove `-n auto` from the `Run API test suite` step in `.github/workflows/ci.yml`. No fixture changes or `requirements.txt` changes needed for rollback.
 
 ---
 
-## Activation Criteria
+## Fixture Isolation Audit
 
-Do not add `pytest-xdist` until **all** of the following are true:
+Completed before API xdist activation in PR #64.
 
-1. Behavioral test count (API + UI combined) exceeds **20**, OR measured full Docker suite runtime exceeds **5 minutes**.
-2. A fixture isolation audit has been completed — confirm `created_booking` teardowns are worker-safe, `auth_token` is read-only in all tests, and Playwright fixture isolation is understood.
-3. Explicit Mode A approval identifies the specific parallelization strategy (API tests only, UI tests only, or both; `--dist=loadscope` vs `--dist=each`).
+### Session-scoped fixtures
+
+| Fixture | Audit result | Reasoning |
+|---|---|---|
+| `booking_api` | **Safe** | Stateless HTTP client; immutable after construction |
+| `auth_token` | **Safe** | Immutable string; each worker process creates its own token via a separate `/auth` POST; no test mutates it |
+| `test_data`, `base_url`, `api_base_url`, `credentials` | **Safe** | Read-only data; no network calls |
+
+### Function-scoped fixtures
+
+| Fixture | Audit result | Reasoning |
+|---|---|---|
+| `booking_payload_factory` | **Safe** | Returns a factory closure with no shared mutable state |
+| `created_booking` | **Audited safe for API xdist** | Each invocation POSTs a new booking and receives a unique `bookingid` from the API. Teardown deletes that specific booking. Concurrent teardowns delete distinct resources — no race. The prior concern about concurrent DELETE teardowns was incorrect: it only applies if tests share a single pre-created booking, which they do not. |
+
+### UI fixtures — deferred
+
+The Playwright `page` fixture wraps browser context. Isolation under `pytest-xdist` requires a separate Mode A review before UI parallelization is considered.
+
+### Script fixtures — deferred
+
+Script tests use `tmp_path` and plain dicts only. They are fast governance checks. Serial execution is required for the TC-ID uniqueness guard (TC-SCRIPT-031) and release gate logic.
 
 ---
 
-## ADR Note
+## Future Activation Conditions
 
-Do not create ADR-028 now. ADR-028 should be created only when `pytest-xdist` is actually activated or explicitly rejected after evidence. A readiness assessment is not a decision.
+### UI xdist
+
+Trigger a new Mode A review when any of the following are true:
+
+- UI test count exceeds **15**, or
+- UI Tests job runtime exceeds **3 minutes**, or
+- a portfolio or client need justifies browser-level parallel execution.
+
+### Script xdist
+
+No activation planned. Script tests are fast deterministic governance checks and should remain serial.
 
 ---
 
 ## References
 
+- [ADR-028](architecture_decision_log.md#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) — full decision record for this activation
 - `quality_gates.md` — CI job structure and test execution policy
-- `architecture_decision_log.md` — ADR-028 placeholder (not yet written)

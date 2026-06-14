@@ -37,6 +37,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-025](#adr-025-dockerfile-os-package-upgrade-for-cve-remediation) | Dockerfile OS package upgrade for CVE remediation | Accepted | 2026-06-10 |
 | [ADR-026](#adr-026-dependency-review-action-as-advisory-pr-dependency-diff-gate) | Dependency Review Action as advisory PR dependency-diff gate | Accepted | 2026-06-11 |
 | [ADR-027](#adr-027-gmail-smtp-live-delivery-validation-outcome) | Gmail SMTP live delivery validation outcome | Accepted | 2026-06-14 |
+| [ADR-028](#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) | API pytest-xdist activation with serial UI and script execution | Accepted | 2026-06-14 |
 
 ---
 
@@ -1695,3 +1696,83 @@ Port `465` remains documented as a fallback path for network/connectivity failur
 - `scripts/notify.py`
 - `notification_wiring.md`
 - PR #60 — SMTP live delivery diagnostics and validation procedure
+
+---
+
+## ADR-028: API pytest-xdist activation with serial UI and script execution
+
+**Status:** Accepted
+**Date:** 2026-06-14
+
+### Context
+
+The behavioral test suite reached 22 tests after PR #62: 13 API and 9 UI. This crossed the `>20` behavioral-test threshold documented in `parallelization_readiness.md`.
+
+PR #63 split the API suite into behavior-grouped files, making API fixture dependencies and parallelization risk easier to inspect before activation.
+
+A fixture isolation audit was completed before enabling process-level parallelism.
+
+### Decision
+
+Activate `pytest-xdist` for the standard API Tests CI job only, using:
+
+```bash
+pytest test/api $MARKER_ARGS -v -n auto --junitxml=artifacts/api-report.xml
+```
+
+UI tests and script tests remain serial.
+
+The prod-read-only API step remains serial because it is a small gated read-only subset and should stay conservative until production activation is reviewed separately.
+
+### Fixture audit result
+
+- `booking_api` is safe: stateless HTTP client, immutable after construction.
+- `auth_token` is safe: immutable string; each worker process creates its own token via a separate `/auth` POST; no test mutates it.
+- `booking_payload_factory` is safe: function-scoped factory with no shared mutable state.
+- `created_booking` is safe for API xdist: each fixture invocation creates a unique booking ID, and teardown deletes that specific booking. Concurrent teardowns delete distinct resources. The prior concern about concurrent DELETE teardowns in `parallelization_readiness.md` was incorrect — a race would only exist if tests shared a single pre-created booking, which they do not.
+- Read-only data fixtures (`test_data`, `base_url`, `api_base_url`, `credentials`) are safe: loaded data is not mutated by any test.
+
+### Why API first
+
+API tests have no browser-context isolation concerns and are the best first target for xdist. The suite now has enough behavioral tests to justify a controlled activation.
+
+### Why UI remains serial
+
+UI tests remain serial because Playwright browser/page/context isolation under xdist requires a separate Mode A review. The current UI suite has 9 tests, which does not yet justify adding browser-parallelization risk in the same PR.
+
+### Why scripts remain serial
+
+Script tests are governance and tooling checks. They are fast and should remain deterministic, especially the TC-ID uniqueness guard (TC-SCRIPT-031) and release gate logic.
+
+### Rejected alternatives
+
+- **Activate API and UI xdist together** — rejected. UI isolation requires a separate Mode A review.
+- **Use `--dist=loadscope`** — rejected. With tests now split across five behavior-grouped files, `loadscope` would assign each module to a single worker, reducing effective distribution.
+- **Use explicit `-n 2`** — rejected. `-n auto` is idiomatic and adapts to available runner CPU without hardcoding an assumption about runner size.
+- **Add xdist globally via `pytest.ini` `addopts`** — rejected. Activation should be command-specific, not global. Script tests must remain serial.
+- **Parallelize script tests** — rejected. Script governance checks should remain serial and deterministic.
+
+### Consequences
+
+- API Tests job now runs with process-level parallelism (`-n auto`).
+- UI Tests and Docker Test Suite remain unchanged.
+- JUnit output is produced by the API Tests job and remains compatible with the existing `dorny/test-reporter` step.
+- If API flakiness appears post-activation, first rollback is to remove `-n auto` from the API Tests command.
+
+### Rollback
+
+Remove `-n auto` from the normal `Run API test suite` command in `.github/workflows/ci.yml`. No fixture changes are required for rollback. `pytest-xdist` may remain in `requirements.txt` — it is inert when not invoked with `-n`.
+
+### Future follow-up
+
+A separate Mode A review should evaluate UI xdist when either:
+
+- UI test count exceeds 15, or
+- UI job runtime exceeds 3 minutes, or
+- a portfolio or client need justifies browser-level parallel execution.
+
+### Related docs
+
+- `parallelization_readiness.md` — fixture isolation audit details and future activation conditions
+- `requirements.txt` — `pytest-xdist` dependency
+- `.github/workflows/ci.yml` — `Run API test suite` step

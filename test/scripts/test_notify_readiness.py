@@ -1,6 +1,6 @@
-"""Unit tests for compute_overall_readiness() and build_message_lines() in scripts/notify.py.
+"""Unit tests for notify readiness helpers in scripts/notify.py.
 
-Covers TC-SCRIPT-014 to TC-SCRIPT-022. Delivery functions (send_slack, send_email)
+Covers TC-SCRIPT-014 to TC-SCRIPT-028. Delivery functions (send_slack, send_email)
 are excluded — they require network calls outside the scope of this slice.
 """
 
@@ -124,25 +124,25 @@ def test_build_message_lines_no_gate_data():
 # ---------------------------------------------------------------------------
 
 
-# TC-SCRIPT-023 — port 465 → SMTP_SSL
+# TC-SCRIPT-026 — port 465 → SMTP_SSL
 @pytest.mark.scripts
 @pytest.mark.regression
-@pytest.mark.tc_id("TC-SCRIPT-023")
+@pytest.mark.tc_id("TC-SCRIPT-026")
 def test_smtp_transport_mode_465():
     assert get_smtp_transport_mode(465) == "SMTP_SSL"
 
 
-# TC-SCRIPT-024 — port 587 → STARTTLS
+# TC-SCRIPT-027 — port 587 → STARTTLS
 @pytest.mark.scripts
 @pytest.mark.regression
-@pytest.mark.tc_id("TC-SCRIPT-024")
+@pytest.mark.tc_id("TC-SCRIPT-027")
 def test_smtp_transport_mode_587():
     assert get_smtp_transport_mode(587) == "STARTTLS"
 
 
-# TC-SCRIPT-025 — any non-465 port → STARTTLS (e.g. 2525)
+# TC-SCRIPT-028 — any non-465 port → STARTTLS (e.g. 2525)
 @pytest.mark.scripts
 @pytest.mark.regression
-@pytest.mark.tc_id("TC-SCRIPT-025")
+@pytest.mark.tc_id("TC-SCRIPT-028")
 def test_smtp_transport_mode_non_465():
     assert get_smtp_transport_mode(2525) == "STARTTLS"

@@ -1,7 +1,8 @@
 """Unit tests for notify readiness helpers in scripts/notify.py.
 
-Covers TC-SCRIPT-014 to TC-SCRIPT-028. Delivery functions (send_slack, send_email)
-are excluded — they require network calls outside the scope of this slice.
+Covers TC-SCRIPT-014 to TC-SCRIPT-018, TC-SCRIPT-026 to TC-SCRIPT-030.
+Delivery functions (send_slack, send_email) are excluded — they require
+network calls outside the scope of this slice.
 """
 
 import pytest
@@ -82,11 +83,11 @@ def test_readiness_missing_ci_status_not_blocked():
 # ---------------------------------------------------------------------------
 
 
-# TC-SCRIPT-021 — build_message_lines: gate_skipped artifact emits smoke-skip message
+# TC-SCRIPT-029 — build_message_lines: gate_skipped artifact emits smoke-skip message
 # Verifies ⚠️ Skipped line appears and no "?" test-count placeholder leaks through.
 @pytest.mark.scripts
 @pytest.mark.regression
-@pytest.mark.tc_id("TC-SCRIPT-021")
+@pytest.mark.tc_id("TC-SCRIPT-029")
 def test_build_message_lines_gate_skipped():
     data = {
         "overall_decision": "UNKNOWN",
@@ -105,12 +106,12 @@ def test_build_message_lines_gate_skipped():
     )
 
 
-# TC-SCRIPT-022 — build_message_lines: data=None still emits the existing no-gate-data message
+# TC-SCRIPT-030 — build_message_lines: data=None still emits the existing no-gate-data message
 # Regression guard: the existing data=None fallback must not be broken by the gate_skipped branch.
 @pytest.mark.scripts
 @pytest.mark.negative
 @pytest.mark.regression
-@pytest.mark.tc_id("TC-SCRIPT-022")
+@pytest.mark.tc_id("TC-SCRIPT-030")
 def test_build_message_lines_no_gate_data():
     lines = build_message_lines(None, run_url="", ci_status=_ALL_SUCCESS)
     combined = "\n".join(lines)

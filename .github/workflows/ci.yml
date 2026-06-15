@@ -45,14 +45,16 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build Docker image
-        # Retry loop guards against transient MCR registry 429 rate-limit errors.
         run: |
           for i in 1 2 3; do
             docker build -t playwright-api-automation . && break
-            if [ $i -lt 3 ]; then
-              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
-              sleep $((i * 30))
+
+            if [ "$i" -lt 3 ]; then
+              wait_seconds=$((i * 30))
+              echo "Docker build attempt $i/3 failed — retrying in ${wait_seconds}s"
+              sleep "$wait_seconds"
             else
+              echo "Docker build failed after 3 attempts"
               exit 1
             fi
           done
@@ -125,14 +127,16 @@ jobs:
 
       - name: Build Docker image
         # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        # Retry loop guards against transient MCR registry 429 rate-limit errors.
         run: |
           for i in 1 2 3; do
             docker build -t playwright-api-automation . && break
-            if [ $i -lt 3 ]; then
-              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
-              sleep $((i * 30))
+
+            if [ "$i" -lt 3 ]; then
+              wait_seconds=$((i * 30))
+              echo "Docker build attempt $i/3 failed — retrying in ${wait_seconds}s"
+              sleep "$wait_seconds"
             else
+              echo "Docker build failed after 3 attempts"
               exit 1
             fi
           done
@@ -280,14 +284,16 @@ jobs:
 
       - name: Build Docker image
         # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        # Retry loop guards against transient MCR registry 429 rate-limit errors.
         run: |
           for i in 1 2 3; do
             docker build -t playwright-api-automation . && break
-            if [ $i -lt 3 ]; then
-              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
-              sleep $((i * 30))
+
+            if [ "$i" -lt 3 ]; then
+              wait_seconds=$((i * 30))
+              echo "Docker build attempt $i/3 failed — retrying in ${wait_seconds}s"
+              sleep "$wait_seconds"
             else
+              echo "Docker build failed after 3 attempts"
               exit 1
             fi
           done
@@ -402,17 +408,7 @@ jobs:
 
       - name: Build Docker image
         # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        # Retry loop guards against transient MCR registry 429 rate-limit errors.
-        run: |
-          for i in 1 2 3; do
-            docker build -t playwright-api-automation . && break
-            if [ $i -lt 3 ]; then
-              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
-              sleep $((i * 30))
-            else
-              exit 1
-            fi
-          done
+        run: docker build -t playwright-api-automation .
 
       - name: Prepare artifacts directory
         run: |
@@ -500,17 +496,7 @@ jobs:
 
       - name: Build Docker image
         # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        # Retry loop guards against transient MCR registry 429 rate-limit errors.
-        run: |
-          for i in 1 2 3; do
-            docker build -t playwright-api-automation . && break
-            if [ $i -lt 3 ]; then
-              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
-              sleep $((i * 30))
-            else
-              exit 1
-            fi
-          done
+        run: docker build -t playwright-api-automation .
 
       - name: Prepare artifacts directory
         run: mkdir -p artifacts

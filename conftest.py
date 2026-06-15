@@ -195,8 +195,15 @@ def pytest_runtest_makereport(item, call):
             artifacts_dir = Path("artifacts") / "failures"
             artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-            screenshot_path = artifacts_dir / f"{item.name}.png"
-            html_path = artifacts_dir / f"{item.name}.html"
+            safe_name = (
+                item.nodeid.replace("/", "_")
+                .replace("\\", "_")
+                .replace("::", "__")
+                .replace("[", "_")
+                .replace("]", "_")
+            )
+            screenshot_path = artifacts_dir / f"{safe_name}.png"
+            html_path = artifacts_dir / f"{safe_name}.html"
 
             page.screenshot(path=str(screenshot_path), full_page=True)
             html_path.write_text(page.content(), encoding="utf-8")

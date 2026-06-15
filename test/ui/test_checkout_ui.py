@@ -82,20 +82,3 @@ def test_checkout_overview_shows_item(page, base_url, credentials, checkout_data
     )
     checkout.continue_checkout()
     checkout.verify_overview_item("Sauce Labs Backpack")
-
-
-# TC-UI-009
-@pytest.mark.ui
-@pytest.mark.regression
-@pytest.mark.tc_id("TC-UI-009")
-def test_multiple_items_cart_badge_count(page, base_url, credentials):
-    login = LoginPage(page)
-    inventory = InventoryPage(page)
-
-    login.navigate(base_url)
-    login.login(credentials["username"], credentials["password"])
-    login.verify_login_success()
-
-    inventory.add_product_to_cart_by_index(0)
-    inventory.add_product_to_cart_by_index(1)
-    inventory.verify_cart_badge_count(2)

@@ -25,6 +25,7 @@ PR failure notification is opt-in via the `NOTIFY_PR_FAILURES` repository variab
 - **CI Status** — per-job result rows for Docker Test Suite, API Tests, and UI Tests.
 - **Release Gate (staging API)** — the component gate decision from `release-readiness.json`. When overall readiness is BLOCKED but the component gate says GO, the line is annotated: `— component signal only; overall readiness is BLOCKED`.
 - **Tests** — pass/fail/skip counts and duration (when release gate data is present).
+- **Advisory Jobs** — cloud-grid and cross-browser status (PASS / FAIL / SKIPPED / PARTIAL), shown only on nightly and `workflow_dispatch` runs when advisory jobs were scheduled. Advisory status is display-only and does not affect Overall Release Readiness.
 - **Run URL** — link to the GitHub Actions run.
 
 **Dry-run default:** each channel checks its own required environment variables independently. When a channel's required variables are absent, it logs a message preview and continues without failing CI. Dry-run output includes all CI Status rows so wiring can be validated before live credentials are provisioned.
@@ -164,6 +165,20 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 | unset | any | Notify job does not start — PR failure is silent |
 | `true` | `true` | Notify job starts — all channels dry-run (useful for wiring validation) |
 | `true` | unset or `false` | Notify job starts — live delivery if secrets are configured |
+
+---
+
+## Advisory Cloud Grid Configuration
+
+`SAUCE_CONNECT_TIMEOUT_MS` is an optional **GitHub repository variable** (not a secret).
+
+Add it under: **Settings → Secrets and variables → Actions → Variables tab**.
+
+| Variable                   | Default | Purpose                                |
+|----------------------------|---------|----------------------------------------|
+| `SAUCE_CONNECT_TIMEOUT_MS` | `60000` | Playwright remote connect timeout (ms) |
+
+When unset, the `cloud-grid` job defaults to 60 000 ms (60 seconds). Increase this value if your Sauce Labs account experiences frequent provisioning delays. The value is passed to the Docker container via `-e SAUCE_CONNECT_TIMEOUT_MS` and read by the `browser` fixture in `conftest.py`.
 
 ---
 

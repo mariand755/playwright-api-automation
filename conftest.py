@@ -187,11 +187,17 @@ def browser(playwright, browser_name, browser_type_launch_args):
             f"wss://{username}:{access_key}@ondemand.{region}.saucelabs.com"
             f":443/playwright/{browser_name}"
         )
+        timeout_ms = int(os.environ.get("SAUCE_CONNECT_TIMEOUT_MS", "60000"))
         try:
-            b = getattr(playwright, browser_name).connect(endpoint)
+            b = getattr(playwright, browser_name).connect(endpoint, timeout=timeout_ms)
         except Exception as exc:
             raise RuntimeError(
-                f"Sauce Labs connection failed: {type(exc).__name__}"
+                f"Sauce Labs remote session could not be provisioned.\n"
+                f"Provider: sauce  Region: {region}  Browser: {browser_name}\n"
+                f"Error type: {type(exc).__name__}\n"
+                f"Likely causes: inactive/expired Sauce account, quota or concurrency limit reached,\n"
+                f"  region mismatch, provider outage, or session provisioning timeout.\n"
+                f"Secrets and WebSocket endpoint were redacted from this message."
             ) from None
         yield b
         b.close()

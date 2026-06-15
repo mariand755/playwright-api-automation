@@ -21,9 +21,11 @@ GitHub Actions env vars (auto-set, used to construct the run URL):
   GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID
 
 CI job result env vars (set by the notify job via needs.*.result):
-  DOCKER_TEST_SUITE_RESULT  Result of the Docker Test Suite job
-  API_TESTS_RESULT          Result of the API Tests job
-  UI_TESTS_RESULT           Result of the UI Tests job
+  DOCKER_TEST_SUITE_RESULT   Result of the Docker Test Suite job
+  API_TESTS_RESULT           Result of the API Tests job
+  UI_TESTS_RESULT            Result of the UI Tests job
+  UI_CROSS_BROWSER_RESULT    Result of the UI Cross-Browser advisory job ('skipped' when not scheduled)
+  CLOUD_GRID_RESULT          Result of the Cloud Grid advisory job ('skipped' when not scheduled)
 
 Gmail example configuration:
   SMTP_HOST=smtp.gmail.com
@@ -48,6 +50,7 @@ from pathlib import Path
 ARTIFACT_JSON = Path("artifacts/release-readiness.json")
 MAX_ITEMS_IN_MESSAGE = 3
 NETWORK_TIMEOUT = 10  # seconds
+CROSS_BROWSER_BROWSERS = ("chromium", "firefox", "webkit")
 
 
 def get_run_url() -> str:
@@ -83,6 +86,70 @@ def get_ci_status() -> dict[str, str]:
     }
 
 
+def load_advisory_status() -> dict[str, object]:
+    """Read advisory job statuses from per-job status artifact files and env vars.
+
+    Returns a dict with keys:
+      cloud_grid_status        — PASS | FAIL | SKIPPED | UNKNOWN
+      cloud_grid_detail        — human-readable detail string
+      cross_browser_status     — PASS | FAIL | PARTIAL | SKIPPED | UNKNOWN
+      cross_browser_by_browser — {browser: status} for each leg that ran
+    """
+    # --- Cloud Grid ---
+    cg_env = os.environ.get("CLOUD_GRID_RESULT", "").strip().lower()
+    cg_status: str = "SKIPPED"
+    cg_detail: str = ""
+
+    cg_artifact = Path("artifacts/cloud-grid-status.json")
+    if cg_artifact.exists():
+        try:
+            raw = json.loads(cg_artifact.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                cg_status = str(raw.get("status", "UNKNOWN")).upper()
+                cg_detail = str(raw.get("detail", ""))
+        except (json.JSONDecodeError, OSError):
+            cg_status = "UNKNOWN"
+    elif cg_env == "skipped":
+        cg_status = "SKIPPED"
+    elif cg_env:
+        cg_status = "UNKNOWN"
+
+    # --- Cross-Browser ---
+    cb_env = os.environ.get("UI_CROSS_BROWSER_RESULT", "").strip().lower()
+    cb_by_browser: dict[str, str] = {}
+
+    for browser in CROSS_BROWSER_BROWSERS:
+        artifact = Path(f"artifacts/cross-browser-{browser}-status.json")
+        if artifact.exists():
+            try:
+                raw = json.loads(artifact.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    cb_by_browser[browser] = str(raw.get("status", "UNKNOWN")).upper()
+            except (json.JSONDecodeError, OSError):
+                cb_by_browser[browser] = "UNKNOWN"
+
+    if not cb_by_browser:
+        cb_aggregate: str = "SKIPPED" if cb_env in ("skipped", "") else "UNKNOWN"
+    elif any(s == "FAIL" for s in cb_by_browser.values()):
+        all_fail_or_unknown = all(
+            s in ("FAIL", "UNKNOWN") for s in cb_by_browser.values()
+        )
+        cb_aggregate = "FAIL" if all_fail_or_unknown else "PARTIAL"
+    elif all(s == "PASS" for s in cb_by_browser.values()):
+        cb_aggregate = "PASS"
+    elif all(s == "UNKNOWN" for s in cb_by_browser.values()):
+        cb_aggregate = "UNKNOWN"
+    else:
+        cb_aggregate = "PARTIAL"
+
+    return {
+        "cloud_grid_status": cg_status,
+        "cloud_grid_detail": cg_detail,
+        "cross_browser_status": cb_aggregate,
+        "cross_browser_by_browser": cb_by_browser,
+    }
+
+
 def compute_overall_readiness(
     ci_status: dict[str, str], gate_decision: str | None
 ) -> str:
@@ -104,6 +171,7 @@ def build_message_lines(
     data: dict[str, object] | None,
     run_url: str,
     ci_status: dict[str, str],
+    advisory_status: dict[str, object] | None = None,
 ) -> list[str]:
     """Build channel-agnostic message lines including overall CI status and release gate."""
     gate_decision = str(data.get("overall_decision", "")) if data is not None else None
@@ -182,6 +250,35 @@ def build_message_lines(
             if remaining > 0:
                 lines.append(f"  ... and {remaining} more")
 
+    if advisory_status is not None:
+        cg_status = str(advisory_status.get("cloud_grid_status", "SKIPPED"))
+        cb_status = str(advisory_status.get("cross_browser_status", "SKIPPED"))
+        cg_scheduled = os.environ.get("CLOUD_GRID_RESULT", "").strip().lower() not in (
+            "",
+            "skipped",
+        )
+        cb_scheduled = os.environ.get(
+            "UI_CROSS_BROWSER_RESULT", ""
+        ).strip().lower() not in ("", "skipped")
+
+        if cg_scheduled or cb_scheduled:
+            lines.append("Advisory Jobs:")
+            _icons = {
+                "PASS": "✅",
+                "FAIL": "❌",
+                "SKIPPED": "⏭️",
+                "PARTIAL": "⚠️",
+                "UNKNOWN": "⚠️",
+            }
+            cb_icon = _icons.get(cb_status, "⚠️")
+            lines.append(f"  · UI Cross-Browser: {cb_icon} {cb_status}")
+            cg_icon = _icons.get(cg_status, "⚠️")
+            cg_detail = str(advisory_status.get("cloud_grid_detail", ""))
+            cg_line = f"  · Cloud Grid: {cg_icon} {cg_status}"
+            if cg_detail:
+                cg_line += f" — {cg_detail}"
+            lines.append(cg_line)
+
     if run_url:
         lines.append(f"Run: {run_url}")
 
@@ -193,9 +290,10 @@ def send_slack(
     run_url: str,
     dry_run_forced: bool,
     ci_status: dict[str, str],
+    advisory_status: dict[str, object] | None = None,
 ) -> bool:
     webhook_url = os.environ.get("SLACK_WEBHOOK_URL", "")
-    lines = build_message_lines(data, run_url, ci_status)
+    lines = build_message_lines(data, run_url, ci_status, advisory_status)
 
     if dry_run_forced or not webhook_url:
         if dry_run_forced and webhook_url:
@@ -237,6 +335,7 @@ def send_email(
     run_url: str,
     dry_run_forced: bool,
     ci_status: dict[str, str],
+    advisory_status: dict[str, object] | None = None,
 ) -> bool:
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_port_str = os.environ.get("SMTP_PORT", "587")
@@ -255,7 +354,7 @@ def send_email(
     if not recipients_str:
         required_missing.append("NOTIFY_RECIPIENTS")
 
-    lines = build_message_lines(data, run_url, ci_status)
+    lines = build_message_lines(data, run_url, ci_status, advisory_status)
 
     if dry_run_forced or required_missing:
         if dry_run_forced and not required_missing:
@@ -325,6 +424,7 @@ def main() -> int:
     run_url = get_run_url()
     dry_run_forced = is_dry_run_forced()
     ci_status = get_ci_status()
+    advisory_status = load_advisory_status()
 
     if data is None:
         print(
@@ -332,8 +432,8 @@ def main() -> int:
             " — release gate data unavailable"
         )
 
-    slack_ok = send_slack(data, run_url, dry_run_forced, ci_status)
-    email_ok = send_email(data, run_url, dry_run_forced, ci_status)
+    slack_ok = send_slack(data, run_url, dry_run_forced, ci_status, advisory_status)
+    email_ok = send_email(data, run_url, dry_run_forced, ci_status, advisory_status)
 
     if not slack_ok or not email_ok:
         print("WARNING: one or more notification channels failed — see above")

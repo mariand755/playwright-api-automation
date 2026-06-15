@@ -41,6 +41,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-029](#adr-029-ui-pytest-xdist-activation-with-serial-script-and-prod-read-only-execution) | UI pytest-xdist activation with serial script and prod-read-only execution | Accepted | 2026-06-15 |
 | [ADR-030](#adr-030-cross-browser-ui-matrix-and-cloud-grid-preflight-with-safe-skip-policy) | Cross-browser UI matrix and cloud-grid preflight with safe-skip policy | Accepted | 2026-06-14 |
 | [ADR-031](#adr-031-sauce-labs-cloud-grid-execution-gated-by-preflight-readiness) | Sauce Labs cloud-grid execution gated by preflight readiness | Accepted | 2026-06-14 |
+| [ADR-032](#adr-032-advisory-job-notification-and-cloud-grid-provider-failure-messaging) | Advisory job notification and cloud-grid provider-failure messaging | Accepted | 2026-06-15 |
 
 ---
 
@@ -2177,3 +2178,140 @@ Both rollbacks are independent and do not affect the existing `test`, `api`, `ui
 - `conftest.py` — `browser` fixture override
 - `scripts/cloud_grid_preflight.py` — preflight implementation (ADR-030)
 - `test/scripts/test_cloud_grid_preflight.py` — preflight unit tests (TC-SCRIPT-032–TC-SCRIPT-041)
+
+---
+
+## ADR-032: Advisory job notification and cloud-grid provider-failure messaging
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Context
+
+ADR-031 (PR #69) activated Sauce Labs cloud-grid execution and PR #68 activated the cross-browser
+UI matrix. A manual run with Sauce Labs enabled proved the advisory lane works end-to-end but
+revealed three gaps:
+
+1. Connection failure message was too generic: `"Sauce Labs connection failed: Error"` — no provider,
+   region, browser, or likely-cause information.
+2. Connection attempt took ~5 minutes with no explicit timeout cap — `playwright.connect()` was
+   called without a `timeout` parameter.
+3. Notification did not include advisory job status — cloud-grid and cross-browser failures were
+   invisible in the aggregate CI signal. Required and advisory lanes looked identical in the
+   notification output.
+
+Additionally, `continue-on-error: true` on both advisory jobs means `needs.*.result` returns
+`'success'` even when tests fail. Naively reading `needs.cloud-grid.result` cannot distinguish
+PASS from FAIL — a status artifact is required.
+
+### Decision
+
+**1. Sauce Labs connection timeout:** Add `SAUCE_CONNECT_TIMEOUT_MS` env var (default 60 000 ms)
+to the `browser` fixture `connect()` call:
+
+```python
+timeout_ms = int(os.environ.get("SAUCE_CONNECT_TIMEOUT_MS", "60000"))
+getattr(playwright, browser_name).connect(endpoint, timeout=timeout_ms)
+```
+
+Configurable via `vars.SAUCE_CONNECT_TIMEOUT_MS` in CI. Passed to Docker with
+`-e SAUCE_CONNECT_TIMEOUT_MS="${SAUCE_CONNECT_TIMEOUT_MS:-60000}"`.
+
+**2. Structured failure message:** Replace the generic `"Sauce Labs connection failed: Error"`
+with a multi-line message that includes provider, region, browser, error type, likely causes,
+and a "secrets redacted" line. Credentials and the WebSocket endpoint URL are never printed.
+
+**3. Advisory status artifacts:** Each advisory CI job writes a per-job status JSON file
+(`artifacts/cloud-grid-status.json`, `artifacts/cross-browser-{browser}-status.json`) after
+execution, regardless of outcome. The `cloud-grid` job uses `steps.sauce_run.outcome` (real
+outcome) vs `steps.sauce_run.conclusion` (always `'success'` due to `continue-on-error: true`).
+
+**4. `notify.needs` extended:** Add `ui-cross-browser` and `cloud-grid` to `notify.needs`.
+This ensures `Notify` waits for advisory jobs on nightly and `workflow_dispatch` before
+delivering the notification. On PR and push-to-feature triggers, advisory jobs are SKIPPED
+immediately, so `Notify` is never delayed on those events.
+
+**5. `notify.py` extended:** New `load_advisory_status()` reads status artifact files and env
+vars. `build_message_lines()` gains an `advisory_status` parameter and appends an Advisory Jobs
+section when advisory jobs were scheduled (both `needs.*.result == 'skipped'` → section hidden).
+`compute_overall_readiness()` is UNCHANGED — advisory status is display-only.
+
+### Why `needs.*.result` is insufficient for `continue-on-error` advisory jobs
+
+When `continue-on-error: true` is set on a job (or matrix job), GitHub Actions sets
+`needs.<job>.result = 'success'` even when the job fails. The only safe way to detect SKIPPED
+(never scheduled) vs EXECUTED (ran, pass or fail) is `needs.*.result == 'skipped'`. For actual
+PASS/FAIL distinction, a status artifact written by the job is required.
+
+| Scenario | `needs.cloud-grid.result` | Actual status |
+|---|---|---|
+| Job not scheduled (PR/push) | `skipped` | SKIPPED — omit advisory section |
+| Preflight status is SKIPPED_* | `success` | SKIPPED — read from artifact |
+| Sauce connection failed | `success` | FAIL — read from artifact |
+| Smoke suite tests failed | `success` | FAIL — read from artifact |
+| All tests passed | `success` | PASS — read from artifact |
+
+### Why advisory status in notifications
+
+Hiding advisory failures defeats their purpose as signal. The advisory lane exists to surface
+cloud-provider and cross-browser issues without blocking the required release lane. A failing
+Sauce Labs run that is invisible in the notification provides no signal value.
+
+**Required release readiness** (GO/NO_GO/BLOCKED) is computed only from Docker Test Suite,
+API Tests, UI Tests, and the release gate. Advisory status cannot change this verdict.
+
+### Why secrets remain redacted in failure messages
+
+CI step logs can be read by anyone with repository access. The WebSocket endpoint URL embeds
+`username:access_key`. Only `type(exc).__name__` and non-sensitive contextual metadata
+(region, browser name) are included in the error message. `from None` suppresses chained
+tracebacks that might contain credential strings.
+
+### Why PR #71 multi-browser cloud matrix is deferred
+
+PR #70 establishes the observability foundation: timeout cap, structured messaging, and advisory
+status in notifications. Expanding to firefox + webkit on Sauce Labs should follow after PR #70
+proves the notification infrastructure works correctly in production with chromium.
+
+### Consequences
+
+- `conftest.py` browser fixture: timeout cap + structured failure message for Sauce connections.
+- `cloud-grid` CI job: `id: sauce_run`, `continue-on-error: true` on smoke step; new "Write
+  cloud-grid execution status" step; new "Upload cloud-grid status artifact" step.
+- `ui-cross-browser` CI job: new "Write cross-browser execution status" step per matrix leg;
+  new "Upload cross-browser status artifact" step per leg.
+- `notify` job: `needs` extended to `[test, api, ui, ui-cross-browser, cloud-grid]`; advisory
+  artifact download steps added; `UI_CROSS_BROWSER_RESULT` and `CLOUD_GRID_RESULT` env vars
+  added to delivery step.
+- `notify.py`: `load_advisory_status()` added; `build_message_lines()` gains `advisory_status`
+  parameter (default `None` — existing tests unaffected); advisory section appended when
+  advisory jobs were scheduled.
+- `compute_overall_readiness()`: UNCHANGED.
+- Collection count: 75 nodes (65 existing + 10 new TC-SCRIPT-042–TC-SCRIPT-051).
+
+### Rollback
+
+All four change groups are independently reversible and do not affect the required release lane:
+
+1. **conftest.py timeout/message:** Revert to `connect(endpoint)` without timeout or set
+   `SAUCE_CONNECT_TIMEOUT_MS=0` to use Playwright default.
+2. **Advisory status artifact steps:** Remove write/upload steps from `cloud-grid` and
+   `ui-cross-browser` jobs. No downstream impact.
+3. **notify.py advisory section:** Remove `load_advisory_status()` call and advisory block
+   from `build_message_lines()`.
+4. **notify.needs:** Revert to `[test, api, ui]` — notify no longer waits for advisory jobs.
+
+### Future follow-up
+
+- PR #71: Sauce Labs multi-browser cloud matrix (chromium + firefox + webkit).
+- BrowserStack: add as a second provider option when a client requirement establishes the need.
+- PARTIAL cross-browser: add per-browser detail lines to the advisory section when aggregate is PARTIAL.
+
+### Related docs
+
+- `notification_wiring.md` — advisory status section; message structure
+- `quality_gates.md` — CI job structure; notify depends-on column
+- `.github/workflows/ci.yml` — `cloud-grid` job, `ui-cross-browser` job, `notify` job
+- `conftest.py` — `browser` fixture override
+- `scripts/notify.py` — `load_advisory_status()`, `build_message_lines()`
+- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-042–TC-SCRIPT-051

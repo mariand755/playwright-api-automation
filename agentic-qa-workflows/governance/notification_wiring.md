@@ -168,6 +168,20 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 
 ---
 
+## Advisory Cloud Grid Configuration
+
+`SAUCE_CONNECT_TIMEOUT_MS` is an optional **GitHub repository variable** (not a secret).
+
+Add it under: **Settings → Secrets and variables → Actions → Variables tab**.
+
+| Variable                   | Default | Purpose                                |
+|----------------------------|---------|----------------------------------------|
+| `SAUCE_CONNECT_TIMEOUT_MS` | `60000` | Playwright remote connect timeout (ms) |
+
+When unset, the `cloud-grid` job defaults to 60 000 ms (60 seconds). Increase this value if your Sauce Labs account experiences frequent provisioning delays. The value is passed to the Docker container via `-e SAUCE_CONNECT_TIMEOUT_MS` and read by the `browser` fixture in `conftest.py`.
+
+---
+
 ### Per-run override via `workflow_dispatch` input
 
 Manual CI runs (`workflow_dispatch`) support a `notification_mode` input that overrides `NOTIFY_DRY_RUN` for that specific run without changing the repo variable:

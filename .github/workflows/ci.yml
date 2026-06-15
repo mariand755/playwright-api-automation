@@ -427,7 +427,7 @@ jobs:
         run: |
           mkdir -p artifacts
           if [[ -f "artifacts/ui-${{ matrix.browser }}-report.xml" ]]; then
-            FAILURES=$(python3 -c "import xml.etree.ElementTree as ET; root=ET.parse('artifacts/ui-${{ matrix.browser }}-report.xml').getroot(); suites=root.findall('testsuite') if root.tag=='testsuites' else [root]; print(sum(int(s.get('failures',0))+int(s.get('errors',0)) for s in suites))")
+            FAILURES=$(python3 -c "import xml.etree.ElementTree as ET; root=ET.parse('artifacts/ui-${{ matrix.browser }}-report.xml').getroot(); suites=root.findall('testsuite') if root.tag=='testsuites' else [root]; print(sum(int(s.get('failures',0))+int(s.get('errors',0)) for s in suites))" 2>/dev/null) || FAILURES=1
             STATUS=$([[ "$FAILURES" == "0" ]] && echo "PASS" || echo "FAIL")
           else
             STATUS="FAIL"
@@ -491,7 +491,7 @@ jobs:
             STATUS=$(python3 -c "import json; print(json.load(open('artifacts/cloud-grid-preflight.json'))['status'])")
             echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
           else
-            echo "status=SKIPPED_NOT_CONFIGURED" >> "$GITHUB_OUTPUT"
+            echo "status=ERROR_PREFLIGHT_STATUS_UNAVAILABLE" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run Sauce Labs smoke suite
@@ -535,21 +535,25 @@ jobs:
         run: |
           mkdir -p artifacts
           PREFLIGHT="${{ steps.preflight.outputs.status }}"
+          PREFLIGHT="${PREFLIGHT:-ERROR_PREFLIGHT_STATUS_UNAVAILABLE}"
           SAUCE_OUTCOME="${{ steps.sauce_run.outcome }}"
           CG_REPORT="${{ steps.cg_report.outputs.exists }}"
 
-          if [[ "$PREFLIGHT" != "READY" ]]; then
-            STATUS="SKIPPED"
-            DETAIL="preflight status: $PREFLIGHT"
-          elif [[ "$SAUCE_OUTCOME" == "success" ]]; then
+          if [[ "$PREFLIGHT" == "READY" && "$SAUCE_OUTCOME" == "success" ]]; then
             STATUS="PASS"
             DETAIL="smoke suite passed"
-          elif [[ "$CG_REPORT" == "true" ]]; then
+          elif [[ "$PREFLIGHT" == "READY" && "$CG_REPORT" == "true" ]]; then
             STATUS="FAIL"
             DETAIL="cloud-grid smoke execution failed; see cloud-grid-report.xml for provider or test details"
-          else
+          elif [[ "$PREFLIGHT" == "READY" ]]; then
             STATUS="FAIL"
             DETAIL="remote session could not be provisioned or connection timed out"
+          elif [[ "$PREFLIGHT" == SKIPPED_* ]]; then
+            STATUS="SKIPPED"
+            DETAIL="preflight status: $PREFLIGHT"
+          else
+            STATUS="FAIL"
+            DETAIL="cloud-grid preflight failed: $PREFLIGHT"
           fi
 
           python3 -c "import json,sys; from datetime import datetime,timezone; json.dump({'status':sys.argv[1],'detail':sys.argv[2],'timestamp':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')},open('artifacts/cloud-grid-status.json','w'),indent=2)" "$STATUS" "$DETAIL"

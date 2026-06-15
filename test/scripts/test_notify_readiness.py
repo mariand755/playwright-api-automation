@@ -377,3 +377,73 @@ def test_overall_readiness_unaffected_by_advisory_fail(monkeypatch):
     assert "Advisory Jobs" in combined, (
         "Advisory section must still appear when scheduled"
     )
+
+
+# TC-SCRIPT-052 — load_advisory_status: all-UNKNOWN artifacts aggregate to UNKNOWN, not PARTIAL
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-052")
+def test_advisory_cross_browser_all_unknown_aggregates_to_unknown(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cross-browser-{browser}-status.json").write_text(
+            "not valid json", encoding="utf-8"
+        )
+    result = load_advisory_status()
+    assert result["cross_browser_status"] == "UNKNOWN", (
+        f"All-UNKNOWN browser artifacts must aggregate to UNKNOWN, got: {result['cross_browser_status']!r}"
+    )
+    assert result["cross_browser_by_browser"] == {
+        "chromium": "UNKNOWN",
+        "firefox": "UNKNOWN",
+        "webkit": "UNKNOWN",
+    }
+
+
+# TC-SCRIPT-053 — build_message_lines: advisory section hidden when both env vars are empty (local dry-run)
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-053")
+def test_build_message_lines_no_advisory_section_when_env_unset(monkeypatch):
+    monkeypatch.delenv("CLOUD_GRID_RESULT", raising=False)
+    monkeypatch.delenv("UI_CROSS_BROWSER_RESULT", raising=False)
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "SKIPPED",
+        "cloud_grid_detail": "",
+        "cross_browser_status": "SKIPPED",
+        "cross_browser_by_browser": {},
+    }
+    lines = build_message_lines(
+        None, run_url="", ci_status=_ALL_SUCCESS, advisory_status=advisory
+    )
+    combined = "\n".join(lines)
+    assert "Advisory Jobs" not in combined, (
+        f"Advisory section must be hidden when env vars are unset (local dry-run), got: {combined!r}"
+    )
+
+
+# TC-SCRIPT-054 — load_advisory_status: cloud-grid FAIL with preflight-failed detail renders as FAIL
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-054")
+def test_advisory_cloud_grid_preflight_fail_renders_as_fail(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts" / "cloud-grid-status.json").write_text(
+        '{"status": "FAIL", "detail": "cloud-grid preflight failed: ERROR_UNKNOWN_PROVIDER"}',
+        encoding="utf-8",
+    )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "FAIL", (
+        f"Preflight-failed detail must render as FAIL, got: {result['cloud_grid_status']!r}"
+    )
+    assert "ERROR_UNKNOWN_PROVIDER" in str(result["cloud_grid_detail"])

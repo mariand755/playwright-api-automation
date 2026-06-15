@@ -137,6 +137,8 @@ def load_advisory_status() -> dict[str, object]:
         cb_aggregate = "FAIL" if all_fail_or_unknown else "PARTIAL"
     elif all(s == "PASS" for s in cb_by_browser.values()):
         cb_aggregate = "PASS"
+    elif all(s == "UNKNOWN" for s in cb_by_browser.values()):
+        cb_aggregate = "UNKNOWN"
     else:
         cb_aggregate = "PARTIAL"
 
@@ -251,12 +253,13 @@ def build_message_lines(
     if advisory_status is not None:
         cg_status = str(advisory_status.get("cloud_grid_status", "SKIPPED"))
         cb_status = str(advisory_status.get("cross_browser_status", "SKIPPED"))
-        cg_scheduled = (
-            os.environ.get("CLOUD_GRID_RESULT", "").strip().lower() != "skipped"
+        cg_scheduled = os.environ.get("CLOUD_GRID_RESULT", "").strip().lower() not in (
+            "",
+            "skipped",
         )
-        cb_scheduled = (
-            os.environ.get("UI_CROSS_BROWSER_RESULT", "").strip().lower() != "skipped"
-        )
+        cb_scheduled = os.environ.get(
+            "UI_CROSS_BROWSER_RESULT", ""
+        ).strip().lower() not in ("", "skipped")
 
         if cg_scheduled or cb_scheduled:
             lines.append("Advisory Jobs:")

@@ -170,6 +170,8 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 
 ## Advisory Cloud Grid Configuration
 
+### `SAUCE_CONNECT_TIMEOUT_MS` variable
+
 `SAUCE_CONNECT_TIMEOUT_MS` is an optional **GitHub repository variable** (not a secret).
 
 Add it under: **Settings → Secrets and variables → Actions → Variables tab**.
@@ -179,6 +181,44 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 | `SAUCE_CONNECT_TIMEOUT_MS` | `60000` | Playwright remote connect timeout (ms) |
 
 When unset, the `cloud-grid` job defaults to 60 000 ms (60 seconds). Increase this value if your Sauce Labs account experiences frequent provisioning delays. The value is passed to the Docker container via `-e SAUCE_CONNECT_TIMEOUT_MS` and read by the `browser` fixture in `conftest.py`.
+
+### Multi-browser cloud-grid matrix (PR #71)
+
+The `cloud-grid` job is a 3-browser matrix (chromium, firefox, webkit). Each leg runs independently with `fail-fast: false` and `continue-on-error: true`.
+
+**Per-browser status artifacts** written by each leg:
+
+```text
+artifacts/cloud-grid-chromium-status.json
+artifacts/cloud-grid-firefox-status.json
+artifacts/cloud-grid-webkit-status.json
+```
+
+Each file contains `{ "status": "PASS|FAIL|SKIPPED", "detail": "...", "browser": "...", "timestamp": "..." }`.
+
+**Artifact upload names** per leg: `cloud-grid-{browser}-execution-status`
+
+The `notify` job downloads all three using a pattern download (`cloud-grid-*-execution-status` with `merge-multiple: true`) so all files land in `artifacts/` before `notify.py` runs.
+
+**Aggregation logic** in `load_advisory_status()`:
+
+| All legs | Aggregate |
+|---|---|
+| All PASS | PASS |
+| All SKIPPED | SKIPPED |
+| All FAIL or UNKNOWN | FAIL |
+| Any FAIL, others PASS | PARTIAL |
+| All UNKNOWN | UNKNOWN |
+| Mixed (PASS + SKIPPED, etc.) | PARTIAL |
+
+**Notification rendering:**
+
+- PASS or SKIPPED → single summary line, no per-browser detail (clean output)
+- PARTIAL or FAIL → per-browser detail lines with status and detail string
+
+**Legacy fallback:** If no per-browser files exist but `artifacts/cloud-grid-status.json` does (produced by a pre-PR #71 run), `load_advisory_status()` reads it as the chromium result. This preserves backward compatibility during the transition window.
+
+**Preflight runs once per matrix leg** (idempotent; fast enough to not justify a shared preflight job). Non-READY preflight states write a GitHub step summary line for both `SKIPPED_*` and `ERROR_*` states.
 
 ---
 

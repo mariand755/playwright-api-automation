@@ -447,3 +447,264 @@ def test_advisory_cloud_grid_preflight_fail_renders_as_fail(tmp_path, monkeypatc
         f"Preflight-failed detail must render as FAIL, got: {result['cloud_grid_status']!r}"
     )
     assert "ERROR_UNKNOWN_PROVIDER" in str(result["cloud_grid_detail"])
+
+
+# ---------------------------------------------------------------------------
+# TC-SCRIPT-055–063 — Cloud Grid multi-browser matrix (PR #71)
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-055 — load_advisory_status: cloud-grid all browsers PASS → aggregate PASS
+@pytest.mark.scripts
+@pytest.mark.smoke
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-055")
+def test_advisory_cloud_grid_all_pass_aggregates_to_pass(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cloud-grid-{browser}-status.json").write_text(
+            f'{{"status": "PASS", "detail": "smoke suite passed", "browser": "{browser}"}}',
+            encoding="utf-8",
+        )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "PASS", (
+        f"All-PASS cloud-grid legs must aggregate to PASS, got: {result['cloud_grid_status']!r}"
+    )
+    assert result["cloud_grid_by_browser"] == {
+        "chromium": "PASS",
+        "firefox": "PASS",
+        "webkit": "PASS",
+    }
+
+
+# TC-SCRIPT-056 — load_advisory_status: no cloud-grid artifacts + env skipped → SKIPPED
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-056")
+def test_advisory_cloud_grid_no_artifacts_env_skipped_aggregates_to_skipped(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "SKIPPED", (
+        f"No artifacts + env skipped must aggregate to SKIPPED, got: {result['cloud_grid_status']!r}"
+    )
+    assert result["cloud_grid_by_browser"] == {}
+
+
+# TC-SCRIPT-057 — load_advisory_status: one cloud-grid FAIL + others PASS → PARTIAL
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-057")
+def test_advisory_cloud_grid_one_fail_others_pass_aggregates_to_partial(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts" / "cloud-grid-chromium-status.json").write_text(
+        '{"status": "FAIL", "detail": "remote session could not be provisioned", "browser": "chromium"}',
+        encoding="utf-8",
+    )
+    (tmp_path / "artifacts" / "cloud-grid-firefox-status.json").write_text(
+        '{"status": "PASS", "detail": "smoke suite passed", "browser": "firefox"}',
+        encoding="utf-8",
+    )
+    (tmp_path / "artifacts" / "cloud-grid-webkit-status.json").write_text(
+        '{"status": "PASS", "detail": "smoke suite passed", "browser": "webkit"}',
+        encoding="utf-8",
+    )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "PARTIAL", (
+        f"One FAIL + others PASS must aggregate to PARTIAL, got: {result['cloud_grid_status']!r}"
+    )
+    assert result["cloud_grid_by_browser"]["chromium"] == "FAIL"
+    assert result["cloud_grid_by_browser"]["firefox"] == "PASS"
+    assert result["cloud_grid_by_browser"]["webkit"] == "PASS"
+
+
+# TC-SCRIPT-058 — load_advisory_status: all cloud-grid browsers FAIL → aggregate FAIL
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-058")
+def test_advisory_cloud_grid_all_fail_aggregates_to_fail(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cloud-grid-{browser}-status.json").write_text(
+            f'{{"status": "FAIL", "detail": "remote session could not be provisioned", "browser": "{browser}"}}',
+            encoding="utf-8",
+        )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "FAIL", (
+        f"All-FAIL cloud-grid legs must aggregate to FAIL, got: {result['cloud_grid_status']!r}"
+    )
+
+
+# TC-SCRIPT-059 — load_advisory_status: all cloud-grid browsers unreadable → aggregate UNKNOWN
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-059")
+def test_advisory_cloud_grid_all_unknown_aggregates_to_unknown(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cloud-grid-{browser}-status.json").write_text(
+            "not valid json", encoding="utf-8"
+        )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "UNKNOWN", (
+        f"All-UNKNOWN cloud-grid artifacts must aggregate to UNKNOWN, got: {result['cloud_grid_status']!r}"
+    )
+    assert result["cloud_grid_by_browser"] == {
+        "chromium": "UNKNOWN",
+        "firefox": "UNKNOWN",
+        "webkit": "UNKNOWN",
+    }
+
+
+# TC-SCRIPT-060 — build_message_lines: cloud-grid PARTIAL renders per-browser detail lines
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-060")
+def test_build_message_lines_renders_cloud_grid_per_browser_when_partial(monkeypatch):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "PARTIAL",
+        "cloud_grid_detail": "",
+        "cloud_grid_by_browser": {
+            "chromium": "FAIL",
+            "firefox": "PASS",
+            "webkit": "PASS",
+        },
+        "cloud_grid_detail_by_browser": {
+            "chromium": "remote session could not be provisioned",
+            "firefox": "smoke suite passed",
+            "webkit": "smoke suite passed",
+        },
+        "cross_browser_status": "SKIPPED",
+        "cross_browser_by_browser": {},
+    }
+    lines = build_message_lines(
+        None, run_url="", ci_status=_ALL_SUCCESS, advisory_status=advisory
+    )
+    combined = "\n".join(lines)
+    assert "PARTIAL" in combined
+    assert "chromium" in combined
+    assert "remote session could not be provisioned" in combined
+
+
+# TC-SCRIPT-061 — build_message_lines: cloud-grid FAIL renders per-browser detail lines
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-061")
+def test_build_message_lines_renders_cloud_grid_per_browser_when_fail(monkeypatch):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "FAIL",
+        "cloud_grid_detail": "",
+        "cloud_grid_by_browser": {
+            "chromium": "FAIL",
+            "firefox": "FAIL",
+            "webkit": "FAIL",
+        },
+        "cloud_grid_detail_by_browser": {
+            "chromium": "remote session could not be provisioned",
+            "firefox": "remote session could not be provisioned",
+            "webkit": "remote session could not be provisioned",
+        },
+        "cross_browser_status": "SKIPPED",
+        "cross_browser_by_browser": {},
+    }
+    lines = build_message_lines(
+        None, run_url="", ci_status=_ALL_SUCCESS, advisory_status=advisory
+    )
+    combined = "\n".join(lines)
+    assert "Cloud Grid" in combined
+    assert "chromium" in combined
+    assert "firefox" in combined
+    assert "webkit" in combined
+
+
+# TC-SCRIPT-062 — build_message_lines: cross-browser PARTIAL renders per-browser lines
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-062")
+def test_build_message_lines_renders_cross_browser_per_browser_when_partial(
+    monkeypatch,
+):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "SKIPPED",
+        "cloud_grid_detail": "",
+        "cloud_grid_by_browser": {},
+        "cloud_grid_detail_by_browser": {},
+        "cross_browser_status": "PARTIAL",
+        "cross_browser_by_browser": {
+            "chromium": "PASS",
+            "firefox": "FAIL",
+            "webkit": "PASS",
+        },
+    }
+    lines = build_message_lines(
+        None, run_url="", ci_status=_ALL_SUCCESS, advisory_status=advisory
+    )
+    combined = "\n".join(lines)
+    assert "UI Cross-Browser" in combined
+    assert "PARTIAL" in combined
+    assert "chromium" in combined
+    assert "firefox" in combined
+    assert "webkit" in combined
+
+
+# TC-SCRIPT-063 — build_message_lines: cloud-grid PASS → no per-browser lines (clean output)
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-063")
+def test_build_message_lines_no_per_browser_detail_when_cloud_grid_all_pass(
+    monkeypatch,
+):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "PASS",
+        "cloud_grid_detail": "",
+        "cloud_grid_by_browser": {
+            "chromium": "PASS",
+            "firefox": "PASS",
+            "webkit": "PASS",
+        },
+        "cloud_grid_detail_by_browser": {
+            "chromium": "smoke suite passed",
+            "firefox": "smoke suite passed",
+            "webkit": "smoke suite passed",
+        },
+        "cross_browser_status": "SKIPPED",
+        "cross_browser_by_browser": {},
+    }
+    lines = build_message_lines(
+        None, run_url="", ci_status=_ALL_SUCCESS, advisory_status=advisory
+    )
+    combined = "\n".join(lines)
+    assert "Cloud Grid" in combined
+    assert "PASS" in combined
+    assert "chromium" not in combined, (
+        "Happy-path PASS must not expand per-browser lines — keep notifications clean"
+    )

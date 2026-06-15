@@ -38,7 +38,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 | API Tests | Full API suite, JUnit report, dorny test panel | Docker Test Suite |
 | UI Tests | Full UI suite, JUnit report, dorny test panel, failure artifacts | Docker Test Suite |
 | UI Cross-Browser | Advisory chromium/firefox/webkit smoke matrix, JUnit report, dorny test panel | Docker Test Suite |
-| Cloud Grid | Advisory Sauce Labs chromium smoke execution, preflight-gated with safe-skip behavior | Docker Test Suite |
+| Cloud Grid | Advisory Sauce Labs 3-browser cloud matrix (chromium, firefox, webkit), preflight-gated, per-browser status artifacts | Docker Test Suite |
 | Notify | Builds release readiness notification with required CI status, release gate, and advisory job results; delivers to configured channels | API Tests + UI Tests |
 
 ### Test scope by trigger

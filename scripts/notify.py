@@ -51,6 +51,7 @@ ARTIFACT_JSON = Path("artifacts/release-readiness.json")
 MAX_ITEMS_IN_MESSAGE = 3
 NETWORK_TIMEOUT = 10  # seconds
 CROSS_BROWSER_BROWSERS = ("chromium", "firefox", "webkit")
+CLOUD_GRID_BROWSERS = ("chromium", "firefox", "webkit")
 
 
 def get_run_url() -> str:
@@ -90,29 +91,67 @@ def load_advisory_status() -> dict[str, object]:
     """Read advisory job statuses from per-job status artifact files and env vars.
 
     Returns a dict with keys:
-      cloud_grid_status        — PASS | FAIL | SKIPPED | UNKNOWN
-      cloud_grid_detail        — human-readable detail string
-      cross_browser_status     — PASS | FAIL | PARTIAL | SKIPPED | UNKNOWN
-      cross_browser_by_browser — {browser: status} for each leg that ran
+      cloud_grid_status          — PASS | FAIL | PARTIAL | SKIPPED | UNKNOWN
+      cloud_grid_detail          — detail string for single-browser legacy path; "" for multi-browser
+      cloud_grid_by_browser      — {browser: status} for each cloud-grid leg
+      cloud_grid_detail_by_browser — {browser: detail} for each cloud-grid leg
+      cross_browser_status       — PASS | FAIL | PARTIAL | SKIPPED | UNKNOWN
+      cross_browser_by_browser   — {browser: status} for each cross-browser leg
     """
-    # --- Cloud Grid ---
+    # --- Cloud Grid (per-browser) ---
     cg_env = os.environ.get("CLOUD_GRID_RESULT", "").strip().lower()
-    cg_status: str = "SKIPPED"
-    cg_detail: str = ""
+    cg_by_browser: dict[str, str] = {}
+    cg_detail_by_browser: dict[str, str] = {}
 
-    cg_artifact = Path("artifacts/cloud-grid-status.json")
-    if cg_artifact.exists():
-        try:
-            raw = json.loads(cg_artifact.read_text(encoding="utf-8"))
-            if isinstance(raw, dict):
-                cg_status = str(raw.get("status", "UNKNOWN")).upper()
-                cg_detail = str(raw.get("detail", ""))
-        except (json.JSONDecodeError, OSError):
-            cg_status = "UNKNOWN"
-    elif cg_env == "skipped":
-        cg_status = "SKIPPED"
-    elif cg_env:
-        cg_status = "UNKNOWN"
+    for browser in CLOUD_GRID_BROWSERS:
+        artifact = Path(f"artifacts/cloud-grid-{browser}-status.json")
+        if artifact.exists():
+            try:
+                raw = json.loads(artifact.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    cg_by_browser[browser] = str(raw.get("status", "UNKNOWN")).upper()
+                    cg_detail_by_browser[browser] = str(raw.get("detail", ""))
+            except (json.JSONDecodeError, OSError):
+                cg_by_browser[browser] = "UNKNOWN"
+                cg_detail_by_browser[browser] = ""
+
+    # Legacy fallback: single-file format (cloud-grid-status.json) from pre-PR #71 runs.
+    # Reads as chromium so TC-SCRIPT-043/044/054 continue to pass without modification.
+    if not cg_by_browser:
+        legacy = Path("artifacts/cloud-grid-status.json")
+        if legacy.exists():
+            try:
+                raw = json.loads(legacy.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    cg_by_browser["chromium"] = str(
+                        raw.get("status", "UNKNOWN")
+                    ).upper()
+                    cg_detail_by_browser["chromium"] = str(raw.get("detail", ""))
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    if not cg_by_browser:
+        cg_aggregate: str = "SKIPPED" if cg_env in ("skipped", "") else "UNKNOWN"
+    elif all(s == "SKIPPED" for s in cg_by_browser.values()):
+        cg_aggregate = "SKIPPED"
+    elif any(s == "FAIL" for s in cg_by_browser.values()):
+        all_fail_or_unknown = all(
+            s in ("FAIL", "UNKNOWN") for s in cg_by_browser.values()
+        )
+        cg_aggregate = "FAIL" if all_fail_or_unknown else "PARTIAL"
+    elif all(s == "PASS" for s in cg_by_browser.values()):
+        cg_aggregate = "PASS"
+    elif all(s == "UNKNOWN" for s in cg_by_browser.values()):
+        cg_aggregate = "UNKNOWN"
+    else:
+        cg_aggregate = "PARTIAL"
+
+    # Propagate legacy detail when only one chromium leg exists (single-file path).
+    # Keeps cloud_grid_detail non-empty so TC-SCRIPT-043/044/054 assertions still pass.
+    if len(cg_detail_by_browser) == 1 and "chromium" in cg_detail_by_browser:
+        cg_detail: str = cg_detail_by_browser["chromium"]
+    else:
+        cg_detail = ""
 
     # --- Cross-Browser ---
     cb_env = os.environ.get("UI_CROSS_BROWSER_RESULT", "").strip().lower()
@@ -143,8 +182,10 @@ def load_advisory_status() -> dict[str, object]:
         cb_aggregate = "PARTIAL"
 
     return {
-        "cloud_grid_status": cg_status,
+        "cloud_grid_status": cg_aggregate,
         "cloud_grid_detail": cg_detail,
+        "cloud_grid_by_browser": cg_by_browser,
+        "cloud_grid_detail_by_browser": cg_detail_by_browser,
         "cross_browser_status": cb_aggregate,
         "cross_browser_by_browser": cb_by_browser,
     }
@@ -272,12 +313,34 @@ def build_message_lines(
             }
             cb_icon = _icons.get(cb_status, "⚠️")
             lines.append(f"  · UI Cross-Browser: {cb_icon} {cb_status}")
+            if cb_status == "PARTIAL" and advisory_status.get(
+                "cross_browser_by_browser"
+            ):
+                cb_by_browser_map: dict[str, str] = advisory_status.get(  # type: ignore[assignment]
+                    "cross_browser_by_browser", {}
+                )
+                for browser, bstatus in cb_by_browser_map.items():
+                    b_icon = _icons.get(str(bstatus), "⚠️")
+                    lines.append(f"      {browser}: {b_icon} {bstatus}")
+
             cg_icon = _icons.get(cg_status, "⚠️")
-            cg_detail = str(advisory_status.get("cloud_grid_detail", ""))
-            cg_line = f"  · Cloud Grid: {cg_icon} {cg_status}"
-            if cg_detail:
-                cg_line += f" — {cg_detail}"
-            lines.append(cg_line)
+            lines.append(f"  · Cloud Grid: {cg_icon} {cg_status}")
+            if cg_status in ("PARTIAL", "FAIL") and advisory_status.get(
+                "cloud_grid_by_browser"
+            ):
+                cg_by_browser_map: dict[str, str] = advisory_status.get(  # type: ignore[assignment]
+                    "cloud_grid_by_browser", {}
+                )
+                cg_detail_by_browser_map: dict[str, str] = advisory_status.get(  # type: ignore[assignment]
+                    "cloud_grid_detail_by_browser", {}
+                )
+                for browser, bstatus in cg_by_browser_map.items():
+                    b_icon = _icons.get(str(bstatus), "⚠️")
+                    bdetail = str(cg_detail_by_browser_map.get(browser, ""))
+                    b_line = f"      {browser}: {b_icon} {bstatus}"
+                    if bdetail:
+                        b_line += f" — {bdetail}"
+                    lines.append(b_line)
 
     if run_url:
         lines.append(f"Run: {run_url}")

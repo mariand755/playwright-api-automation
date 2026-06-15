@@ -443,12 +443,16 @@ jobs:
           if-no-files-found: ignore
 
   cloud-grid:
-    name: Cloud Grid (Sauce Labs)
+    name: Cloud Grid (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test]
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
 
     steps:
       - name: Checkout code
@@ -512,19 +516,27 @@ jobs:
             -e SAUCE_REGION="${SAUCE_REGION:-us-west-1}" \
             -e SAUCE_CONNECT_TIMEOUT_MS="${SAUCE_CONNECT_TIMEOUT_MS:-60000}" \
             playwright-api-automation pytest test/ui -m smoke -v \
-            --browser chromium \
-            --junitxml=artifacts/cloud-grid-report.xml
+            --browser ${{ matrix.browser }} \
+            --junitxml=artifacts/cloud-grid-${{ matrix.browser }}-report.xml
 
-      - name: Skip cloud execution
-        if: steps.preflight.outputs.status != 'READY' && startsWith(steps.preflight.outputs.status, 'SKIPPED_')
+      - name: Record cloud-grid non-ready status
+        if: steps.preflight.outputs.status != 'READY'
         run: |
-          echo "Cloud-grid execution skipped — preflight status: ${{ steps.preflight.outputs.status }}" >> "$GITHUB_STEP_SUMMARY"
+          PREFLIGHT="${{ steps.preflight.outputs.status }}"
+          if [[ "$PREFLIGHT" == SKIPPED_* ]]; then
+            echo "### ⏭️ Cloud Grid Skipped (${{ matrix.browser }})" >> "$GITHUB_STEP_SUMMARY"
+            echo "Preflight status: \`$PREFLIGHT\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ⚠️ Cloud Grid Not Run — Preflight Error (${{ matrix.browser }})" >> "$GITHUB_STEP_SUMMARY"
+            echo "Preflight status: \`$PREFLIGHT\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "Check the Run cloud-grid preflight step output above for details." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Check cloud-grid report exists
         id: cg_report
         if: always()
         run: |
-          if [[ -f artifacts/cloud-grid-report.xml ]]; then
+          if [[ -f "artifacts/cloud-grid-${{ matrix.browser }}-report.xml" ]]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -544,7 +556,7 @@ jobs:
             DETAIL="smoke suite passed"
           elif [[ "$PREFLIGHT" == "READY" && "$CG_REPORT" == "true" ]]; then
             STATUS="FAIL"
-            DETAIL="cloud-grid smoke execution failed; see cloud-grid-report.xml for provider or test details"
+            DETAIL="cloud-grid smoke execution failed; see cloud-grid-${{ matrix.browser }}-report.xml for provider or test details"
           elif [[ "$PREFLIGHT" == "READY" ]]; then
             STATUS="FAIL"
             DETAIL="remote session could not be provisioned or connection timed out"
@@ -556,19 +568,19 @@ jobs:
             DETAIL="cloud-grid preflight failed: $PREFLIGHT"
           fi
 
-          python3 -c "import json,sys; from datetime import datetime,timezone; json.dump({'status':sys.argv[1],'detail':sys.argv[2],'timestamp':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')},open('artifacts/cloud-grid-status.json','w'),indent=2)" "$STATUS" "$DETAIL"
+          python3 -c "import json,sys; from datetime import datetime,timezone; json.dump({'status':sys.argv[1],'detail':sys.argv[2],'browser':sys.argv[3],'timestamp':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')},open('artifacts/cloud-grid-${{ matrix.browser }}-status.json','w'),indent=2)" "$STATUS" "$DETAIL" "${{ matrix.browser }}"
 
       - name: Write cloud-grid test summary
         if: always() && steps.cg_report.outputs.exists == 'true'
-        run: python scripts/ci_summary.py artifacts/cloud-grid-report.xml >> "$GITHUB_STEP_SUMMARY"
+        run: python scripts/ci_summary.py "artifacts/cloud-grid-${{ matrix.browser }}-report.xml" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish cloud-grid test report
         if: always() && steps.cg_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
         with:
-          name: Cloud Grid Test Results (Sauce Labs)
-          path: artifacts/cloud-grid-report.xml
+          name: Cloud Grid Test Results (Sauce Labs ${{ matrix.browser }})
+          path: artifacts/cloud-grid-${{ matrix.browser }}-report.xml
           reporter: java-junit
           fail-on-error: false
           use-actions-summary: false  # v3.0.0 changed default to true; preserve GitHub Check Run panels
@@ -577,9 +589,9 @@ jobs:
         if: always() && steps.cg_report.outputs.exists == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: cloud-grid-artifacts
+          name: cloud-grid-artifacts-${{ matrix.browser }}
           path: |
-            artifacts/cloud-grid-report.xml
+            artifacts/cloud-grid-${{ matrix.browser }}-report.xml
             artifacts/cloud-grid-preflight.json
             artifacts/cloud-grid-preflight.md
           if-no-files-found: ignore
@@ -588,8 +600,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: cloud-grid-execution-status
-          path: artifacts/cloud-grid-status.json
+          name: cloud-grid-${{ matrix.browser }}-execution-status
+          path: artifacts/cloud-grid-${{ matrix.browser }}-status.json
           if-no-files-found: ignore
 
   notify:
@@ -617,11 +629,12 @@ jobs:
           path: artifacts/
         continue-on-error: true
 
-      - name: Download cloud-grid status artifact
+      - name: Download cloud-grid status artifacts
         uses: actions/download-artifact@v8
         with:
-          name: cloud-grid-execution-status
+          pattern: cloud-grid-*-execution-status
           path: artifacts/
+          merge-multiple: true
         continue-on-error: true
 
       - name: Download cross-browser status artifacts

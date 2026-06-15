@@ -31,14 +31,23 @@ agentic-qa-workflows/
 8. Produce a QA summary.
 9. Save output files only for audits, triage reports, release/readiness reviews, CI evidence, or significant multi-file changes.
 
-## Governance Files
-- qa_standards.md
-- suite_taxonomy.md
-- page_object_api_rules.md
-- test_data_env_rules.md
-- failure_evidence.md
-- quality_gates.md
-- agentic_workflow_rules.md
+## Governance Docs
+
+| File | Purpose |
+|---|---|
+| `qa_standards.md` | Naming, TC-ID, assertion, and DRY standards |
+| `suite_taxonomy.md` | Marker taxonomy, suite ownership, and current test lists |
+| `quality_gates.md` | PR, merge, release, Docker, and CI gate rules |
+| `page_object_api_rules.md` | Page Object and API client boundary rules |
+| `test_data_env_rules.md` | Test data and environment variable rules |
+| `failure_evidence.md` | Failure evidence capture expectations |
+| `agentic_workflow_rules.md` | AI-assisted workflow constraints and review rules |
+| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-028) |
+| `notification_wiring.md` | Slack/SMTP notification setup and activation guide |
+| `observability_wiring.md` | Datadog/Grafana/PagerDuty activation guide |
+| `parallelization_readiness.md` | xdist activation state, fixture audit, and future UI criteria |
+| `dependency_update_triage.md` | Dependabot and dependency review triage policy |
+| `security_and_branch_protection.md` | Required checks and branch security posture |
 
 ## Design Principle
 AI can assist with analysis, test design, and implementation, but governance controls the workflow.

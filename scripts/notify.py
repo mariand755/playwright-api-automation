@@ -313,7 +313,7 @@ def build_message_lines(
             }
             cb_icon = _icons.get(cb_status, "⚠️")
             lines.append(f"  · UI Cross-Browser: {cb_icon} {cb_status}")
-            if cb_status == "PARTIAL" and advisory_status.get(
+            if cb_status in ("PARTIAL", "FAIL") and advisory_status.get(
                 "cross_browser_by_browser"
             ):
                 cb_by_browser_map: dict[str, str] = advisory_status.get(  # type: ignore[assignment]

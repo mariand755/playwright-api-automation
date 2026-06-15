@@ -528,6 +528,10 @@ def test_advisory_cloud_grid_one_fail_others_pass_aggregates_to_partial(
     assert result["cloud_grid_by_browser"]["chromium"] == "FAIL"
     assert result["cloud_grid_by_browser"]["firefox"] == "PASS"
     assert result["cloud_grid_by_browser"]["webkit"] == "PASS"
+    assert (
+        result["cloud_grid_detail_by_browser"]["chromium"]
+        == "remote session could not be provisioned"
+    )
 
 
 # TC-SCRIPT-058 — load_advisory_status: all cloud-grid browsers FAIL → aggregate FAIL
@@ -708,3 +712,30 @@ def test_build_message_lines_no_per_browser_detail_when_cloud_grid_all_pass(
     assert "chromium" not in combined, (
         "Happy-path PASS must not expand per-browser lines — keep notifications clean"
     )
+
+
+# TC-SCRIPT-064 — load_advisory_status: all SKIPPED per-browser artifacts → aggregate SKIPPED
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-064")
+def test_advisory_cloud_grid_all_skipped_per_browser_artifacts_aggregates_to_skipped(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cloud-grid-{browser}-status.json").write_text(
+            f'{{"status": "SKIPPED", "detail": "preflight status: SKIPPED_NOT_CONFIGURED", "browser": "{browser}"}}',
+            encoding="utf-8",
+        )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "SKIPPED", (
+        f"All-SKIPPED per-browser artifacts must aggregate to SKIPPED, got: {result['cloud_grid_status']!r}"
+    )
+    assert result["cloud_grid_by_browser"] == {
+        "chromium": "SKIPPED",
+        "firefox": "SKIPPED",
+        "webkit": "SKIPPED",
+    }

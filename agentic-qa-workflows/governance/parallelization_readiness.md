@@ -126,8 +126,10 @@ not in branch protection. Full UI cross-browser suite is deferred pending smoke 
 ### Cloud-grid execution
 
 Cloud-grid credential preflight implemented in PR #68 (`scripts/cloud_grid_preflight.py`).
-Actual provider execution is deferred to PR #69. Preflight exits 0 on all skip conditions;
-`CLOUD_GRID_PROVIDER=none` by default.
+Sauce Labs cloud-grid execution activated as advisory in PR #69 (ADR-031), gated on `READY`
+preflight status. Chromium smoke suite runs on nightly schedule and `workflow_dispatch` only.
+`continue-on-error: true` — not in branch protection. All `SKIPPED_*` preflight statuses
+skip cloud execution and exit 0. `CLOUD_GRID_PROVIDER=none` by default.
 
 ---
 
@@ -136,4 +138,5 @@ Actual provider execution is deferred to PR #69. Preflight exits 0 on all skip c
 - [ADR-028](architecture_decision_log.md#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) — API xdist decision
 - [ADR-029](architecture_decision_log.md#adr-029-ui-pytest-xdist-activation-with-serial-script-and-prod-read-only-execution) — UI xdist decision
 - [ADR-030](architecture_decision_log.md#adr-030-cross-browser-ui-matrix-and-cloud-grid-preflight-with-safe-skip-policy) — Cross-browser matrix and cloud-grid preflight decision
+- [ADR-031](architecture_decision_log.md#adr-031-sauce-labs-cloud-grid-execution-gated-by-preflight-readiness) — Sauce Labs cloud-grid execution decision
 - `quality_gates.md` — CI job structure and test execution policy

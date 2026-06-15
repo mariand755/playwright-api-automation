@@ -40,6 +40,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-028](#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) | API pytest-xdist activation with serial UI and script execution | Accepted | 2026-06-14 |
 | [ADR-029](#adr-029-ui-pytest-xdist-activation-with-serial-script-and-prod-read-only-execution) | UI pytest-xdist activation with serial script and prod-read-only execution | Accepted | 2026-06-15 |
 | [ADR-030](#adr-030-cross-browser-ui-matrix-and-cloud-grid-preflight-with-safe-skip-policy) | Cross-browser UI matrix and cloud-grid preflight with safe-skip policy | Accepted | 2026-06-14 |
+| [ADR-031](#adr-031-sauce-labs-cloud-grid-execution-gated-by-preflight-readiness) | Sauce Labs cloud-grid execution gated by preflight readiness | Accepted | 2026-06-14 |
 
 ---
 
@@ -2007,4 +2008,172 @@ Both rollbacks are independent of each other and do not affect existing API or U
 - `parallelization_readiness.md` — xdist activation state; Future Activation Conditions
 - `.github/workflows/ci.yml` — `ui-cross-browser` job
 - `scripts/cloud_grid_preflight.py` — preflight implementation
+- `test/scripts/test_cloud_grid_preflight.py` — preflight unit tests (TC-SCRIPT-032–TC-SCRIPT-041)
+
+---
+
+## ADR-031: Sauce Labs cloud-grid execution gated by preflight readiness
+
+**Status:** Accepted
+**Date:** 2026-06-14
+
+### Context
+
+ADR-030 (PR #68) implemented `scripts/cloud_grid_preflight.py` — a credential-safe preflight
+script that validates whether a cloud browser-grid provider is configured and reachable. ADR-030
+explicitly deferred actual cloud-grid execution to a separate slice:
+
+> "PR #69: Sauce Labs cloud-grid execution step, gated on `READY` preflight status."
+
+The `CLOUD_GRID_PROVIDER=none|sauce` provider model is established. Preflight exits 0 for all
+skip conditions and exits 1 only for an unknown provider value (repository configuration bug).
+
+### Decision
+
+Add a `cloud-grid` CI job (advisory, nightly + `workflow_dispatch`, chromium smoke suite, gated
+on `READY` preflight status). Override the `browser` fixture in `conftest.py` to detect
+`CLOUD_GRID_PROVIDER=sauce` and connect to Sauce Labs via
+`playwright.{browser_name}.connect(endpoint)`. Fall back to local browser launch when
+`CLOUD_GRID_PROVIDER` is unset or `none`.
+
+**Cloud-grid CI command (when preflight status is `READY`):**
+
+```bash
+pytest test/ui -m smoke -v --browser chromium \
+  --junitxml=artifacts/cloud-grid-report.xml
+```
+
+**`browser` fixture override (conftest.py):**
+
+```python
+@pytest.fixture(scope="session")
+def browser(playwright, browser_name, browser_type_launch_args):
+    cloud_provider = os.environ.get("CLOUD_GRID_PROVIDER", "none").strip().lower()
+    if cloud_provider == "sauce":
+        # endpoint URL embeds credentials — never printed or logged
+        endpoint = (
+            f"wss://{username}:{access_key}@ondemand.{region}.saucelabs.com"
+            f":443/playwright/{browser_name}"
+        )
+        b = getattr(playwright, browser_name).connect(endpoint)
+        yield b
+        b.close()
+    else:
+        b = getattr(playwright, browser_name).launch(**browser_type_launch_args)
+        yield b
+        b.close()
+```
+
+### Preflight gate behavior
+
+| Preflight status | Cloud execution | Job result |
+|---|---|---|
+| `READY` | Runs Sauce Labs chromium smoke suite | Advisory pass/fail |
+| `SKIPPED_NOT_CONFIGURED` | Step skipped; summary note written | Success |
+| `SKIPPED_MISSING_CREDENTIALS` | Step skipped; summary note written | Success |
+| `SKIPPED_INVALID_CREDENTIALS` | Step skipped; summary note written | Success |
+| `SKIPPED_PROVIDER_UNAVAILABLE` | Step skipped; summary note written | Success |
+| `ERROR_UNKNOWN_PROVIDER` | Preflight exits 1; cloud step skipped | Failure — repo config bug |
+
+### Why `conftest.py` browser fixture override
+
+The `browser` fixture (session-scoped, pytest-playwright) controls browser launch. Overriding it
+is the only approach that runs existing pytest tests against Sauce Labs without duplicating test
+logic. Alternatives rejected:
+
+- **Standalone script** — duplicates all test scenario logic outside pytest; two codebases to
+  maintain; does not prove real pytest tests run against Sauce Labs.
+- **`test/cloud/conftest.py`** — separate invocation path creates two maintenance surfaces;
+  requires duplicating or importing test files.
+- **Provider CLI tooling** — no CLI-driven Playwright cloud execution tool exists for Python
+  pytest.
+
+The fixture change is minimal (~20 lines), gated by `CLOUD_GRID_PROVIDER` env var, and reuses
+`browser_type_launch_args` so all pytest-playwright defaults are preserved in the local fallback.
+
+### Why advisory
+
+Cloud provider availability, session limits, and billing are external dependencies outside the
+repo's control. Sauce Labs failures must not block PRs or merges. Same rationale as
+`ui-cross-browser` (ADR-030).
+
+### Why nightly and `workflow_dispatch` only
+
+Cloud execution validates provider connectivity and session provisioning, not feature
+correctness. Running it on every PR would consume Sauce Labs session quota without adding signal
+relevant to merge decisions. Nightly is sufficient to surface provider-side regressions.
+
+### Why smoke only
+
+1 smoke test × 1 cloud session proves the cloud path works. Full cloud suite is PR #70. Smoke
+first — confirm stability, then expand.
+
+### Why preflight gates execution
+
+Mirrors the Slack/SMTP dry-run philosophy (ADR-011) and ADR-030: missing or invalid credentials
+are configuration choices, not broken builds. CI must never fail due to absent secrets. The
+preflight output (`cloud-grid-preflight.json`) is the single authoritative signal for whether
+cloud execution should run.
+
+### Why chromium only
+
+Sauce Labs recommends Chromium as the first Playwright browser. Multi-browser cloud matrix
+(chromium + firefox + webkit on Sauce Labs) is PR #70.
+
+### Why no xdist inside the cloud-grid job
+
+1 smoke test. Spawning 2 xdist workers opens 2 Sauce Labs sessions for zero parallelism benefit.
+Sauce Labs charges per session/minute.
+
+### Why Sauce Labs first, not BrowserStack
+
+ADR-030 established Sauce Labs as the concrete first implementation. BrowserStack is a separate
+provider slice, deferred until a client requirement establishes the need.
+
+### Why Jenkins template not in this PR
+
+Same deferral as ADR-030. No client requirement established; evaluate after second-repo adoption.
+
+### Security constraints
+
+- Sauce Labs credentials (`SAUCE_USERNAME`, `SAUCE_ACCESS_KEY`) are embedded in the WebSocket
+  endpoint URL and never printed, logged, or written to artifacts.
+- Exception handler in the `browser` fixture uses `from None` to suppress chained tracebacks
+  that might contain the URL; only `type(exc).__name__` surfaces in the error message.
+- `CLOUD_GRID_PROVIDER` and `SAUCE_REGION` are non-sensitive repository variables (not secrets).
+
+### Consequences
+
+- `cloud-grid` CI job runs on nightly and `workflow_dispatch`; advisory; chromium only.
+- `notify` job `needs: [test, api, ui]` — unchanged; cloud-grid is not a notify dependency.
+- Release gate: unchanged; consumes `api-report.xml` only.
+- Collection count: 65 nodes — unchanged (no new test files).
+- `conftest.py` adds a session-scoped `browser` fixture override; local execution paths
+  are unaffected (fallback branch is identical to pytest-playwright's default behavior).
+
+### Rollback
+
+**Cloud-grid job:** Remove the `cloud-grid` job from `.github/workflows/ci.yml`. Advisory — no
+branch protection to update. No other job depends on it.
+
+**`conftest.py` fixture override:** Remove the `browser` fixture from `conftest.py`. pytest-playwright
+resumes ownership. Existing tests are unaffected — they never depended on the override in local
+mode.
+
+Both rollbacks are independent and do not affect the existing `test`, `api`, `ui`,
+`ui-cross-browser`, or `notify` jobs.
+
+### Future follow-up
+
+- PR #70: Multi-browser cloud matrix (chromium, firefox, webkit on Sauce Labs).
+- BrowserStack: add as a second provider option when a client requirement establishes the need.
+- Jenkins blueprint: evaluate after second-repo adoption identifies whether a Jenkins adapter is
+  needed.
+
+### Related docs
+
+- `parallelization_readiness.md` — cloud-grid execution state
+- `.github/workflows/ci.yml` — `cloud-grid` job
+- `conftest.py` — `browser` fixture override
+- `scripts/cloud_grid_preflight.py` — preflight implementation (ADR-030)
 - `test/scripts/test_cloud_grid_preflight.py` — preflight unit tests (TC-SCRIPT-032–TC-SCRIPT-041)

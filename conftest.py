@@ -174,6 +174,33 @@ def created_booking(booking_api, auth_token, booking_payload_factory):
         )
 
 
+@pytest.fixture(scope="session")
+def browser(playwright, browser_name, browser_type_launch_args):
+    cloud_provider = os.environ.get("CLOUD_GRID_PROVIDER", "none").strip().lower()
+
+    if cloud_provider == "sauce":
+        username = os.environ.get("SAUCE_USERNAME", "")
+        access_key = os.environ.get("SAUCE_ACCESS_KEY", "")
+        region = os.environ.get("SAUCE_REGION", "us-west-1")
+        # Credentials embedded in endpoint URL — never printed or logged
+        endpoint = (
+            f"wss://{username}:{access_key}@ondemand.{region}.saucelabs.com"
+            f":443/playwright/{browser_name}"
+        )
+        try:
+            b = getattr(playwright, browser_name).connect(endpoint)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Sauce Labs connection failed: {type(exc).__name__}"
+            ) from None
+        yield b
+        b.close()
+    else:
+        b = getattr(playwright, browser_name).launch(**browser_type_launch_args)
+        yield b
+        b.close()
+
+
 # UI test fixture to set consistent timeouts across all tests.
 @pytest.fixture
 def page(page):

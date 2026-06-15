@@ -422,6 +422,116 @@ jobs:
           path: artifacts/failures/
           if-no-files-found: ignore
 
+  cloud-grid:
+    name: Cloud Grid (Sauce Labs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build Docker image
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
+        run: docker build -t playwright-api-automation .
+
+      - name: Prepare artifacts directory
+        run: mkdir -p artifacts
+
+      - name: Run cloud-grid preflight
+        env:
+          CLOUD_GRID_PROVIDER: ${{ vars.CLOUD_GRID_PROVIDER }}
+          SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
+          SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
+          SAUCE_REGION: ${{ vars.SAUCE_REGION }}
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            -e CLOUD_GRID_PROVIDER="${CLOUD_GRID_PROVIDER:-none}" \
+            -e SAUCE_USERNAME="${SAUCE_USERNAME}" \
+            -e SAUCE_ACCESS_KEY="${SAUCE_ACCESS_KEY}" \
+            -e SAUCE_REGION="${SAUCE_REGION:-us-west-1}" \
+            playwright-api-automation python scripts/cloud_grid_preflight.py
+
+      - name: Write preflight summary
+        if: always()
+        run: |
+          if [[ -f artifacts/cloud-grid-preflight.md ]]; then
+            cat artifacts/cloud-grid-preflight.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Read preflight status
+        id: preflight
+        if: always()
+        run: |
+          if [[ -f artifacts/cloud-grid-preflight.json ]]; then
+            STATUS=$(python3 -c "import json; print(json.load(open('artifacts/cloud-grid-preflight.json'))['status'])")
+            echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=SKIPPED_NOT_CONFIGURED" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Sauce Labs smoke suite
+        if: steps.preflight.outputs.status == 'READY'
+        env:
+          SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
+          SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
+          SAUCE_REGION: ${{ vars.SAUCE_REGION }}
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            -e CLOUD_GRID_PROVIDER=sauce \
+            -e SAUCE_USERNAME="${SAUCE_USERNAME}" \
+            -e SAUCE_ACCESS_KEY="${SAUCE_ACCESS_KEY}" \
+            -e SAUCE_REGION="${SAUCE_REGION:-us-west-1}" \
+            playwright-api-automation pytest test/ui -m smoke -v \
+            --browser chromium \
+            --junitxml=artifacts/cloud-grid-report.xml
+
+      - name: Skip cloud execution
+        if: steps.preflight.outputs.status != 'READY' && startsWith(steps.preflight.outputs.status, 'SKIPPED_')
+        run: |
+          echo "Cloud-grid execution skipped — preflight status: ${{ steps.preflight.outputs.status }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check cloud-grid report exists
+        id: cg_report
+        if: always()
+        run: |
+          if [[ -f artifacts/cloud-grid-report.xml ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write cloud-grid test summary
+        if: always() && steps.cg_report.outputs.exists == 'true'
+        run: python scripts/ci_summary.py artifacts/cloud-grid-report.xml >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish cloud-grid test report
+        if: always() && steps.cg_report.outputs.exists == 'true'
+        # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
+        with:
+          name: Cloud Grid Test Results (Sauce Labs)
+          path: artifacts/cloud-grid-report.xml
+          reporter: java-junit
+          fail-on-error: false
+          use-actions-summary: false  # v3.0.0 changed default to true; preserve GitHub Check Run panels
+
+      - name: Upload cloud-grid artifacts
+        if: always() && steps.cg_report.outputs.exists == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: cloud-grid-artifacts
+          path: |
+            artifacts/cloud-grid-report.xml
+            artifacts/cloud-grid-preflight.json
+            artifacts/cloud-grid-preflight.md
+          if-no-files-found: ignore
+
   notify:
     name: Notify
     runs-on: ubuntu-latest

@@ -45,7 +45,7 @@ agentic-qa-workflows/
 | `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-029) |
 | `notification_wiring.md` | Slack/SMTP notification setup and activation guide |
 | `observability_wiring.md` | Datadog/Grafana/PagerDuty activation guide |
-| `parallelization_readiness.md` | xdist activation state, fixture audit, and future UI criteria |
+| `parallelization_readiness.md` | xdist activation state and fixture audit for API and UI suites |
 | `dependency_update_triage.md` | Dependabot and dependency review triage policy |
 | `security_and_branch_protection.md` | Required checks and branch security posture |
 

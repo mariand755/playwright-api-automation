@@ -45,7 +45,17 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build Docker image
-        run: docker build -t playwright-api-automation .
+        # Retry loop guards against transient MCR registry 429 rate-limit errors.
+        run: |
+          for i in 1 2 3; do
+            docker build -t playwright-api-automation . && break
+            if [ $i -lt 3 ]; then
+              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
+              sleep $((i * 30))
+            else
+              exit 1
+            fi
+          done
 
       - name: Check formatting
         run: docker run --rm playwright-api-automation ruff format --check .
@@ -114,8 +124,18 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
-        run: docker build -t playwright-api-automation .
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
+        # Retry loop guards against transient MCR registry 429 rate-limit errors.
+        run: |
+          for i in 1 2 3; do
+            docker build -t playwright-api-automation . && break
+            if [ $i -lt 3 ]; then
+              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
+              sleep $((i * 30))
+            else
+              exit 1
+            fi
+          done
 
       - name: Prepare artifacts directory
         run: mkdir -p artifacts
@@ -259,8 +279,18 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
-        run: docker build -t playwright-api-automation .
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
+        # Retry loop guards against transient MCR registry 429 rate-limit errors.
+        run: |
+          for i in 1 2 3; do
+            docker build -t playwright-api-automation . && break
+            if [ $i -lt 3 ]; then
+              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
+              sleep $((i * 30))
+            else
+              exit 1
+            fi
+          done
 
       - name: Prepare artifacts directory
         run: |
@@ -371,8 +401,18 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
-        run: docker build -t playwright-api-automation .
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
+        # Retry loop guards against transient MCR registry 429 rate-limit errors.
+        run: |
+          for i in 1 2 3; do
+            docker build -t playwright-api-automation . && break
+            if [ $i -lt 3 ]; then
+              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
+              sleep $((i * 30))
+            else
+              exit 1
+            fi
+          done
 
       - name: Prepare artifacts directory
         run: |
@@ -459,8 +499,18 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
-        run: docker build -t playwright-api-automation .
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
+        # Retry loop guards against transient MCR registry 429 rate-limit errors.
+        run: |
+          for i in 1 2 3; do
+            docker build -t playwright-api-automation . && break
+            if [ $i -lt 3 ]; then
+              echo "Build attempt $i/3 failed — waiting $((i * 30))s (transient MCR rate limit)"
+              sleep $((i * 30))
+            else
+              exit 1
+            fi
+          done
 
       - name: Prepare artifacts directory
         run: mkdir -p artifacts

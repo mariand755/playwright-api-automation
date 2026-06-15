@@ -292,7 +292,7 @@ jobs:
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
-            playwright-api-automation pytest test/ui $MARKER_ARGS -v --junitxml=artifacts/ui-report.xml
+            playwright-api-automation pytest test/ui $MARKER_ARGS -v -n auto --junitxml=artifacts/ui-report.xml
 
       - name: Run UI test suite (prod-read-only)
         if: always()

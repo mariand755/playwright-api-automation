@@ -134,7 +134,7 @@ pre-commit run --all-files
 
 ## Failure Diagnostics
 
-On any UI test failure, the framework captures a screenshot (`artifacts/failures/<test_name>.png`) and HTML dump (`artifacts/failures/<test_name>.html`) via the `pytest_runtest_makereport` hook in `conftest.py`. In CI these are uploaded as the `failure-artifacts` artifact; the upload is skipped silently when no files are present. API failures surface diagnostic context (URL, status code, response body excerpt) directly in the pytest traceback.
+On any UI test failure, the framework captures a screenshot (`artifacts/failures/<sanitized-nodeid>.png`) and HTML dump (`artifacts/failures/<sanitized-nodeid>.html`) via the `pytest_runtest_makereport` hook in `conftest.py`. In CI these are uploaded as the `failure-artifacts` artifact; the upload is skipped silently when no files are present. API failures surface diagnostic context (URL, status code, response body excerpt) directly in the pytest traceback.
 
 ## Planned / Deferred Capabilities
 
@@ -143,7 +143,7 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | SMTP/email live delivery validation | ✅ Validated | Gmail SMTP STARTTLS on port `587` works from GitHub Actions; Gmail may place first-time automation emails in Spam |
 | Forced-live critical failure alerts | ⏳ Deferred | Needs ADR before activation |
 | Live observability API integration | ⏳ Deferred | Replace stub bodies when live observability stack is available |
-| pytest-xdist parallelization | ✅ Activated for API | API Tests run with `-n auto`; UI and script suites remain serial pending separate isolation review |
+| pytest-xdist parallelization | ✅ Activated for API + UI | API and standard UI test jobs run with `-n auto`; script and prod-read-only suites remain serial |
 | Blueprint extraction | ⏳ Deferred | Phase 8; after README refresh |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.

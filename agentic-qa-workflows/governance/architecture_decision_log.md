@@ -38,6 +38,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-026](#adr-026-dependency-review-action-as-advisory-pr-dependency-diff-gate) | Dependency Review Action as advisory PR dependency-diff gate | Accepted | 2026-06-11 |
 | [ADR-027](#adr-027-gmail-smtp-live-delivery-validation-outcome) | Gmail SMTP live delivery validation outcome | Accepted | 2026-06-14 |
 | [ADR-028](#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) | API pytest-xdist activation with serial UI and script execution | Accepted | 2026-06-14 |
+| [ADR-029](#adr-029-ui-pytest-xdist-activation-with-serial-script-and-prod-read-only-execution) | UI pytest-xdist activation with serial script and prod-read-only execution | Accepted | 2026-06-15 |
 
 ---
 
@@ -1776,3 +1777,107 @@ A separate Mode A review should evaluate UI xdist when either:
 - `parallelization_readiness.md` — fixture isolation audit details and future activation conditions
 - `requirements.txt` — `pytest-xdist` dependency
 - `.github/workflows/ci.yml` — `Run API test suite` step
+
+---
+
+## ADR-029: UI pytest-xdist activation with serial script and prod-read-only execution
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Context
+
+API xdist was activated in ADR-028. The UI suite remained serial pending a Playwright/browser-context isolation review.
+
+PR #66 split the UI suite into behavior-grouped files:
+
+- `test_login_ui.py`
+- `test_cart_ui.py`
+- `test_checkout_ui.py`
+
+PR #66 also hardened failure artifact filenames from `item.name` to a sanitized `item.nodeid` stem, reducing collision risk before UI parallelization.
+
+The portfolio/client blueprint now benefits from demonstrating both API and UI parallelization patterns while keeping production-gated and governance-critical paths conservative.
+
+### Decision
+
+Activate `pytest-xdist` for the standard UI Tests CI job only, using:
+
+```bash
+pytest test/ui $MARKER_ARGS -v -n auto --junitxml=artifacts/ui-report.xml
+```
+
+The prod-read-only UI step, script tests, and Docker Test Suite remain serial.
+
+### Fixture isolation audit
+
+- Session-scoped data fixtures (`base_url`, `credentials`, `locked_out_credentials`, `checkout_data`, `test_data`) are safe because they are read-only and not mutated by UI tests.
+- The `page` fixture is function-scoped. Each UI test receives its own Playwright page/context through pytest-playwright.
+- `expect.set_options(timeout=UI_EXPECT_TIMEOUT_MS)` sets process-global Playwright expectation timeout inside each worker process. Under xdist, workers are separate Python subprocesses, so workers do not share this state.
+- Page objects (`LoginPage`, `InventoryPage`, `CartPage`, `CheckoutPage`) are instantiated inside individual tests from the function-scoped page fixture and do not share state.
+
+### Failure artifact safety
+
+The failure evidence hook now writes screenshots and HTML dumps using a sanitized `item.nodeid` stem.
+
+This makes artifact filenames unique across:
+
+- split UI files
+- future duplicate test function names in different files
+- future parameterized tests
+
+### Why UI xdist is safe
+
+pytest-playwright works with pytest-xdist because workers run in separate subprocesses and tests receive isolated Playwright page/context fixtures. The current UI tests do not share mutable state.
+
+### Why `-n auto`
+
+This matches ADR-028 for API xdist. It is idiomatic and adapts to available runner CPU without hardcoding `-n 2`.
+
+### Why default `--dist=load`
+
+The UI suite has 9 tests across three behavior-grouped modules. Default load distribution is simple and sufficient.
+
+### Why prod-read-only UI remains serial
+
+The prod-read-only UI path is a production-gated subset and should remain conservative and serial.
+
+### Why scripts remain serial
+
+Script tests are fast governance checks. Serial execution keeps the TC-ID uniqueness guard, release gate checks, notification checks, and CI summary checks deterministic.
+
+### Why Docker Test Suite remains serial
+
+The Docker Test Suite remains the serial source-of-truth baseline for collection, script unit tests, quality checks, and security checks.
+
+### Rejected alternatives
+
+- **Activate API and UI xdist in one PR** — rejected. API xdist was intentionally activated first in ADR-028. UI xdist is activated independently after the UI suite split and artifact hardening in PR #66.
+- **Use fixed `-n 2`** — rejected. `-n auto` is consistent with ADR-028 and adapts to runner CPU.
+- **Use `--dist=loadscope`** — rejected. Default `--dist=load` is simpler and sufficient for the current suite.
+- **Parallelize scripts** — rejected. Script governance checks remain serial and deterministic.
+- **Parallelize prod-read-only UI** — rejected. Production-gated paths remain conservative.
+
+### Consequences
+
+- UI Tests job now runs with process-level parallelism.
+- API Tests job remains unchanged and already uses xdist from ADR-028.
+- Docker Test Suite remains unchanged.
+- JUnit output remains compatible with the existing `dorny/test-reporter` step.
+- UI failure artifact capture remains unchanged and now uses sanitized node IDs.
+
+### Rollback
+
+Remove `-n auto` from the standard `Run UI test suite` command in `.github/workflows/ci.yml`.
+
+Do not remove `pytest-xdist` from `requirements.txt`, because API xdist still depends on it.
+
+### Future follow-up
+
+When UI coverage grows, evaluate cross-browser matrix execution (`chromium`, `firefox`, `webkit`) or cloud grid execution as separate decision-gated slices.
+
+### Related docs
+
+- `parallelization_readiness.md` — fixture audit and activation state
+- `.github/workflows/ci.yml` — `Run UI test suite` step
+- `failure_evidence.md` — artifact filename convention

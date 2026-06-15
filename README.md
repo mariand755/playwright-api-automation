@@ -144,6 +144,8 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | Forced-live critical failure alerts | ⏳ Deferred | Needs ADR before activation |
 | Live observability API integration | ⏳ Deferred | Replace stub bodies when live observability stack is available |
 | pytest-xdist parallelization | ✅ Activated for API + UI | API and standard UI test jobs run with `-n auto`; script and prod-read-only suites remain serial |
+| Cross-browser UI matrix | ✅ Activated (smoke, advisory) | Nightly + `workflow_dispatch`; chromium / firefox / webkit smoke suite; advisory — not in branch protection |
+| Cloud-grid CI preflight | ✅ Implemented | Validates cloud provider credentials before cloud-grid execution; `CLOUD_GRID_PROVIDER=none` by default; safe-skip on missing or invalid credentials |
 | Blueprint extraction | ⏳ Deferred | Phase 8; after README refresh |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.

@@ -354,6 +354,74 @@ jobs:
           path: artifacts/failures/
           if-no-files-found: ignore
 
+  ui-cross-browser:
+    name: UI Cross-Browser (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [test]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build Docker image
+        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization
+        run: docker build -t playwright-api-automation .
+
+      - name: Prepare artifacts directory
+        run: |
+          rm -rf artifacts/failures
+          mkdir -p artifacts/failures
+
+      - name: Run UI smoke suite (${{ matrix.browser }})
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/artifacts:/app/artifacts \
+            playwright-api-automation pytest test/ui -m smoke -v \
+            --browser ${{ matrix.browser }} \
+            --junitxml=artifacts/ui-${{ matrix.browser }}-report.xml
+
+      - name: Check cross-browser report exists
+        id: cb_report
+        if: always()
+        run: |
+          if [[ -f artifacts/ui-${{ matrix.browser }}-report.xml ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "UI cross-browser report not found — upstream step did not produce the JUnit artifact" >> "$GITHUB_STEP_SUMMARY"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write cross-browser test summary
+        if: always() && steps.cb_report.outputs.exists == 'true'
+        run: |
+          python scripts/ci_summary.py artifacts/ui-${{ matrix.browser }}-report.xml >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish cross-browser test report
+        if: always() && steps.cb_report.outputs.exists == 'true'
+        # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
+        with:
+          name: UI Cross-Browser Results (${{ matrix.browser }})
+          path: artifacts/ui-${{ matrix.browser }}-report.xml
+          reporter: java-junit
+          fail-on-error: false
+          use-actions-summary: false  # v3.0.0 changed default to true; preserve GitHub Check Run panels
+
+      - name: Upload failure artifacts (${{ matrix.browser }})
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-artifacts-${{ matrix.browser }}
+          path: artifacts/failures/
+          if-no-files-found: ignore
+
   notify:
     name: Notify
     runs-on: ubuntu-latest

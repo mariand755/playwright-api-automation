@@ -192,8 +192,11 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks 
 | `API Tests` | API test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, release readiness gate (full runs only), release readiness artifact upload | All triggers | `Docker Test Suite` |
 | `UI Tests` | UI test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, failure artifact upload | All triggers | `Docker Test Suite` |
 | `Notify` | Aggregate Slack/SMTP notification with overall CI status and release readiness | `schedule` and `workflow_dispatch` always; `push` to `main` when any required job is not `success`; `pull_request` when any required job is not `success` AND `NOTIFY_PR_FAILURES=true` (repo variable) | `Docker Test Suite`, `API Tests`, `UI Tests` |
+| `UI Cross-Browser` | Cross-browser smoke suite across chromium, firefox, webkit — advisory only | `schedule` and `workflow_dispatch` only; never on PR or push | `Docker Test Suite` |
 
 `API Tests` and `UI Tests` run in parallel after `Docker Test Suite` passes. `Notify` runs after all three required jobs complete. `Docker Test Suite`, `API Tests`, and `UI Tests` are required status checks for merge to `main`. `Notify` is not a required check — it is advisory delivery and must never block merges.
+
+`UI Cross-Browser` is advisory — `continue-on-error: true`; runs on nightly and `workflow_dispatch` only; not listed in branch protection required checks. Cross-browser failures surface as signal but do not block PRs or merges.
 
 For the full required checks configuration and post-merge update instructions, see [`agentic-qa-workflows/governance/security_and_branch_protection.md`](security_and_branch_protection.md).
 

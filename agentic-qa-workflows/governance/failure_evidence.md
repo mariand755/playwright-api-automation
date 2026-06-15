@@ -4,8 +4,8 @@
 
 Every UI test failure must automatically produce:
 
-- **Full-page screenshot**: `artifacts/failures/<test_name>.png`
-- **Page HTML dump**: `artifacts/failures/<test_name>.html`
+- **Full-page screenshot**: `artifacts/failures/<sanitized-nodeid>.png`
+- **Page HTML dump**: `artifacts/failures/<sanitized-nodeid>.html`
 
 This is already implemented via the `pytest_runtest_makereport` hook in `conftest.py`. Do not remove or bypass this hook.
 
@@ -32,8 +32,8 @@ assert response.status_code == 200, (
 
 | Artifact | Path | Gitignored |
 |---|---|---|
-| UI screenshot | `artifacts/failures/<test_name>.png` | Yes |
-| UI HTML dump | `artifacts/failures/<test_name>.html` | Yes |
+| UI screenshot | `artifacts/failures/<sanitized-nodeid>.png` | Yes |
+| UI HTML dump | `artifacts/failures/<sanitized-nodeid>.html` | Yes |
 | Full run output | `artifacts/local-run-output.txt` | No |
 | Docker run output | `artifacts/docker-run-output.txt` | No |
 

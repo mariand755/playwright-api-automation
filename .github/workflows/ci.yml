@@ -471,6 +471,8 @@ jobs:
           SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
           SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
           SAUCE_REGION: ${{ vars.SAUCE_REGION }}
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
@@ -478,6 +480,8 @@ jobs:
             -e SAUCE_USERNAME="${SAUCE_USERNAME}" \
             -e SAUCE_ACCESS_KEY="${SAUCE_ACCESS_KEY}" \
             -e SAUCE_REGION="${SAUCE_REGION:-us-west-1}" \
+            -e BROWSERSTACK_USERNAME="${BROWSERSTACK_USERNAME}" \
+            -e BROWSERSTACK_ACCESS_KEY="${BROWSERSTACK_ACCESS_KEY}" \
             playwright-api-automation python scripts/cloud_grid_preflight.py
 
       - name: Write preflight summary
@@ -498,7 +502,7 @@ jobs:
             echo "status=ERROR_PREFLIGHT_STATUS_UNAVAILABLE" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run Sauce Labs smoke suite
+      - name: Run cloud-grid smoke suite
         id: sauce_run
         if: steps.preflight.outputs.status == 'READY'
         continue-on-error: true
@@ -568,7 +572,7 @@ jobs:
             DETAIL="cloud-grid preflight failed: $PREFLIGHT"
           fi
 
-          python3 -c "import json,sys; from datetime import datetime,timezone; json.dump({'status':sys.argv[1],'detail':sys.argv[2],'browser':sys.argv[3],'timestamp':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')},open('artifacts/cloud-grid-${{ matrix.browser }}-status.json','w'),indent=2)" "$STATUS" "$DETAIL" "${{ matrix.browser }}"
+          python3 -c "import json,sys; from datetime import datetime,timezone; json.dump({'status':sys.argv[1],'detail':sys.argv[2],'browser':sys.argv[3],'provider':sys.argv[4],'timestamp':datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')},open('artifacts/cloud-grid-${{ matrix.browser }}-status.json','w'),indent=2)" "$STATUS" "$DETAIL" "${{ matrix.browser }}" "${{ vars.CLOUD_GRID_PROVIDER }}"
 
       - name: Write cloud-grid test summary
         if: always() && steps.cg_report.outputs.exists == 'true'

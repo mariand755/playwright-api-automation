@@ -52,6 +52,10 @@ MAX_ITEMS_IN_MESSAGE = 3
 NETWORK_TIMEOUT = 10  # seconds
 CROSS_BROWSER_BROWSERS = ("chromium", "firefox", "webkit")
 CLOUD_GRID_BROWSERS = ("chromium", "firefox", "webkit")
+PROVIDER_LABELS: dict[str, str] = {
+    "sauce": "Sauce Labs",
+    "browserstack": "BrowserStack",
+}
 
 
 def get_run_url() -> str:
@@ -102,6 +106,7 @@ def load_advisory_status() -> dict[str, object]:
     cg_env = os.environ.get("CLOUD_GRID_RESULT", "").strip().lower()
     cg_by_browser: dict[str, str] = {}
     cg_detail_by_browser: dict[str, str] = {}
+    cg_provider = ""
 
     for browser in CLOUD_GRID_BROWSERS:
         artifact = Path(f"artifacts/cloud-grid-{browser}-status.json")
@@ -111,6 +116,8 @@ def load_advisory_status() -> dict[str, object]:
                 if isinstance(raw, dict):
                     cg_by_browser[browser] = str(raw.get("status", "UNKNOWN")).upper()
                     cg_detail_by_browser[browser] = str(raw.get("detail", ""))
+                    if not cg_provider and raw.get("provider"):
+                        cg_provider = str(raw["provider"]).lower()
             except (json.JSONDecodeError, OSError):
                 cg_by_browser[browser] = "UNKNOWN"
                 cg_detail_by_browser[browser] = ""
@@ -186,6 +193,7 @@ def load_advisory_status() -> dict[str, object]:
         "cloud_grid_detail": cg_detail,
         "cloud_grid_by_browser": cg_by_browser,
         "cloud_grid_detail_by_browser": cg_detail_by_browser,
+        "cloud_grid_provider": cg_provider,
         "cross_browser_status": cb_aggregate,
         "cross_browser_by_browser": cb_by_browser,
     }
@@ -208,6 +216,52 @@ def compute_overall_readiness(
     return "UNKNOWN"
 
 
+def compute_release_confidence(
+    overall: str,
+    data: dict[str, object] | None,
+    advisory_status: dict[str, object] | None,
+) -> tuple[str, str, str]:
+    """Return (emoji, label, meaning) for the Release Confidence summary line."""
+    if overall == "BLOCKED":
+        return (
+            "🔴",
+            "Blocked",
+            "required CI failed/skipped/cancelled; fix required lane before release evaluation",
+        )
+
+    cg_status = ""
+    cb_status = ""
+    if advisory_status:
+        cg_status = str(advisory_status.get("cloud_grid_status", "")).upper()
+        cb_status = str(advisory_status.get("cross_browser_status", "")).upper()
+
+    advisory_values = [s for s in (cg_status, cb_status) if s]
+    advisory_has_fail = any(s == "FAIL" for s in advisory_values)
+    advisory_limited = any(
+        s in ("PARTIAL", "SKIPPED", "UNKNOWN") for s in advisory_values
+    )
+
+    if overall == "NO_GO" or advisory_has_fail:
+        return (
+            "🟠",
+            "Low",
+            "required CI passed, but release gate or advisory signal failed; review before release",
+        )
+
+    if overall == "GO" and not advisory_limited:
+        return (
+            "🟢",
+            "High",
+            "required CI and release gate passed; advisory checks are clean",
+        )
+
+    return (
+        "🟡",
+        "Medium",
+        "required CI passed, but release/advisory signal is limited, skipped, partial, or unknown",
+    )
+
+
 def build_message_lines(
     data: dict[str, object] | None,
     run_url: str,
@@ -221,6 +275,11 @@ def build_message_lines(
     overall_emoji = _overall_emoji.get(overall, "⚠️")
 
     lines: list[str] = [f"Overall Release Readiness: {overall_emoji} {overall}"]
+
+    conf_emoji, conf_label, conf_meaning = compute_release_confidence(
+        overall, data, advisory_status
+    )
+    lines.append(f"Release Confidence: {conf_emoji} {conf_label} — {conf_meaning}")
 
     job_labels = [
         ("docker_test_suite", "Docker Test Suite"),
@@ -323,8 +382,11 @@ def build_message_lines(
                     b_icon = _icons.get(str(bstatus), "⚠️")
                     lines.append(f"      {browser}: {b_icon} {bstatus}")
 
+            cg_provider_key = str(advisory_status.get("cloud_grid_provider", ""))
+            cg_label = PROVIDER_LABELS.get(cg_provider_key, "")
+            cg_header = f"Cloud Grid ({cg_label})" if cg_label else "Cloud Grid"
             cg_icon = _icons.get(cg_status, "⚠️")
-            lines.append(f"  · Cloud Grid: {cg_icon} {cg_status}")
+            lines.append(f"  · {cg_header}: {cg_icon} {cg_status}")
             if cg_status in ("PARTIAL", "FAIL") and advisory_status.get(
                 "cloud_grid_by_browser"
             ):

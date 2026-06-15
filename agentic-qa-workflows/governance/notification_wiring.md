@@ -194,7 +194,7 @@ artifacts/cloud-grid-firefox-status.json
 artifacts/cloud-grid-webkit-status.json
 ```
 
-Each file contains `{ "status": "PASS|FAIL|SKIPPED", "detail": "...", "browser": "...", "timestamp": "..." }`.
+Each file contains `{ "status": "PASS|FAIL|SKIPPED", "detail": "...", "browser": "...", "provider": "...", "timestamp": "..." }`. The `provider` field drives provider-aware header labels in `notify.py`.
 
 **Artifact upload names** per leg: `cloud-grid-{browser}-execution-status`
 
@@ -219,6 +219,42 @@ The `notify` job downloads all three using a pattern download (`cloud-grid-*-exe
 **Legacy fallback:** If no per-browser files exist but `artifacts/cloud-grid-status.json` does (produced by a pre-PR #71 run), `load_advisory_status()` reads it as the chromium result. This preserves backward compatibility during the transition window.
 
 **Preflight runs once per matrix leg** (idempotent; fast enough to not justify a shared preflight job). Non-READY preflight states write a GitHub step summary line for both `SKIPPED_*` and `ERROR_*` states.
+
+### Provider label rendering
+
+`notify.py` reads the `provider` field from the first available cloud-grid status artifact and renders a human-readable label in the Advisory Jobs section:
+
+| Artifact `provider` value | Notification header |
+|---|---|
+| `sauce` | `Cloud Grid (Sauce Labs)` |
+| `browserstack` | `Cloud Grid (BrowserStack)` |
+| empty or absent | `Cloud Grid` (backward compat with pre-PR #72 artifacts) |
+
+### BrowserStack secrets (readiness-only — live execution deferred)
+
+BrowserStack is a registered provider as of PR #72. Preflight validates credential presence; live cloud-grid execution is deferred to ADR-035 / PR #73.
+
+When `CLOUD_GRID_PROVIDER=browserstack` is set, add these as **GitHub repository secrets** (Settings → Secrets and variables → Actions → Secrets tab):
+
+| Secret | Purpose |
+|---|---|
+| `BROWSERSTACK_USERNAME` | BrowserStack account username |
+| `BROWSERSTACK_ACCESS_KEY` | BrowserStack access key |
+
+Absent secrets → `SKIPPED_MISSING_CREDENTIALS`. Credentials present → `SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` (expected until live execution is implemented in ADR-035). Secret values are never printed, logged, or written to artifacts.
+
+### Release Confidence line
+
+The notification includes a `Release Confidence` line after `Overall Release Readiness`. It provides a plain-language interpretation of the combined CI + release gate + advisory signal:
+
+| Confidence | Condition | Meaning |
+| --- | --- | --- |
+| 🟢 High | required CI passed, gate GO, advisory all PASS | Required CI and release gate passed; advisory checks are clean |
+| 🟠 Low | required CI passed, gate NO_GO or advisory FAIL | Release gate or advisory signal failed; review before release |
+| 🟡 Medium | required CI passed, signal limited/skipped/partial/unknown | Signal is incomplete; advisory or gate data not available |
+| 🔴 Blocked | any required CI job not `success` | Fix required lane before release evaluation |
+
+`compute_overall_readiness()` is unchanged. `Release Confidence` is display-only and has no effect on gate decisions.
 
 ---
 

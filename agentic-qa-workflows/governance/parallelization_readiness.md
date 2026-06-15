@@ -117,9 +117,17 @@ Script tests use `tmp_path` and plain dicts only. They are fast governance check
 
 No activation planned. Script tests are fast deterministic governance checks and should remain serial.
 
-### Cross-browser Playwright matrix or cloud grid
+### Cross-browser Playwright matrix
 
-Activate only when cross-browser coverage or cross-device coverage becomes a stated requirement. Separate Mode A review required.
+Activated as advisory in PR #68 (ADR-030). Cross-browser smoke suite (`chromium`, `firefox`,
+`webkit`) runs on nightly schedule and `workflow_dispatch` only. `continue-on-error: true` —
+not in branch protection. Full UI cross-browser suite is deferred pending smoke stability.
+
+### Cloud-grid execution
+
+Cloud-grid credential preflight implemented in PR #68 (`scripts/cloud_grid_preflight.py`).
+Actual provider execution is deferred to PR #69. Preflight exits 0 on all skip conditions;
+`CLOUD_GRID_PROVIDER=none` by default.
 
 ---
 
@@ -127,4 +135,5 @@ Activate only when cross-browser coverage or cross-device coverage becomes a sta
 
 - [ADR-028](architecture_decision_log.md#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) — API xdist decision
 - [ADR-029](architecture_decision_log.md#adr-029-ui-pytest-xdist-activation-with-serial-script-and-prod-read-only-execution) — UI xdist decision
+- [ADR-030](architecture_decision_log.md#adr-030-cross-browser-ui-matrix-and-cloud-grid-preflight-with-safe-skip-policy) — Cross-browser matrix and cloud-grid preflight decision
 - `quality_gates.md` — CI job structure and test execution policy

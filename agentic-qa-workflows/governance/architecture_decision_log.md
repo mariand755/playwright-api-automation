@@ -39,6 +39,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-027](#adr-027-gmail-smtp-live-delivery-validation-outcome) | Gmail SMTP live delivery validation outcome | Accepted | 2026-06-14 |
 | [ADR-028](#adr-028-api-pytest-xdist-activation-with-serial-ui-and-script-execution) | API pytest-xdist activation with serial UI and script execution | Accepted | 2026-06-14 |
 | [ADR-029](#adr-029-ui-pytest-xdist-activation-with-serial-script-and-prod-read-only-execution) | UI pytest-xdist activation with serial script and prod-read-only execution | Accepted | 2026-06-15 |
+| [ADR-030](#adr-030-cross-browser-ui-matrix-and-cloud-grid-preflight-with-safe-skip-policy) | Cross-browser UI matrix and cloud-grid preflight with safe-skip policy | Accepted | 2026-06-14 |
 
 ---
 
@@ -1881,3 +1882,129 @@ When UI coverage grows, evaluate cross-browser matrix execution (`chromium`, `fi
 - `parallelization_readiness.md` — fixture audit and activation state
 - `.github/workflows/ci.yml` — `Run UI test suite` step
 - `failure_evidence.md` — artifact filename convention
+
+---
+
+## ADR-030: Cross-browser UI matrix and cloud-grid preflight with safe-skip policy
+
+**Status:** Accepted
+**Date:** 2026-06-14
+
+### Context
+
+API xdist (ADR-028) and UI xdist (ADR-029) are complete. ADR-029's Future follow-up cited
+cross-browser matrix and cloud grid as the next area. `parallelization_readiness.md` Future
+Activation Conditions listed cross-browser as a separate review requiring a Mode A architecture
+review before activation.
+
+The Playwright base image (`mcr.microsoft.com/playwright/python:v1.60.0-noble`) pre-installs all
+three browsers (chromium, firefox, webkit) with their system dependencies — no Dockerfile change
+is required to activate cross-browser testing.
+
+### Decision
+
+Activate a cross-browser UI matrix CI job (`ui-cross-browser`) on nightly schedule and
+`workflow_dispatch` only, running the smoke suite across `chromium`, `firefox`, and `webkit`.
+The job is advisory (`continue-on-error: true`) and is not listed in branch protection required
+checks.
+
+Add `scripts/cloud_grid_preflight.py`, a credential-safe preflight script that validates whether
+a cloud browser-grid provider is configured and reachable. The script always exits 0 for
+missing, invalid, or unreachable credentials. It exits 1 only for repository configuration bugs
+(unknown provider value). Cloud-grid execution is deferred to a separate slice.
+
+**Cross-browser CI command (per matrix leg):**
+
+```bash
+pytest test/ui -m smoke -v --browser ${{ matrix.browser }} \
+  --junitxml=artifacts/ui-${{ matrix.browser }}-report.xml
+```
+
+**Preflight provider model:** `CLOUD_GRID_PROVIDER=none | sauce` (default: `none`).
+
+### Why nightly and workflow_dispatch only
+
+Cross-browser CI is orthogonal to functional correctness — it validates rendering and browser
+engine compatibility, not feature correctness. Running it on every PR would slow the PR feedback
+loop without adding signal relevant to merge decisions. Nightly is sufficient to surface
+browser-specific regressions.
+
+### Why smoke only
+
+Nine UI tests × 3 browsers = 27 executions if the full suite is used. Smoke (1 test × 3 browsers)
+proves the matrix configuration is correct and the browser-specific rendering path works. Full
+cross-browser can be activated in a later slice once smoke stability is confirmed.
+
+### Why advisory
+
+Demo-site CSS/rendering differences across browsers are not blocking defects in a reference
+implementation. Cross-browser failures should surface as advisory signal, not merge blockers.
+
+### Why no xdist inside matrix legs
+
+Each matrix leg runs 1 smoke test. Spawning 2 xdist workers for 1 test adds process overhead
+with zero parallelism benefit. No xdist inside cross-browser legs.
+
+### Why safe-skip on missing or invalid cloud credentials
+
+CI must never fail due to absent secrets. The pattern mirrors Slack/SMTP notification channels
+(ADR-011): missing credentials trigger a dry-run log message and exit 0, not a CI failure. Cloud
+providers are optional external dependencies — a missing `SAUCE_ACCESS_KEY` is a configuration
+choice, not a broken build.
+
+### Preflight output statuses
+
+| Status | Meaning | Exit code |
+|---|---|---|
+| `READY` | Credentials valid; provider reachable | 0 |
+| `SKIPPED_NOT_CONFIGURED` | `CLOUD_GRID_PROVIDER=none` or unset | 0 |
+| `SKIPPED_MISSING_CREDENTIALS` | Required secrets not set | 0 |
+| `SKIPPED_INVALID_CREDENTIALS` | Provider API returned 401 or 403 | 0 |
+| `SKIPPED_PROVIDER_UNAVAILABLE` | Network error, timeout, or unexpected HTTP error | 0 |
+| `ERROR_UNKNOWN_PROVIDER` | Unsupported provider value — repo configuration bug | 1 |
+
+### Rejected alternatives
+
+- **Required cross-browser gate:** rejected — cross-browser variability at a demo site should not
+  block PRs.
+- **xdist inside matrix legs:** rejected — 1 smoke test per leg; overhead exceeds benefit.
+- **Full UI suite cross-browser in PR #68:** rejected — smoke first, prove stability, expand
+  later.
+- **BrowserStack in PR #68:** deferred — Sauce Labs is the concrete first implementation;
+  BrowserStack can be added as a second provider in a later slice.
+- **Jenkins template in PR #68:** deferred — no client requirement established yet; evaluate
+  after second-repo adoption identifies whether a Jenkins adapter is needed.
+
+### Consequences
+
+- `ui-cross-browser` matrix job runs on nightly and workflow_dispatch; advisory; 3 browser legs.
+- `notify` job `needs: [test, api, ui]` — unchanged; cross-browser is not a notify dependency.
+- Release gate: unchanged; consumes `api-report.xml` only.
+- Collection count: 65 nodes (55 existing + 10 new TC-SCRIPT-032–TC-SCRIPT-041 preflight unit
+  tests).
+- `scripts/cloud_grid_preflight.py` and `test/scripts/test_cloud_grid_preflight.py` added.
+
+### Rollback
+
+**Cross-browser matrix:** Remove the `ui-cross-browser` job from `.github/workflows/ci.yml`.
+Advisory — no branch protection to update. No other job depends on it.
+
+**Cloud-grid preflight:** Remove `scripts/cloud_grid_preflight.py` and
+`test/scripts/test_cloud_grid_preflight.py`. No CI job depends on the preflight output until a
+cloud-grid execution slice (PR #69) is implemented.
+
+Both rollbacks are independent of each other and do not affect existing API or UI test jobs.
+
+### Future follow-up
+
+- PR #69: Sauce Labs cloud-grid execution step, gated on `READY` preflight status.
+- Full UI suite cross-browser: activate when smoke cross-browser is stable and coverage
+  justifies the added execution time.
+- BrowserStack: add as a second provider option when a client requirement establishes the need.
+
+### Related docs
+
+- `parallelization_readiness.md` — xdist activation state; Future Activation Conditions
+- `.github/workflows/ci.yml` — `ui-cross-browser` job
+- `scripts/cloud_grid_preflight.py` — preflight implementation
+- `test/scripts/test_cloud_grid_preflight.py` — preflight unit tests (TC-SCRIPT-032–TC-SCRIPT-041)

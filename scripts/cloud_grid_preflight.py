@@ -7,10 +7,12 @@ missing, invalid, or unreachable credentials — CI must never fail due to absen
 secrets. It exits 1 only for repository configuration bugs (unknown provider value).
 
 Environment variables:
-  CLOUD_GRID_PROVIDER   Provider name (default: none). Supported: none, sauce.
-  SAUCE_USERNAME        Sauce Labs username (required when provider=sauce).
-  SAUCE_ACCESS_KEY      Sauce Labs access key (required when provider=sauce).
-  SAUCE_REGION          Sauce Labs region (default: us-west-1).
+  CLOUD_GRID_PROVIDER      Provider name (default: none). Supported: none, sauce, browserstack.
+  SAUCE_USERNAME           Sauce Labs username (required when provider=sauce).
+  SAUCE_ACCESS_KEY         Sauce Labs access key (required when provider=sauce).
+  SAUCE_REGION             Sauce Labs region (default: us-west-1).
+  BROWSERSTACK_USERNAME    BrowserStack username (required when provider=browserstack).
+  BROWSERSTACK_ACCESS_KEY  BrowserStack access key (required when provider=browserstack).
 
 Output artifacts:
   artifacts/cloud-grid-preflight.json   Machine-readable preflight result.
@@ -33,6 +35,9 @@ STATUS_SKIPPED_NOT_CONFIGURED = "SKIPPED_NOT_CONFIGURED"
 STATUS_SKIPPED_MISSING_CREDENTIALS = "SKIPPED_MISSING_CREDENTIALS"
 STATUS_SKIPPED_INVALID_CREDENTIALS = "SKIPPED_INVALID_CREDENTIALS"
 STATUS_PROVIDER_UNAVAILABLE = "SKIPPED_PROVIDER_UNAVAILABLE"
+STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED = (
+    "SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED"
+)
 
 ARTIFACTS_DIR = Path("artifacts")
 PREFLIGHT_JSON = ARTIFACTS_DIR / "cloud-grid-preflight.json"
@@ -124,9 +129,31 @@ def run() -> int:
         print(f"[cloud-grid-preflight] {status}: {msg}")
         return 0
 
+    if provider == "browserstack":
+        bs_username = os.environ.get("BROWSERSTACK_USERNAME", "").strip()
+        bs_access_key = os.environ.get("BROWSERSTACK_ACCESS_KEY", "").strip()
+        if not bs_username or not bs_access_key:
+            msg = "BROWSERSTACK_USERNAME or BROWSERSTACK_ACCESS_KEY is not set."
+            _write_artifacts(provider, STATUS_SKIPPED_MISSING_CREDENTIALS, msg)
+            print(f"[cloud-grid-preflight] {STATUS_SKIPPED_MISSING_CREDENTIALS}: {msg}")
+            return 0
+        msg = (
+            "BrowserStack credentials are present. "
+            "Live cloud-grid execution is not yet implemented for BrowserStack. "
+            "See ADR-034 and ADR-035 for the activation plan."
+        )
+        _write_artifacts(
+            provider, STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED, msg
+        )
+        print(
+            f"[cloud-grid-preflight] "
+            f"{STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED}: {msg}"
+        )
+        return 0
+
     msg = (
         f"Unknown CLOUD_GRID_PROVIDER value: '{provider}'. "
-        "Supported values: none, sauce. This is a repository configuration error."
+        "Supported values: none, sauce, browserstack. This is a repository configuration error."
     )
     print(f"[cloud-grid-preflight] ERROR: {msg}", file=sys.stderr)
     _write_artifacts(provider, "ERROR_UNKNOWN_PROVIDER", msg)

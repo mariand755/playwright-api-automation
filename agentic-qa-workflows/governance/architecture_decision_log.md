@@ -2418,3 +2418,118 @@ None of these changes affect the required release lane.
 - `.github/workflows/ci.yml` — `cloud-grid` matrix job; `notify` pattern download
 - `scripts/notify.py` — `CLOUD_GRID_BROWSERS`, `load_advisory_status()`, `build_message_lines()`
 - `test/scripts/test_notify_readiness.py` — TC-SCRIPT-042–TC-SCRIPT-063
+
+---
+
+## ADR-034: Cloud-grid provider abstraction, BrowserStack readiness preflight, and release-confidence notification signal
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Context
+
+ADR-033 (PR #71) proved the Sauce Labs 3-browser advisory cloud matrix end-to-end. The `cloud-grid` CI job, `cloud_grid_preflight.py`, and `notify.py` were all Sauce-specific. Three gaps remained:
+
+1. Adding BrowserStack as a second cloud provider required code changes across preflight, CI, and notification — no abstraction layer existed.
+2. The notification showed `Cloud Grid:` with no indication of which provider ran, making multi-provider signals ambiguous.
+3. `Overall Release Readiness` (GO / NO_GO / UNKNOWN / BLOCKED) is accurate but machine-facing. Engineers reading notifications needed a plain-language confidence interpretation of the combined CI + gate + advisory signal.
+
+### Decision
+
+**1. Provider abstraction in `cloud_grid_preflight.py`:**
+- Add `browserstack` as a known provider alongside `none` and `sauce`.
+- Add `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` constant.
+- BrowserStack branch: validate `BROWSERSTACK_USERNAME` + `BROWSERSTACK_ACCESS_KEY` presence only. Missing → `SKIPPED_MISSING_CREDENTIALS`. Present → `SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED`. No HTTP check. Always exits 0.
+- Unknown provider (e.g., `jenkins`) still exits 1 (`ERROR_UNKNOWN_PROVIDER`).
+
+**2. Provider field in cloud-grid status artifacts:**
+- The `Write cloud-grid execution status` step adds `"provider": "${{ vars.CLOUD_GRID_PROVIDER }}"` to each per-browser status JSON.
+- `load_advisory_status()` reads `provider` from the first available artifact and returns `cloud_grid_provider` in its dict.
+- Absent `provider` field (pre-PR #72 artifacts) → empty string → legacy `Cloud Grid:` label.
+
+**3. Provider-aware notification labels:**
+- Add `PROVIDER_LABELS: dict[str, str] = {"sauce": "Sauce Labs", "browserstack": "BrowserStack"}` constant.
+- `build_message_lines()` renders `Cloud Grid (Sauce Labs):` / `Cloud Grid (BrowserStack):` / `Cloud Grid:` (fallback).
+
+**4. BrowserStack secrets in CI:**
+- Add `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` to the `Run cloud-grid preflight` step env.
+- Absent secrets → empty strings → `SKIPPED_MISSING_CREDENTIALS`. CI never fails due to absent BrowserStack secrets.
+- Secret values are never printed, logged, or written to artifacts.
+
+**5. CI execution step rename:**
+- `Run Sauce Labs smoke suite` → `Run cloud-grid smoke suite`.
+- Condition `if: steps.preflight.outputs.status == 'READY'` unchanged. BrowserStack never reaches `READY` in PR #72, so the execution step is naturally skipped.
+
+**6. Release Confidence line:**
+- Add `compute_release_confidence(overall, data, advisory_status) → tuple[str, str, str]` to `notify.py`.
+- `build_message_lines()` appends `Release Confidence: {emoji} {label} — {meaning}` immediately after `Overall Release Readiness`.
+- Four levels: 🟢 High, 🟠 Low, 🟡 Medium, 🔴 Blocked.
+- `compute_overall_readiness()` is unchanged — confidence is display-only.
+
+**7. Live BrowserStack execution deferred to ADR-035 / PR #73.**
+
+### Why provider abstraction before live execution
+
+Credentials validation and provider registration should precede execution implementation. PR #72 proves the abstraction compiles, tests pass, and notifications correctly label providers before any live BrowserStack traffic is attempted. This avoids coupling provider-specific secrets and step names into the execution flow before the pattern is established.
+
+### Why `SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED`
+
+Distinguishes "provider configured, credentials present, but execution not yet live" from:
+- `SKIPPED_NOT_CONFIGURED` — `CLOUD_GRID_PROVIDER=none`
+- `SKIPPED_MISSING_CREDENTIALS` — provider selected but secrets absent
+- `SKIPPED_INVALID_CREDENTIALS` — Sauce credentials rejected
+
+The status is actionable: it tells the operator that the provider is recognized and ready to activate, pending ADR-035.
+
+### Why provider in artifact (not env var in notify step)
+
+The artifact is self-describing. The `notify` job does not need a new `CLOUD_GRID_PROVIDER` env var. Backward compatibility is trivial — absent `provider` field → `cg_provider = ""` → `PROVIDER_LABELS.get("", "")` → `""` → fallback `Cloud Grid:` header. All pre-PR #72 tests continue to pass without modification.
+
+### Why Release Confidence
+
+`Overall Release Readiness` (GO / NO_GO / UNKNOWN / BLOCKED) is precise but requires mental mapping. The confidence line provides a single human-readable interpretation that combines required CI, gate decision, and advisory signals into an actionable phrase. Engineers can read a notification and immediately understand whether the release evidence is complete, incomplete, or blocked.
+
+The four levels are designed to be exhaustive with no overlap:
+- **Blocked**: required CI is not `success` — nothing else matters.
+- **Low**: required CI passed, but gate is NO_GO or advisory has FAIL — caution before release.
+- **High**: required CI passed, gate is GO, and advisory shows no FAIL or LIMITED signal — clean signal.
+- **Medium**: everything else — signal exists but is incomplete (SKIPPED, UNKNOWN, PARTIAL, gate skipped).
+
+### Why advisory remains advisory
+
+Cloud Grid and Cross-Browser are not required checks. Adding them to the required release lane would make provider availability and quota limits a release blocker. Advisory status informs; it does not gate.
+
+### Secret safety
+
+`BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` are passed to Docker as env vars. The BrowserStack branch in `cloud_grid_preflight.py` only tests for presence (`len > 0`); values are never interpolated into messages, printed, or written to artifacts. The `_write_artifacts()` function receives only the static `msg` string.
+
+### Rollback
+
+1. Remove `elif provider == "browserstack":` block and `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` constant from `cloud_grid_preflight.py`.
+2. Remove `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` from CI preflight step env and docker args.
+3. Remove `provider` field from `Write cloud-grid execution status` python one-liner.
+4. Revert CI execution step name to `Run Sauce Labs smoke suite`.
+5. Remove `PROVIDER_LABELS`, `cg_provider` extraction, and provider header logic from `notify.py`.
+6. Remove `compute_release_confidence()` and the confidence line from `build_message_lines()`.
+7. Revert TC-SCRIPT-041 to use `"browserstack"`; remove TC-SCRIPT-065–TC-SCRIPT-072.
+8. Revert quality_gates.md, notification_wiring.md, README.md, agentic-qa-workflows/README.md.
+
+None of these changes affect the required release lane.
+
+### Consequences
+
+- `cloud_grid_preflight.py`: BrowserStack recognized as a known provider; always exits 0.
+- `.github/workflows/ci.yml`: BrowserStack secrets in preflight env; `provider` field in status artifacts.
+- `notify.py`: `PROVIDER_LABELS`, `cloud_grid_provider` in return dict, `compute_release_confidence()`, provider-aware header, `Release Confidence` line.
+- 8 new unit tests (TC-SCRIPT-065–TC-SCRIPT-072); collection total: 96 nodes.
+- TC-SCRIPT-041 updated: provider changed from `"browserstack"` to `"jenkins"` (browserstack is now a known provider).
+
+### Related docs
+
+- `notification_wiring.md` — BrowserStack secrets; provider label rendering; Release Confidence table; per-browser artifact schema
+- `quality_gates.md` — `Cloud Grid` row updated; `CLOUD_GRID_PROVIDER` values documented
+- `.github/workflows/ci.yml` — `Run cloud-grid preflight` step env; `Write cloud-grid execution status` provider field
+- `scripts/cloud_grid_preflight.py` — `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED`; BrowserStack branch
+- `scripts/notify.py` — `PROVIDER_LABELS`; `compute_release_confidence()`; `build_message_lines()` provider header and confidence line
+- `test/scripts/test_cloud_grid_preflight.py` — TC-SCRIPT-041 updated; TC-SCRIPT-065–TC-SCRIPT-066
+- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-067–TC-SCRIPT-072

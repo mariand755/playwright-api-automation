@@ -739,3 +739,224 @@ def test_advisory_cloud_grid_all_skipped_per_browser_artifacts_aggregates_to_ski
         "firefox": "SKIPPED",
         "webkit": "SKIPPED",
     }
+
+
+# ---------------------------------------------------------------------------
+# TC-SCRIPT-067/068 — provider label rendering
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-067 — Sauce Labs provider label renders in notification
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-067")
+def test_build_message_lines_renders_sauce_labs_provider_label(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cloud-grid-{browser}-status.json").write_text(
+            (
+                '{"status": "PASS", "detail": "smoke suite passed", '
+                f'"browser": "{browser}", "provider": "sauce"}}'
+            ),
+            encoding="utf-8",
+        )
+    advisory = load_advisory_status()
+    assert advisory["cloud_grid_provider"] == "sauce"
+    ci_status = {
+        "docker_test_suite": "success",
+        "api_tests": "success",
+        "ui_tests": "success",
+    }
+    lines = build_message_lines(None, "https://example.com/run/1", ci_status, advisory)
+    assert any("Cloud Grid (Sauce Labs)" in line for line in lines)
+
+
+# TC-SCRIPT-068 — BrowserStack provider label renders in notification
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-068")
+def test_build_message_lines_renders_browserstack_provider_label(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cloud-grid-{browser}-status.json").write_text(
+            (
+                '{"status": "SKIPPED", '
+                '"detail": "preflight status: SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED", '
+                f'"browser": "{browser}", "provider": "browserstack"}}'
+            ),
+            encoding="utf-8",
+        )
+    advisory = load_advisory_status()
+    assert advisory["cloud_grid_provider"] == "browserstack"
+    ci_status = {
+        "docker_test_suite": "success",
+        "api_tests": "success",
+        "ui_tests": "success",
+    }
+    lines = build_message_lines(None, "https://example.com/run/1", ci_status, advisory)
+    assert any("Cloud Grid (BrowserStack)" in line for line in lines)
+
+
+# ---------------------------------------------------------------------------
+# TC-SCRIPT-069–072 — Release Confidence line
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-069 — BLOCKED overall → Release Confidence Blocked
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-069")
+def test_build_message_lines_release_confidence_blocked_when_required_ci_fails():
+    ci_status = {
+        "docker_test_suite": "success",
+        "api_tests": "failure",
+        "ui_tests": "success",
+    }
+    lines = build_message_lines(None, "", ci_status, advisory_status=None)
+    combined = "\n".join(lines)
+    assert "Overall Release Readiness: ⚠️ BLOCKED" in combined
+    assert (
+        "Release Confidence: 🔴 Blocked — required CI failed/skipped/cancelled; "
+        "fix required lane before release evaluation"
+    ) in combined
+
+
+# TC-SCRIPT-070 — GO + advisory all PASS → Release Confidence High
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-070")
+def test_build_message_lines_release_confidence_high_when_all_signals_clean(
+    monkeypatch,
+):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    ci_status = {
+        "docker_test_suite": "success",
+        "api_tests": "success",
+        "ui_tests": "success",
+    }
+    gate_data: dict[str, object] = {
+        "overall_decision": "GO",
+        "gate_failures": [],
+        "warnings": [],
+        "test_results": {
+            "total": 88,
+            "passed": 88,
+            "failed": 0,
+            "skipped": 0,
+            "duration_secs": 10,
+        },
+    }
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "PASS",
+        "cloud_grid_detail": "",
+        "cloud_grid_by_browser": {
+            "chromium": "PASS",
+            "firefox": "PASS",
+            "webkit": "PASS",
+        },
+        "cloud_grid_detail_by_browser": {},
+        "cloud_grid_provider": "sauce",
+        "cross_browser_status": "PASS",
+        "cross_browser_by_browser": {
+            "chromium": "PASS",
+            "firefox": "PASS",
+            "webkit": "PASS",
+        },
+    }
+    lines = build_message_lines(gate_data, "", ci_status, advisory_status=advisory)
+    combined = "\n".join(lines)
+    assert (
+        "Release Confidence: 🟢 High — required CI and release gate passed; "
+        "advisory checks are clean"
+    ) in combined
+
+
+# TC-SCRIPT-071 — required CI passes, advisory SKIPPED/UNKNOWN → Release Confidence Medium
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-071")
+def test_build_message_lines_release_confidence_medium_when_signal_limited(monkeypatch):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    ci_status = {
+        "docker_test_suite": "success",
+        "api_tests": "success",
+        "ui_tests": "success",
+    }
+    gate_data: dict[str, object] = {"gate_skipped": True}
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "SKIPPED",
+        "cloud_grid_detail": "",
+        "cloud_grid_by_browser": {},
+        "cloud_grid_detail_by_browser": {},
+        "cloud_grid_provider": "",
+        "cross_browser_status": "UNKNOWN",
+        "cross_browser_by_browser": {},
+    }
+    lines = build_message_lines(gate_data, "", ci_status, advisory_status=advisory)
+    combined = "\n".join(lines)
+    assert (
+        "Release Confidence: 🟡 Medium — required CI passed, but "
+        "release/advisory signal is limited, skipped, partial, or unknown"
+    ) in combined
+
+
+# TC-SCRIPT-072 — advisory FAIL with GO gate → Release Confidence Low
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-072")
+def test_build_message_lines_release_confidence_low_when_advisory_fails(monkeypatch):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    ci_status = {
+        "docker_test_suite": "success",
+        "api_tests": "success",
+        "ui_tests": "success",
+    }
+    gate_data: dict[str, object] = {
+        "overall_decision": "GO",
+        "gate_failures": [],
+        "warnings": [],
+        "test_results": {
+            "total": 88,
+            "passed": 88,
+            "failed": 0,
+            "skipped": 0,
+            "duration_secs": 10,
+        },
+    }
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "FAIL",
+        "cloud_grid_detail": "",
+        "cloud_grid_by_browser": {
+            "chromium": "FAIL",
+            "firefox": "PASS",
+            "webkit": "PASS",
+        },
+        "cloud_grid_detail_by_browser": {
+            "chromium": "remote session could not be provisioned"
+        },
+        "cloud_grid_provider": "sauce",
+        "cross_browser_status": "PASS",
+        "cross_browser_by_browser": {
+            "chromium": "PASS",
+            "firefox": "PASS",
+            "webkit": "PASS",
+        },
+    }
+    lines = build_message_lines(gate_data, "", ci_status, advisory_status=advisory)
+    combined = "\n".join(lines)
+    assert "Overall Release Readiness: ✅ GO" in combined
+    assert (
+        "Release Confidence: 🟠 Low — required CI passed, but release gate "
+        "or advisory signal failed; review before release"
+    ) in combined

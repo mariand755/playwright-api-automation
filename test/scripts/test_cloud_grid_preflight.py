@@ -225,7 +225,53 @@ def test_sauce_provider_unavailable_on_timeout(monkeypatch, tmp_path):
 @pytest.mark.regression
 @pytest.mark.tc_id("TC-SCRIPT-041")
 def test_unknown_provider_exits_nonzero(monkeypatch, tmp_path):
-    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
+    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "jenkins")
     monkeypatch.chdir(tmp_path)
     result = preflight.run()
     assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# Provider = browserstack
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-065 — browserstack missing credentials → SKIPPED_MISSING_CREDENTIALS
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-065")
+def test_browserstack_missing_credentials_returns_skipped_missing(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
+    monkeypatch.delenv("BROWSERSTACK_USERNAME", raising=False)
+    monkeypatch.delenv("BROWSERSTACK_ACCESS_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    result = preflight.run()
+
+    assert result == 0
+    data = _read_preflight_json(tmp_path / "artifacts")
+    assert data["status"] == preflight.STATUS_SKIPPED_MISSING_CREDENTIALS
+    assert data["provider"] == "browserstack"
+
+
+# TC-SCRIPT-066 — browserstack credentials present → SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-066")
+def test_browserstack_credentials_present_returns_not_implemented(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
+    monkeypatch.setenv("BROWSERSTACK_USERNAME", "test-bs-user")
+    monkeypatch.setenv("BROWSERSTACK_ACCESS_KEY", "test-bs-key")
+    monkeypatch.chdir(tmp_path)
+
+    result = preflight.run()
+
+    assert result == 0
+    data = _read_preflight_json(tmp_path / "artifacts")
+    assert data["status"] == preflight.STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED
+    assert data["provider"] == "browserstack"

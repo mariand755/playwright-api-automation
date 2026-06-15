@@ -218,7 +218,6 @@ def compute_overall_readiness(
 
 def compute_release_confidence(
     overall: str,
-    data: dict[str, object] | None,
     advisory_status: dict[str, object] | None,
 ) -> tuple[str, str, str]:
     """Return (emoji, label, meaning) for the Release Confidence summary line."""
@@ -277,7 +276,7 @@ def build_message_lines(
     lines: list[str] = [f"Overall Release Readiness: {overall_emoji} {overall}"]
 
     conf_emoji, conf_label, conf_meaning = compute_release_confidence(
-        overall, data, advisory_status
+        overall, advisory_status
     )
     lines.append(f"Release Confidence: {conf_emoji} {conf_label} — {conf_meaning}")
 

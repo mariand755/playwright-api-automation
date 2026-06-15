@@ -9,7 +9,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 ## What This Repo Demonstrates
 
 - Multi-layer test suite: API (CRUD + contract validation), UI (page-object flows), and script unit tests covering QA tooling logic
-- 4-job CI pipeline with smoke/full test-scope gating, code quality gates, JUnit reporting, and nightly regression
+- Multi-job CI pipeline with smoke/full test-scope gating, code quality gates, JUnit reporting, advisory cross-browser/cloud-grid jobs, and nightly regression
 - Multi-signal release readiness gate: test results + observability signals + defect metrics → GO/NO_GO decision
 - Notification delivery infrastructure: Slack and SMTP channels, dry-run by default, activation-gated by secrets
 - ADR-backed governance documentation layer: suite taxonomy, quality gate definitions, notification and observability activation guides
@@ -21,7 +21,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 |---|---|---|---|
 | API | 13 | pytest + Requests | CRUD + auth + contract validation — Restful Booker |
 | UI | 9 | pytest + Playwright | Login, cart, checkout, negative paths — SauceDemo |
-| Script unit | 33 | pytest | Release gate, CI summary, notification decision logic |
+| Script unit | 43 | pytest | Release gate, CI summary, notification decision logic, cloud-grid preflight |
 
 ## Target Applications
 
@@ -37,6 +37,8 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 | Docker Test Suite | Builds image, validates pytest collection | — |
 | API Tests | Full API suite, JUnit report, dorny test panel | Docker Test Suite |
 | UI Tests | Full UI suite, JUnit report, dorny test panel, failure artifacts | Docker Test Suite |
+| UI Cross-Browser | Advisory chromium/firefox/webkit smoke matrix, JUnit report, dorny test panel | Docker Test Suite |
+| Cloud Grid | Advisory Sauce Labs chromium smoke execution, preflight-gated with safe-skip behavior | Docker Test Suite |
 | Notify | Builds release readiness notification and delivers to configured channels | API Tests + UI Tests |
 
 ### Test scope by trigger
@@ -146,6 +148,7 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | pytest-xdist parallelization | ✅ Activated for API + UI | API and standard UI test jobs run with `-n auto`; script and prod-read-only suites remain serial |
 | Cross-browser UI matrix | ✅ Activated (smoke, advisory) | Nightly + `workflow_dispatch`; chromium / firefox / webkit smoke suite; advisory — not in branch protection |
 | Cloud-grid CI preflight | ✅ Implemented | Validates cloud provider credentials before cloud-grid execution; `CLOUD_GRID_PROVIDER=none` by default; safe-skip on missing or invalid credentials |
+| Sauce Labs cloud-grid execution | ✅ Activated (smoke, advisory) | Nightly + `workflow_dispatch`; chromium smoke suite; gated on `READY` preflight status; `continue-on-error: true` — not in branch protection |
 | Blueprint extraction | ⏳ Deferred | Phase 8; after README refresh |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.

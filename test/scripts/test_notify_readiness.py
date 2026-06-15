@@ -11,6 +11,7 @@ from scripts.notify import (
     build_message_lines,
     compute_overall_readiness,
     get_smtp_transport_mode,
+    load_advisory_status,
 )
 
 _ALL_SUCCESS = {
@@ -147,3 +148,232 @@ def test_smtp_transport_mode_587():
 @pytest.mark.tc_id("TC-SCRIPT-028")
 def test_smtp_transport_mode_non_465():
     assert get_smtp_transport_mode(2525) == "STARTTLS"
+
+
+# ---------------------------------------------------------------------------
+# Advisory status — load_advisory_status and build_message_lines advisory section
+# ---------------------------------------------------------------------------
+
+_ADVISORY_SKIPPED: dict[str, object] = {
+    "cloud_grid_status": "SKIPPED",
+    "cloud_grid_detail": "",
+    "cross_browser_status": "SKIPPED",
+    "cross_browser_by_browser": {},
+}
+
+
+# TC-SCRIPT-042 — load_advisory_status: all SKIPPED when no artifacts and both env vars 'skipped'
+@pytest.mark.scripts
+@pytest.mark.smoke
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-042")
+def test_advisory_status_all_skipped_when_not_scheduled(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "SKIPPED"
+    assert result["cross_browser_status"] == "SKIPPED"
+    assert result["cross_browser_by_browser"] == {}
+
+
+# TC-SCRIPT-043 — load_advisory_status: cloud-grid PASS from status artifact
+@pytest.mark.scripts
+@pytest.mark.smoke
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-043")
+def test_advisory_cloud_grid_pass_from_artifact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts" / "cloud-grid-status.json").write_text(
+        '{"status": "PASS", "detail": "smoke suite passed"}', encoding="utf-8"
+    )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "PASS"
+    assert result["cloud_grid_detail"] == "smoke suite passed"
+
+
+# TC-SCRIPT-044 — load_advisory_status: cloud-grid FAIL with detail from artifact
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-044")
+def test_advisory_cloud_grid_fail_from_artifact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts" / "cloud-grid-status.json").write_text(
+        '{"status": "FAIL", "detail": "remote session could not be provisioned or connection timed out"}',
+        encoding="utf-8",
+    )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "FAIL"
+    assert "remote session" in str(result["cloud_grid_detail"])
+
+
+# TC-SCRIPT-045 — load_advisory_status: cloud-grid SKIPPED propagated from artifact
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-045")
+def test_advisory_cloud_grid_skipped_from_artifact(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts" / "cloud-grid-status.json").write_text(
+        '{"status": "SKIPPED", "detail": "preflight status: SKIPPED_NOT_CONFIGURED"}',
+        encoding="utf-8",
+    )
+    result = load_advisory_status()
+    assert result["cloud_grid_status"] == "SKIPPED"
+
+
+# TC-SCRIPT-046 — load_advisory_status: cross-browser PASS when all 3 browser artifacts are PASS
+@pytest.mark.scripts
+@pytest.mark.smoke
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-046")
+def test_advisory_cross_browser_pass_all_browsers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cross-browser-{browser}-status.json").write_text(
+            f'{{"status": "PASS", "browser": "{browser}"}}', encoding="utf-8"
+        )
+    result = load_advisory_status()
+    assert result["cross_browser_status"] == "PASS"
+    assert result["cross_browser_by_browser"] == {
+        "chromium": "PASS",
+        "firefox": "PASS",
+        "webkit": "PASS",
+    }
+
+
+# TC-SCRIPT-047 — load_advisory_status: cross-browser FAIL when all browser artifacts are FAIL
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-047")
+def test_advisory_cross_browser_fail_all_browsers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    (tmp_path / "artifacts").mkdir()
+    for browser in ("chromium", "firefox", "webkit"):
+        (tmp_path / "artifacts" / f"cross-browser-{browser}-status.json").write_text(
+            f'{{"status": "FAIL", "browser": "{browser}"}}', encoding="utf-8"
+        )
+    result = load_advisory_status()
+    assert result["cross_browser_status"] == "FAIL"
+
+
+# TC-SCRIPT-048 — load_advisory_status: cross-browser PARTIAL when mixed pass/fail browser artifacts
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-048")
+def test_advisory_cross_browser_partial(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    (tmp_path / "artifacts").mkdir()
+    (tmp_path / "artifacts" / "cross-browser-chromium-status.json").write_text(
+        '{"status": "PASS", "browser": "chromium"}', encoding="utf-8"
+    )
+    (tmp_path / "artifacts" / "cross-browser-firefox-status.json").write_text(
+        '{"status": "FAIL", "browser": "firefox"}', encoding="utf-8"
+    )
+    # webkit artifact absent — only chromium and firefox present
+    result = load_advisory_status()
+    assert result["cross_browser_status"] == "PARTIAL"
+
+
+# TC-SCRIPT-049 — build_message_lines: advisory section shown when advisory jobs were scheduled
+@pytest.mark.scripts
+@pytest.mark.smoke
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-049")
+def test_build_message_lines_includes_advisory_section_when_scheduled(monkeypatch):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "FAIL",
+        "cloud_grid_detail": "remote session could not be provisioned or connection timed out",
+        "cross_browser_status": "PASS",
+        "cross_browser_by_browser": {
+            "chromium": "PASS",
+            "firefox": "PASS",
+            "webkit": "PASS",
+        },
+    }
+    lines = build_message_lines(
+        None, run_url="", ci_status=_ALL_SUCCESS, advisory_status=advisory
+    )
+    combined = "\n".join(lines)
+    assert "Advisory Jobs" in combined, f"Expected advisory section, got: {combined!r}"
+    assert "UI Cross-Browser" in combined
+    assert "Cloud Grid" in combined
+    assert "FAIL" in combined
+
+
+# TC-SCRIPT-050 — build_message_lines: advisory section NOT shown when both advisory jobs skipped
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-050")
+def test_build_message_lines_no_advisory_section_when_not_scheduled(monkeypatch):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "skipped")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "skipped")
+    lines = build_message_lines(
+        None, run_url="", ci_status=_ALL_SUCCESS, advisory_status=_ADVISORY_SKIPPED
+    )
+    combined = "\n".join(lines)
+    assert "Advisory Jobs" not in combined, (
+        f"Expected no advisory section when not scheduled, got: {combined!r}"
+    )
+
+
+# TC-SCRIPT-051 — advisory FAIL does not change overall readiness when required lane is GO
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-051")
+def test_overall_readiness_unaffected_by_advisory_fail(monkeypatch):
+    monkeypatch.setenv("CLOUD_GRID_RESULT", "success")
+    monkeypatch.setenv("UI_CROSS_BROWSER_RESULT", "success")
+    advisory: dict[str, object] = {
+        "cloud_grid_status": "FAIL",
+        "cloud_grid_detail": "connection failed",
+        "cross_browser_status": "FAIL",
+        "cross_browser_by_browser": {
+            "chromium": "FAIL",
+            "firefox": "FAIL",
+            "webkit": "FAIL",
+        },
+    }
+    gate_data: dict[str, object] = {
+        "overall_decision": "GO",
+        "gate_failures": [],
+        "warnings": [],
+        "test_results": {
+            "total": 22,
+            "passed": 22,
+            "failed": 0,
+            "skipped": 0,
+            "duration_secs": 10,
+        },
+    }
+    lines = build_message_lines(
+        gate_data, run_url="", ci_status=_ALL_SUCCESS, advisory_status=advisory
+    )
+    combined = "\n".join(lines)
+    assert "Overall Release Readiness: ✅ GO" in combined, (
+        f"Advisory FAIL must not change overall readiness; expected GO line, got: {combined!r}"
+    )
+    assert "Advisory Jobs" in combined, (
+        "Advisory section must still appear when scheduled"
+    )

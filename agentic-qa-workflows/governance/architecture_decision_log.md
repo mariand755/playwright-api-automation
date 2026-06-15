@@ -2303,9 +2303,8 @@ All four change groups are independently reversible and do not affect the requir
 
 ### Future follow-up
 
-- PR #71: Sauce Labs multi-browser cloud matrix (chromium + firefox + webkit).
 - BrowserStack: add as a second provider option when a client requirement establishes the need.
-- PARTIAL cross-browser: add per-browser detail lines to the advisory section when aggregate is PARTIAL.
+- Jenkins/client adapter: deferred until a specific client deployment target is established.
 
 ### Related docs
 
@@ -2314,4 +2313,108 @@ All four change groups are independently reversible and do not affect the requir
 - `.github/workflows/ci.yml` — `cloud-grid` job, `ui-cross-browser` job, `notify` job
 - `conftest.py` — `browser` fixture override
 - `scripts/notify.py` — `load_advisory_status()`, `build_message_lines()`
-- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-042–TC-SCRIPT-051
+- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-042–TC-SCRIPT-054
+
+---
+
+## ADR-033: Sauce Labs multi-browser cloud matrix and advisory browser-detail rendering
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Context
+
+ADR-032 (PR #70) established the advisory observability foundation: per-job status artifacts,
+`load_advisory_status()`, and the Advisory Jobs section in notifications. The `cloud-grid` job
+executed a single chromium smoke leg. This PR expands it to a 3-browser matrix and adds
+per-browser detail rendering in the notification.
+
+Three improvements are bundled because they are tightly coupled: the matrix expansion produces
+per-browser artifacts; the aggregation logic consumes them; and the rendering makes the
+aggregated result actionable. Separating them would require three PRs with no meaningful
+intermediate state.
+
+### Decision
+
+1. Convert the `cloud-grid` CI job to a 3-browser matrix: `[chromium, firefox, webkit]`.
+2. Each matrix leg writes a browser-specific status artifact:
+   `artifacts/cloud-grid-{browser}-status.json`.
+3. The `notify` job downloads all three via pattern download
+   (`cloud-grid-*-execution-status`, `merge-multiple: true`).
+4. `notify.py` reads per-browser cloud-grid artifacts via `CLOUD_GRID_BROWSERS` loop
+   (matching the existing `CROSS_BROWSER_BROWSERS` pattern) and aggregates to
+   PASS / FAIL / PARTIAL / SKIPPED / UNKNOWN using the same 5-branch logic as cross-browser.
+5. Notification renders per-browser detail lines when cloud-grid aggregate is PARTIAL or FAIL.
+6. Notification renders per-browser detail lines when cross-browser aggregate is PARTIAL
+   (deferred item R5 from PR #70 Mode B, included here because the data is already collected
+   and the rendering pattern is identical).
+7. Legacy fallback: if no per-browser files exist but `artifacts/cloud-grid-status.json` does,
+   `load_advisory_status()` reads it as the chromium result so pre-PR #71 artifacts remain
+   readable without breaking existing tests.
+8. Non-READY preflight states (both `SKIPPED_*` and `ERROR_*`) write a GitHub step summary
+   line, making error states visible in the Actions panel (deferred item R2 from PR #70 Mode B).
+9. Required release readiness (`compute_overall_readiness()`) is unchanged.
+
+### Why cloud-grid expands to 3 browsers
+
+Sauce Labs supports chromium, firefox, and webkit. PR #70 proved the advisory infrastructure
+works end-to-end with chromium. Expanding to all three provides full cross-browser signal from
+real remote devices — the same set that local `ui-cross-browser` tests cover — without
+additional infrastructure cost beyond job time.
+
+### Why cloud-grid remains advisory
+
+Adding cloud-grid to the required release lane would make Sauce Labs account availability and
+quota limits a release blocker. Advisory status provides signal without imposing infrastructure
+dependency on the release process.
+
+### Why cloud-grid remains smoke-only
+
+Full regression on Sauce Labs per nightly would be cost-prohibitive. Smoke provides connectivity
+and basic functionality signal. Full cloud regression is a future consideration gated on usage
+patterns and cost review.
+
+### Why per-browser detail is rendered on PARTIAL or FAIL only
+
+Happy-path notifications (PASS) should be clean and scannable. Detail lines are diagnostic —
+they are only useful when something is wrong. PARTIAL and FAIL trigger the expanded view;
+PASS, SKIPPED, and UNKNOWN show a single summary line.
+
+### Why BrowserStack is deferred
+
+PR #71 proves the multi-browser cloud matrix pattern works. BrowserStack as a second provider
+follows after a client requirement or comparative benchmark establishes the need.
+
+### Why Jenkins/client adapter is deferred
+
+No specific client deployment target has been established for this repo. The advisory lane
+pattern is provider-agnostic; a Jenkins adapter would reuse `cloud_grid_preflight.py` and the
+artifact write/upload pattern without changes to required lane semantics.
+
+### Rollback
+
+1. **Revert cloud-grid matrix:** change `strategy.matrix.browser` back to single `chromium`;
+   rename artifact paths back to `cloud-grid-report.xml` and `cloud-grid-status.json`;
+   revert notify download step to single-name download.
+2. **Revert notify.py cloud-grid section:** remove `CLOUD_GRID_BROWSERS` loop; restore
+   single-file `cg_artifact` read; remove `cloud_grid_by_browser` and
+   `cloud_grid_detail_by_browser` keys from return dict.
+3. **Revert build_message_lines per-browser rendering:** remove per-browser detail blocks
+   for both cloud-grid and cross-browser; restore original single-line rendering.
+
+None of these changes affect the required release lane.
+
+### Consequences
+
+- Cloud-grid nightly job time increases (3 browser legs × smoke duration, parallel).
+- Notification advisory section shows per-browser breakdown when any cloud-grid leg fails.
+- 9 new unit tests (TC-SCRIPT-055–TC-SCRIPT-063); collection total: 87 nodes.
+- Pre-PR #71 artifacts (`cloud-grid-status.json`) are supported via legacy fallback.
+
+### Related docs
+
+- `notification_wiring.md` — multi-browser cloud-grid configuration; artifact naming; per-browser rendering rules
+- `quality_gates.md` — CI job structure; `Cloud Grid` row updated to 3-browser matrix
+- `.github/workflows/ci.yml` — `cloud-grid` matrix job; `notify` pattern download
+- `scripts/notify.py` — `CLOUD_GRID_BROWSERS`, `load_advisory_status()`, `build_message_lines()`
+- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-042–TC-SCRIPT-063

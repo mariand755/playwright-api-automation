@@ -2652,7 +2652,9 @@ Add `_check_browserstack()` — hits `https://api.browserstack.com/automate/plan
 Remove `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` constant — no longer needed after this PR.
 
 **2. BrowserStack connection (`conftest.py`):**
-Add `elif cloud_provider == "browserstack":` branch in the `browser` fixture. Always calls `playwright.chromium.connect(endpoint)` regardless of target browser — BrowserStack's CDP proxy routes to the correct engine based on capabilities JSON. Browser mapping: `chromium→chrome`, `firefox→firefox`, `webkit→playwright-webkit`.
+Add `elif cloud_provider == "browserstack":` branch in the `browser` fixture. Always calls `playwright.chromium.connect(endpoint)` regardless of target browser — BrowserStack's CDP proxy routes to the correct engine based on capabilities JSON. Browser mapping: `chromium→chrome`, `firefox→playwright-firefox`, `webkit→playwright-webkit`.
+
+**Amendment note (PR #75):** The initial mapping used `firefox→firefox`. Live validation after PR #74 showed `chromium` and `webkit` sessions passed on the BrowserStack dashboard, but `firefox` failed. BrowserStack's Playwright-specific capability naming requires `playwright-firefox`, not the bare `firefox` value. The mapping was corrected; no other behavior changed.
 
 Exception handling follows the Sauce Labs pattern exactly: catches `Exception`, raises `RuntimeError` with provider, browser, and `type(exc).__name__` — credentials and endpoint URL are never included in the message; `from None` suppresses chaining.
 
@@ -2672,7 +2674,7 @@ wss://cdp.browserstack.com/playwright?caps=<url-encoded-json>
 | Playwright `--browser` arg | BrowserStack capability `"browser"` |
 | --- | --- |
 | chromium | chrome |
-| firefox | firefox |
+| firefox | playwright-firefox (corrected in PR #75; was `firefox`) |
 | webkit | playwright-webkit |
 
 ### Trial-safe operating model
@@ -2722,6 +2724,7 @@ None of these changes affect the required release lane.
 - `notify.py` unchanged — PROVIDER_LABELS already renders `Cloud Grid (BrowserStack)` (ADR-034).
 - 4 new unit tests (TC-SCRIPT-065a, 065b, 066b, 066c); TC-SCRIPT-066 updated from NOT_IMPLEMENTED to READY; total 100 nodes / 78 script tests.
 - `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` constant removed.
+- PR #75: `_BS_BROWSER_MAP["firefox"]` corrected from `firefox` to `playwright-firefox` after live validation showed the Firefox session failing while chromium and webkit passed. No CI workflow, preflight, or notification changes were required.
 
 ### Related docs
 
@@ -2731,3 +2734,4 @@ None of these changes affect the required release lane.
 - `test/scripts/test_cloud_grid_preflight.py` — TC-SCRIPT-065a, 065b, 066 (updated), 066b, 066c
 - `agentic-qa-workflows/governance/quality_gates.md` — Cloud Grid row updated; BrowserStack activation documented
 - `agentic-qa-workflows/governance/notification_wiring.md` — BrowserStack activation section updated; trial guard added
+- PR #75 — Firefox capability mapping fix (`firefox` → `playwright-firefox`)

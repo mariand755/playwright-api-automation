@@ -19,7 +19,7 @@ _KNOWN_ENVIRONMENTS = frozenset({"staging", "prod_read_only"})
 # specified in the capabilities JSON and routed by BrowserStack's proxy layer.
 _BS_BROWSER_MAP: dict[str, str] = {
     "chromium": "chrome",
-    "firefox": "firefox",
+    "firefox": "playwright-firefox",
     "webkit": "playwright-webkit",
 }
 

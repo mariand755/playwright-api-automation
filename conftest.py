@@ -254,42 +254,42 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    if report.when != "call":
-        return
+    if report.when == "call":
+        if os.environ.get("CLOUD_GRID_PROVIDER", "").strip().lower() == "browserstack":
+            bs_page = item.funcargs.get("page")
+            if bs_page is not None:
+                try:
+                    payload = browserstack_status_payload(report.passed, item.nodeid)
+                    # BrowserStack's executor convention requires the magic
+                    # string be passed as the function *argument*, not as the
+                    # JS expression itself — the no-op expression keeps this
+                    # valid, executable JS.
+                    bs_page.evaluate(
+                        "_ => {}", f"browserstack_executor: {json.dumps(payload)}"
+                    )
+                except Exception:
+                    # BrowserStack dashboard status is cosmetic only.
+                    # GitHub Actions, JUnit, release gate, and notify.py remain authoritative.
+                    pass
 
-    page = item.funcargs.get("page")
+    if report.when == "call" and report.failed:
+        page = item.funcargs.get("page")
+        if page:
+            artifacts_dir = Path("artifacts") / "failures"
+            artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    if (
-        page
-        and os.environ.get("CLOUD_GRID_PROVIDER", "").strip().lower() == "browserstack"
-    ):
-        try:
-            payload = browserstack_status_payload(not report.failed, item.nodeid)
-            # BrowserStack's executor convention requires the magic string be
-            # passed as the function *argument*, not as the JS expression
-            # itself — the no-op expression keeps this valid, executable JS.
-            page.evaluate("_ => {}", f"browserstack_executor: {json.dumps(payload)}")
-        except Exception:
-            # BrowserStack dashboard status is cosmetic only.
-            # GitHub Actions, JUnit, release gate, and notify.py remain authoritative.
-            pass
+            safe_name = (
+                item.nodeid.replace("/", "_")
+                .replace("\\", "_")
+                .replace("::", "__")
+                .replace("[", "_")
+                .replace("]", "_")
+            )
+            screenshot_path = artifacts_dir / f"{safe_name}.png"
+            html_path = artifacts_dir / f"{safe_name}.html"
 
-    if report.failed and page:
-        artifacts_dir = Path("artifacts") / "failures"
-        artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-        safe_name = (
-            item.nodeid.replace("/", "_")
-            .replace("\\", "_")
-            .replace("::", "__")
-            .replace("[", "_")
-            .replace("]", "_")
-        )
-        screenshot_path = artifacts_dir / f"{safe_name}.png"
-        html_path = artifacts_dir / f"{safe_name}.html"
-
-        page.screenshot(path=str(screenshot_path), full_page=True)
-        html_path.write_text(page.content(), encoding="utf-8")
+            page.screenshot(path=str(screenshot_path), full_page=True)
+            html_path.write_text(page.content(), encoding="utf-8")
 
 
 def pytest_collection_modifyitems(items):

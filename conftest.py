@@ -1,5 +1,6 @@
 import json
 import os
+import urllib.parse
 import pytest
 
 from pathlib import Path
@@ -13,6 +14,14 @@ from utils.timeouts import (
 )
 
 _KNOWN_ENVIRONMENTS = frozenset({"staging", "prod_read_only"})
+
+# BrowserStack CDP always uses playwright.chromium.connect(); browser is
+# specified in the capabilities JSON and routed by BrowserStack's proxy layer.
+_BS_BROWSER_MAP: dict[str, str] = {
+    "chromium": "chrome",
+    "firefox": "firefox",
+    "webkit": "playwright-webkit",
+}
 
 
 @pytest.fixture(scope="session")
@@ -197,6 +206,40 @@ def browser(playwright, browser_name, browser_type_launch_args):
                 f"Error type: {type(exc).__name__}\n"
                 f"Likely causes: inactive/expired Sauce account, quota or concurrency limit reached,\n"
                 f"  region mismatch, provider outage, or session provisioning timeout.\n"
+                f"Secrets and WebSocket endpoint were redacted from this message."
+            ) from None
+        yield b
+        b.close()
+    elif cloud_provider == "browserstack":
+        bs_username = os.environ.get("BROWSERSTACK_USERNAME", "")
+        bs_access_key = os.environ.get("BROWSERSTACK_ACCESS_KEY", "")
+        timeout_ms = int(os.environ.get("BROWSERSTACK_CONNECT_TIMEOUT_MS", "60000"))
+        bs_browser = _BS_BROWSER_MAP.get(browser_name, browser_name)
+        # Credentials embedded in caps JSON inside endpoint URL — never printed or logged
+        caps = json.dumps(
+            {
+                "browser": bs_browser,
+                "browser_version": "latest",
+                "os": "osx",
+                "os_version": "ventura",
+                "name": "playwright-api-automation smoke",
+                "build": "playwright-api-automation",
+                "browserstack.username": bs_username,
+                "browserstack.accessKey": bs_access_key,
+            }
+        )
+        endpoint = (
+            f"wss://cdp.browserstack.com/playwright?caps={urllib.parse.quote(caps)}"
+        )
+        try:
+            b = playwright.chromium.connect(endpoint, timeout=timeout_ms)
+        except Exception as exc:
+            raise RuntimeError(
+                f"BrowserStack remote session could not be provisioned.\n"
+                f"Provider: browserstack  Browser: {bs_browser}\n"
+                f"Error type: {type(exc).__name__}\n"
+                f"Likely causes: invalid credentials, Automate plan limit reached,\n"
+                f"  unsupported browser/OS combination, or provider outage.\n"
                 f"Secrets and WebSocket endpoint were redacted from this message."
             ) from None
         yield b

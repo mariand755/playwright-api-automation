@@ -2479,7 +2479,7 @@ Distinguishes "provider configured, credentials present, but execution not yet l
 - `SKIPPED_MISSING_CREDENTIALS` — provider selected but secrets absent
 - `SKIPPED_INVALID_CREDENTIALS` — Sauce credentials rejected
 
-The status is actionable: it tells the operator that the provider is recognized and ready to activate, pending ADR-035.
+The status is actionable: it tells the operator that the provider is recognized and ready to activate — activated by ADR-036 (PR #74).
 
 ### Why provider in artifact (not env var in notify step)
 
@@ -2626,3 +2626,108 @@ None of these changes affect the required release lane, test behavior, or notifi
 - `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table updated; Docker image artifact reuse documented
 - `agentic-qa-workflows/README.md` — ADR range updated to `ADR-001–ADR-035`
 - `agentic-qa-workflows/governance/architecture_decision_log.md` (ADR-034) — corrected BrowserStack live execution deferral from `ADR-035` to `ADR-036`
+
+---
+
+## ADR-036: BrowserStack live cloud-grid smoke execution
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Context
+
+ADR-034 (PR #72) registered BrowserStack as a known cloud-grid provider with credential-presence validation only. When credentials were present, preflight returned `SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` and the smoke suite was never attempted. ADR-035 (PR #73) implemented Docker image artifact reuse without touching the cloud execution path.
+
+Three gaps remained after PR #72:
+
+1. BrowserStack preflight never validated credentials against the API — only their presence.
+2. `conftest.py` had no BrowserStack branch; all non-Sauce providers fell through to local launch.
+3. The CI smoke suite step hardcoded `CLOUD_GRID_PROVIDER=sauce`, making it Sauce-only regardless of the repo variable.
+
+### Decision
+
+**1. BrowserStack preflight (`cloud_grid_preflight.py`):**
+Add `_check_browserstack()` — hits `https://api.browserstack.com/automate/plan.json` with HTTP Basic auth. Returns `READY` on 200, `SKIPPED_INVALID_CREDENTIALS` on 401/403, `SKIPPED_PROVIDER_UNAVAILABLE` on network failure. Pattern mirrors `_check_sauce()` for consistency.
+
+Remove `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` constant — no longer needed after this PR.
+
+**2. BrowserStack connection (`conftest.py`):**
+Add `elif cloud_provider == "browserstack":` branch in the `browser` fixture. Always calls `playwright.chromium.connect(endpoint)` regardless of target browser — BrowserStack's CDP proxy routes to the correct engine based on capabilities JSON. Browser mapping: `chromium→chrome`, `firefox→firefox`, `webkit→playwright-webkit`.
+
+Exception handling follows the Sauce Labs pattern exactly: catches `Exception`, raises `RuntimeError` with provider, browser, and `type(exc).__name__` — credentials and endpoint URL are never included in the message; `from None` suppresses chaining.
+
+**3. CI smoke suite step (`ci.yml`):**
+Rename step `id: sauce_run` → `id: cloud_grid_run`. Pass `CLOUD_GRID_PROVIDER` from the repo variable instead of hardcoding `=sauce`. Pass all provider credentials in the env block and `-e` args. Update `Write cloud-grid execution status` to reference `steps.cloud_grid_run.outcome`.
+
+### BrowserStack CDP constraint
+
+BrowserStack's Playwright integration routes all browsers through a Chromium CDP proxy:
+
+```text
+wss://cdp.browserstack.com/playwright?caps=<url-encoded-json>
+```
+
+`playwright.chromium.connect()` must be used regardless of the target browser; the actual browser engine is selected via the capabilities JSON. This is BrowserStack's documented design — it differs from Sauce Labs where `playwright.{browser}.connect()` is called per browser.
+
+| Playwright `--browser` arg | BrowserStack capability `"browser"` |
+| --- | --- |
+| chromium | chrome |
+| firefox | firefox |
+| webkit | playwright-webkit |
+
+### Trial-safe operating model
+
+BrowserStack execution is activation-gated and budget-sensitive. Operators should enable `CLOUD_GRID_PROVIDER=browserstack` only during a controlled validation window — preferably via `workflow_dispatch` — and switch the variable back to `sauce` or `none` after evidence is captured, unless ongoing BrowserStack usage is explicitly approved and budgeted.
+
+BrowserStack Slack/GitHub dashboard integrations are not required for this repo. GitHub Actions runs the tests, GitHub Secrets store credentials, and `scripts/notify.py` owns Slack/SMTP notifications.
+
+**Required activation (operator):**
+
+| Config | Type | Value |
+| --- | --- | --- |
+| `BROWSERSTACK_USERNAME` | GitHub Secret | BrowserStack account username |
+| `BROWSERSTACK_ACCESS_KEY` | GitHub Secret | BrowserStack access key |
+| `CLOUD_GRID_PROVIDER` | GitHub Variable | `browserstack` |
+| `BROWSERSTACK_CONNECT_TIMEOUT_MS` | GitHub Variable (optional) | Default: 60000 |
+
+**Credentials safety:** Credentials are embedded inside the `caps` JSON value in the endpoint URL. They are never printed, logged, or written to artifacts. Exception messages contain only provider name, browser name, and `type(exc).__name__` — same pattern as Sauce Labs.
+
+### Status model after PR #74
+
+| Condition | Preflight status | Smoke suite |
+| --- | --- | --- |
+| `CLOUD_GRID_PROVIDER=none` | SKIPPED_NOT_CONFIGURED | Skipped |
+| `CLOUD_GRID_PROVIDER=sauce`, credentials missing | SKIPPED_MISSING_CREDENTIALS | Skipped |
+| `CLOUD_GRID_PROVIDER=sauce`, credentials invalid | SKIPPED_INVALID_CREDENTIALS | Skipped |
+| `CLOUD_GRID_PROVIDER=sauce`, credentials valid | READY | Runs |
+| `CLOUD_GRID_PROVIDER=browserstack`, credentials missing | SKIPPED_MISSING_CREDENTIALS | Skipped |
+| `CLOUD_GRID_PROVIDER=browserstack`, credentials invalid | SKIPPED_INVALID_CREDENTIALS | Skipped |
+| `CLOUD_GRID_PROVIDER=browserstack`, credentials valid | READY | Runs |
+| `CLOUD_GRID_PROVIDER=<unknown>` | ERROR_UNKNOWN_PROVIDER | Exit 1 |
+
+### Rollback
+
+1. Remove `_check_browserstack()` from `cloud_grid_preflight.py`; restore `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` constant; restore BrowserStack branch to return NOT_IMPLEMENTED when credentials present.
+2. Remove `elif cloud_provider == "browserstack":` block from `conftest.py`; remove `_BS_BROWSER_MAP`; remove `import urllib.parse` if unused.
+3. Revert CI smoke suite step: restore `id: sauce_run`, restore `-e CLOUD_GRID_PROVIDER=sauce` hardcode, remove BrowserStack env vars.
+4. Revert test file: remove TC-SCRIPT-065a, 065b, 066b, 066c; restore TC-SCRIPT-066 to NOT_IMPLEMENTED assertion; restore NOT_IMPLEMENTED constant import.
+
+None of these changes affect the required release lane.
+
+### Consequences
+
+- BrowserStack credentials present + API 200 → `READY` → smoke matrix runs (chromium, firefox, webkit).
+- Sauce Labs execution is unchanged — CI step is now provider-agnostic via `CLOUD_GRID_PROVIDER` variable.
+- Cloud Grid remains advisory (`continue-on-error: true`); not in branch protection.
+- `notify.py` unchanged — PROVIDER_LABELS already renders `Cloud Grid (BrowserStack)` (ADR-034).
+- 4 new unit tests (TC-SCRIPT-065a, 065b, 066b, 066c); TC-SCRIPT-066 updated from NOT_IMPLEMENTED to READY; total 100 nodes / 78 script tests.
+- `STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` constant removed.
+
+### Related docs
+
+- `scripts/cloud_grid_preflight.py` — `_check_browserstack()`; updated BrowserStack branch; removed NOT_IMPLEMENTED constant
+- `conftest.py` — BrowserStack provider branch; `_BS_BROWSER_MAP`; `urllib.parse` import
+- `.github/workflows/ci.yml` — smoke suite step renamed `cloud_grid_run`; provider-agnostic env and docker args
+- `test/scripts/test_cloud_grid_preflight.py` — TC-SCRIPT-065a, 065b, 066 (updated), 066b, 066c
+- `agentic-qa-workflows/governance/quality_gates.md` — Cloud Grid row updated; BrowserStack activation documented
+- `agentic-qa-workflows/governance/notification_wiring.md` — BrowserStack activation section updated; trial guard added

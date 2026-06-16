@@ -1,6 +1,6 @@
 """Unit tests for scripts/cloud_grid_preflight.py.
 
-Covers TC-SCRIPT-032 to TC-SCRIPT-041.
+Covers TC-SCRIPT-032 to TC-SCRIPT-041, TC-SCRIPT-065 to TC-SCRIPT-066c.
 All tests use monkeypatch for env vars and mock the HTTP call.
 No real network calls are made; no real credentials are used.
 """
@@ -236,7 +236,7 @@ def test_unknown_provider_exits_nonzero(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-# TC-SCRIPT-065 — browserstack missing credentials → SKIPPED_MISSING_CREDENTIALS
+# TC-SCRIPT-065 — browserstack missing both credentials → SKIPPED_MISSING_CREDENTIALS
 @pytest.mark.scripts
 @pytest.mark.negative
 @pytest.mark.regression
@@ -257,15 +257,33 @@ def test_browserstack_missing_credentials_returns_skipped_missing(
     assert data["provider"] == "browserstack"
 
 
-# TC-SCRIPT-066 — browserstack credentials present → SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED
+# TC-SCRIPT-065a — browserstack username set, access key missing → SKIPPED_MISSING_CREDENTIALS
 @pytest.mark.scripts
+@pytest.mark.negative
 @pytest.mark.regression
-@pytest.mark.tc_id("TC-SCRIPT-066")
-def test_browserstack_credentials_present_returns_not_implemented(
-    monkeypatch, tmp_path
-):
+@pytest.mark.tc_id("TC-SCRIPT-065a")
+def test_browserstack_missing_access_key_returns_skipped_missing(monkeypatch, tmp_path):
     monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
     monkeypatch.setenv("BROWSERSTACK_USERNAME", "test-bs-user")
+    monkeypatch.delenv("BROWSERSTACK_ACCESS_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    result = preflight.run()
+
+    assert result == 0
+    data = _read_preflight_json(tmp_path / "artifacts")
+    assert data["status"] == preflight.STATUS_SKIPPED_MISSING_CREDENTIALS
+    assert data["provider"] == "browserstack"
+
+
+# TC-SCRIPT-065b — browserstack access key set, username missing → SKIPPED_MISSING_CREDENTIALS
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-065b")
+def test_browserstack_missing_username_returns_skipped_missing(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
+    monkeypatch.delenv("BROWSERSTACK_USERNAME", raising=False)
     monkeypatch.setenv("BROWSERSTACK_ACCESS_KEY", "test-bs-key")
     monkeypatch.chdir(tmp_path)
 
@@ -273,5 +291,74 @@ def test_browserstack_credentials_present_returns_not_implemented(
 
     assert result == 0
     data = _read_preflight_json(tmp_path / "artifacts")
-    assert data["status"] == preflight.STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED
+    assert data["status"] == preflight.STATUS_SKIPPED_MISSING_CREDENTIALS
+    assert data["provider"] == "browserstack"
+
+
+# TC-SCRIPT-066 — browserstack credentials valid → READY
+@pytest.mark.scripts
+@pytest.mark.smoke
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-066")
+def test_browserstack_valid_credentials_returns_ready(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
+    monkeypatch.setenv("BROWSERSTACK_USERNAME", "test-bs-user")
+    monkeypatch.setenv("BROWSERSTACK_ACCESS_KEY", "test-bs-key")
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda req, timeout=None: _http_response(200)
+    )
+
+    result = preflight.run()
+
+    assert result == 0
+    data = _read_preflight_json(tmp_path / "artifacts")
+    assert data["status"] == preflight.STATUS_READY
+    assert data["provider"] == "browserstack"
+
+
+# TC-SCRIPT-066b — browserstack credentials rejected (401) → SKIPPED_INVALID_CREDENTIALS
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-066b")
+def test_browserstack_invalid_credentials_401(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
+    monkeypatch.setenv("BROWSERSTACK_USERNAME", "test-bs-user")
+    monkeypatch.setenv("BROWSERSTACK_ACCESS_KEY", "test-bs-key")
+    monkeypatch.chdir(tmp_path)
+
+    def raise_401(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", raise_401)
+    result = preflight.run()
+
+    assert result == 0
+    data = _read_preflight_json(tmp_path / "artifacts")
+    assert data["status"] == preflight.STATUS_SKIPPED_INVALID_CREDENTIALS
+    assert data["provider"] == "browserstack"
+
+
+# TC-SCRIPT-066c — browserstack API unreachable → SKIPPED_PROVIDER_UNAVAILABLE
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-066c")
+def test_browserstack_provider_unavailable_on_network_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLOUD_GRID_PROVIDER", "browserstack")
+    monkeypatch.setenv("BROWSERSTACK_USERNAME", "test-bs-user")
+    monkeypatch.setenv("BROWSERSTACK_ACCESS_KEY", "test-bs-key")
+    monkeypatch.chdir(tmp_path)
+
+    def raise_url_error(req, timeout=None):
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(urllib.request, "urlopen", raise_url_error)
+    result = preflight.run()
+
+    assert result == 0
+    data = _read_preflight_json(tmp_path / "artifacts")
+    assert data["status"] == preflight.STATUS_PROVIDER_UNAVAILABLE
     assert data["provider"] == "browserstack"

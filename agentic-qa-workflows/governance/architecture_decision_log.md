@@ -2466,7 +2466,7 @@ ADR-033 (PR #71) proved the Sauce Labs 3-browser advisory cloud matrix end-to-en
 - Four levels: 🟢 High, 🟠 Low, 🟡 Medium, 🔴 Blocked.
 - `compute_overall_readiness()` is unchanged — confidence is display-only.
 
-**7. Live BrowserStack execution deferred to ADR-035 / PR #73.**
+**7. Live BrowserStack execution deferred to ADR-036.**
 
 ### Why provider abstraction before live execution
 
@@ -2622,5 +2622,7 @@ None of these changes affect the required release lane, test behavior, or notifi
 
 ### Related docs
 
-- `.github/workflows/ci.yml` — `Save Docker image`, `Upload Docker image artifact` in `test`; `Download Docker image artifact`, `Load Docker image` in `api`, `ui`, `ui-cross-browser`, `cloud-grid`
+- `.github/workflows/ci.yml` — `Save Docker image`, `Upload Docker image artifact` in `test`; `Download Docker image artifact`, `Load Docker image` in `api`, `ui`, `ui-cross-browser`, `cloud-grid`; `timeout-minutes` on `test` job bumped to 40 to accommodate save/upload
 - `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table updated; Docker image artifact reuse documented
+- `agentic-qa-workflows/README.md` — ADR range updated to `ADR-001–ADR-035`
+- `agentic-qa-workflows/governance/architecture_decision_log.md` (ADR-034) — corrected BrowserStack live execution deferral from `ADR-035` to `ADR-036`

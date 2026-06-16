@@ -230,18 +230,35 @@ The `notify` job downloads all three using a pattern download (`cloud-grid-*-exe
 | `browserstack` | `Cloud Grid (BrowserStack)` |
 | empty or absent | `Cloud Grid` (backward compat with pre-PR #72 artifacts) |
 
-### BrowserStack secrets (readiness-only — live execution deferred)
+### BrowserStack activation (ADR-036)
 
-BrowserStack is a registered provider as of PR #72. Preflight validates credential presence; live cloud-grid execution is deferred to ADR-035 / PR #73.
+BrowserStack live cloud-grid execution is active as of PR #74 (ADR-036). When `CLOUD_GRID_PROVIDER=browserstack` is set and credentials are valid, the 3-browser smoke matrix runs against BrowserStack's Automate grid. Preflight hits `https://api.browserstack.com/automate/plan.json` with HTTP Basic auth to validate credentials before the smoke step executes.
 
-When `CLOUD_GRID_PROVIDER=browserstack` is set, add these as **GitHub repository secrets** (Settings → Secrets and variables → Actions → Secrets tab):
+BrowserStack is optional and account-dependent. This blueprint supports BrowserStack Automate through GitHub Actions secrets and provider selection. BrowserStack dashboard integrations such as Slack/GitHub are not required because CI reporting and notifications are handled by this repo.
+
+**Required secrets** (Settings → Secrets and variables → Actions → Secrets tab):
 
 | Secret | Purpose |
-|---|---|
+| --- | --- |
 | `BROWSERSTACK_USERNAME` | BrowserStack account username |
 | `BROWSERSTACK_ACCESS_KEY` | BrowserStack access key |
 
-Absent secrets → `SKIPPED_MISSING_CREDENTIALS`. Credentials present → `SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED` (expected until live execution is implemented in ADR-035). Secret values are never printed, logged, or written to artifacts.
+**Optional variable** (Settings → Secrets and variables → Actions → Variables tab):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BROWSERSTACK_CONNECT_TIMEOUT_MS` | `60000` | Playwright remote connect timeout for BrowserStack sessions (ms) |
+
+**Status outcomes:**
+
+- Absent credentials → `SKIPPED_MISSING_CREDENTIALS` (exits 0)
+- Credentials rejected by API → `SKIPPED_INVALID_CREDENTIALS` (exits 0)
+- API unreachable → `SKIPPED_PROVIDER_UNAVAILABLE` (exits 0)
+- Credentials valid → `READY` → smoke suite runs
+
+Secret values are never printed, logged, or written to artifacts. The endpoint URL (which embeds credentials in the capabilities JSON) is also never logged.
+
+For trial accounts, validate with `workflow_dispatch` first and switch `CLOUD_GRID_PROVIDER` back to `sauce` or `none` after proof is captured to avoid consuming trial minutes unintentionally.
 
 ### Release Confidence line
 

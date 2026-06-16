@@ -35,9 +35,6 @@ STATUS_SKIPPED_NOT_CONFIGURED = "SKIPPED_NOT_CONFIGURED"
 STATUS_SKIPPED_MISSING_CREDENTIALS = "SKIPPED_MISSING_CREDENTIALS"
 STATUS_SKIPPED_INVALID_CREDENTIALS = "SKIPPED_INVALID_CREDENTIALS"
 STATUS_PROVIDER_UNAVAILABLE = "SKIPPED_PROVIDER_UNAVAILABLE"
-STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED = (
-    "SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED"
-)
 
 ARTIFACTS_DIR = Path("artifacts")
 PREFLIGHT_JSON = ARTIFACTS_DIR / "cloud-grid-preflight.json"
@@ -103,6 +100,39 @@ def _check_sauce(username: str, access_key: str, region: str) -> tuple[str, str]
     )
 
 
+def _check_browserstack(username: str, access_key: str) -> tuple[str, str]:
+    url = "https://api.browserstack.com/automate/plan.json"
+    token = base64.b64encode(f"{username}:{access_key}".encode()).decode()
+    req = urllib.request.Request(url, headers={"Authorization": f"Basic {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            if resp.status == 200:
+                return (
+                    STATUS_READY,
+                    "BrowserStack credentials are valid and the Automate API is reachable.",
+                )
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            return (
+                STATUS_SKIPPED_INVALID_CREDENTIALS,
+                "BrowserStack credentials were rejected by the API. "
+                "Verify BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY.",
+            )
+        return (
+            STATUS_PROVIDER_UNAVAILABLE,
+            f"BrowserStack API returned an unexpected HTTP error: {type(exc).__name__}.",
+        )
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        return (
+            STATUS_PROVIDER_UNAVAILABLE,
+            f"BrowserStack API is unreachable: {type(exc).__name__}.",
+        )
+    return (
+        STATUS_PROVIDER_UNAVAILABLE,
+        "BrowserStack API returned an unexpected response.",
+    )
+
+
 def run() -> int:
     provider = os.environ.get("CLOUD_GRID_PROVIDER", "none").strip().lower()
 
@@ -137,18 +167,9 @@ def run() -> int:
             _write_artifacts(provider, STATUS_SKIPPED_MISSING_CREDENTIALS, msg)
             print(f"[cloud-grid-preflight] {STATUS_SKIPPED_MISSING_CREDENTIALS}: {msg}")
             return 0
-        msg = (
-            "BrowserStack credentials are present. "
-            "Live cloud-grid execution is not yet implemented for BrowserStack. "
-            "See ADR-034 and ADR-035 for the activation plan."
-        )
-        _write_artifacts(
-            provider, STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED, msg
-        )
-        print(
-            f"[cloud-grid-preflight] "
-            f"{STATUS_SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED}: {msg}"
-        )
+        status, msg = _check_browserstack(bs_username, bs_access_key)
+        _write_artifacts(provider, status, msg)
+        print(f"[cloud-grid-preflight] {status}: {msg}")
         return 0
 
     msg = (

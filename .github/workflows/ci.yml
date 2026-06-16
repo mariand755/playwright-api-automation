@@ -546,22 +546,29 @@ jobs:
           fi
 
       - name: Run cloud-grid smoke suite
-        id: sauce_run
+        id: cloud_grid_run
         if: steps.preflight.outputs.status == 'READY'
         continue-on-error: true
         env:
+          CLOUD_GRID_PROVIDER: ${{ vars.CLOUD_GRID_PROVIDER }}
           SAUCE_USERNAME: ${{ secrets.SAUCE_USERNAME }}
           SAUCE_ACCESS_KEY: ${{ secrets.SAUCE_ACCESS_KEY }}
           SAUCE_REGION: ${{ vars.SAUCE_REGION }}
           SAUCE_CONNECT_TIMEOUT_MS: ${{ vars.SAUCE_CONNECT_TIMEOUT_MS }}
+          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
+          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          BROWSERSTACK_CONNECT_TIMEOUT_MS: ${{ vars.BROWSERSTACK_CONNECT_TIMEOUT_MS }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
-            -e CLOUD_GRID_PROVIDER=sauce \
+            -e CLOUD_GRID_PROVIDER="${CLOUD_GRID_PROVIDER}" \
             -e SAUCE_USERNAME="${SAUCE_USERNAME}" \
             -e SAUCE_ACCESS_KEY="${SAUCE_ACCESS_KEY}" \
             -e SAUCE_REGION="${SAUCE_REGION:-us-west-1}" \
             -e SAUCE_CONNECT_TIMEOUT_MS="${SAUCE_CONNECT_TIMEOUT_MS:-60000}" \
+            -e BROWSERSTACK_USERNAME="${BROWSERSTACK_USERNAME}" \
+            -e BROWSERSTACK_ACCESS_KEY="${BROWSERSTACK_ACCESS_KEY}" \
+            -e BROWSERSTACK_CONNECT_TIMEOUT_MS="${BROWSERSTACK_CONNECT_TIMEOUT_MS:-60000}" \
             playwright-api-automation pytest test/ui -m smoke -v \
             --browser ${{ matrix.browser }} \
             --junitxml=artifacts/cloud-grid-${{ matrix.browser }}-report.xml
@@ -595,10 +602,10 @@ jobs:
           mkdir -p artifacts
           PREFLIGHT="${{ steps.preflight.outputs.status }}"
           PREFLIGHT="${PREFLIGHT:-ERROR_PREFLIGHT_STATUS_UNAVAILABLE}"
-          SAUCE_OUTCOME="${{ steps.sauce_run.outcome }}"
+          CG_OUTCOME="${{ steps.cloud_grid_run.outcome }}"
           CG_REPORT="${{ steps.cg_report.outputs.exists }}"
 
-          if [[ "$PREFLIGHT" == "READY" && "$SAUCE_OUTCOME" == "success" ]]; then
+          if [[ "$PREFLIGHT" == "READY" && "$CG_OUTCOME" == "success" ]]; then
             STATUS="PASS"
             DETAIL="smoke suite passed"
           elif [[ "$PREFLIGHT" == "READY" && "$CG_REPORT" == "true" ]]; then

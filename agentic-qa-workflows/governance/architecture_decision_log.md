@@ -2479,7 +2479,7 @@ Distinguishes "provider configured, credentials present, but execution not yet l
 - `SKIPPED_MISSING_CREDENTIALS` — provider selected but secrets absent
 - `SKIPPED_INVALID_CREDENTIALS` — Sauce credentials rejected
 
-The status is actionable: it tells the operator that the provider is recognized and ready to activate, pending ADR-035.
+The status is actionable: it tells the operator that the provider is recognized and ready to activate — activated by ADR-036 (PR #74).
 
 ### Why provider in artifact (not env var in notify step)
 

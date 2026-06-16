@@ -787,7 +787,7 @@ def test_build_message_lines_renders_browserstack_provider_label(tmp_path, monke
         (tmp_path / "artifacts" / f"cloud-grid-{browser}-status.json").write_text(
             (
                 '{"status": "SKIPPED", '
-                '"detail": "preflight status: SKIPPED_PROVIDER_EXECUTION_NOT_IMPLEMENTED", '
+                '"detail": "preflight status: SKIPPED_MISSING_CREDENTIALS", '
                 f'"browser": "{browser}", "provider": "browserstack"}}'
             ),
             encoding="utf-8",

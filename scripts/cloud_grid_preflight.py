@@ -139,7 +139,8 @@ def run() -> int:
     if provider == "none":
         msg = (
             "CLOUD_GRID_PROVIDER is not set or is 'none'. "
-            "Set CLOUD_GRID_PROVIDER=sauce (and required secrets) to enable cloud-grid execution."
+            "Set CLOUD_GRID_PROVIDER=sauce or CLOUD_GRID_PROVIDER=browserstack "
+            "(and required secrets) to enable cloud-grid execution."
         )
         _write_artifacts(provider, STATUS_SKIPPED_NOT_CONFIGURED, msg)
         print(f"[cloud-grid-preflight] {STATUS_SKIPPED_NOT_CONFIGURED}: {msg}")

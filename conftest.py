@@ -265,7 +265,10 @@ def pytest_runtest_makereport(item, call):
     ):
         try:
             payload = browserstack_status_payload(not report.failed, item.nodeid)
-            page.evaluate(f"browserstack_executor: {json.dumps(payload)}")
+            # BrowserStack's executor convention requires the magic string be
+            # passed as the function *argument*, not as the JS expression
+            # itself — the no-op expression keeps this valid, executable JS.
+            page.evaluate("_ => {}", f"browserstack_executor: {json.dumps(payload)}")
         except Exception:
             # BrowserStack dashboard status is cosmetic only.
             # GitHub Actions, JUnit, release gate, and notify.py remain authoritative.

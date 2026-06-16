@@ -115,6 +115,17 @@ jobs:
           fail-on-error: false
           use-actions-summary: false  # v3.0.0 changed default to true; preserve GitHub Check Run panels
 
+      - name: Save Docker image
+        run: docker save playwright-api-automation | gzip > /tmp/playwright-api-automation.tar.gz
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-api-automation-image
+          path: /tmp/playwright-api-automation.tar.gz
+          retention-days: 1
+          if-no-files-found: error
+
   api:
     name: API Tests
     runs-on: ubuntu-latest
@@ -125,21 +136,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        run: |
-          for i in 1 2 3; do
-            docker build -t playwright-api-automation . && break
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: playwright-api-automation-image
+          path: /tmp
 
-            if [ "$i" -lt 3 ]; then
-              wait_seconds=$((i * 30))
-              echo "Docker build attempt $i/3 failed — retrying in ${wait_seconds}s"
-              sleep "$wait_seconds"
-            else
-              echo "Docker build failed after 3 attempts"
-              exit 1
-            fi
-          done
+      - name: Load Docker image
+        run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
         run: mkdir -p artifacts
@@ -282,21 +286,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        run: |
-          for i in 1 2 3; do
-            docker build -t playwright-api-automation . && break
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: playwright-api-automation-image
+          path: /tmp
 
-            if [ "$i" -lt 3 ]; then
-              wait_seconds=$((i * 30))
-              echo "Docker build attempt $i/3 failed — retrying in ${wait_seconds}s"
-              sleep "$wait_seconds"
-            else
-              echo "Docker build failed after 3 attempts"
-              exit 1
-            fi
-          done
+      - name: Load Docker image
+        run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
         run: |
@@ -406,9 +403,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        run: docker build -t playwright-api-automation .
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: playwright-api-automation-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
         run: |
@@ -494,9 +496,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build Docker image
-        # Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.
-        run: docker build -t playwright-api-automation .
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: playwright-api-automation-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
         run: mkdir -p artifacts

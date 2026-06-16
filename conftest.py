@@ -6,6 +6,10 @@ import pytest
 from pathlib import Path
 from playwright.sync_api import expect
 from utils.api_client import BookingApiClient
+from utils.browserstack_capabilities import (
+    browserstack_status_payload,
+    build_browserstack_caps,
+)
 from utils.timeouts import (
     API_REQUEST_TIMEOUT_SECONDS,
     UI_ACTION_TIMEOUT_MS,
@@ -14,14 +18,6 @@ from utils.timeouts import (
 )
 
 _KNOWN_ENVIRONMENTS = frozenset({"staging", "prod_read_only"})
-
-# BrowserStack CDP always uses playwright.chromium.connect(); browser is
-# specified in the capabilities JSON and routed by BrowserStack's proxy layer.
-_BS_BROWSER_MAP: dict[str, str] = {
-    "chromium": "chrome",
-    "firefox": "playwright-firefox",
-    "webkit": "playwright-webkit",
-}
 
 
 @pytest.fixture(scope="session")
@@ -214,19 +210,11 @@ def browser(playwright, browser_name, browser_type_launch_args):
         bs_username = os.environ.get("BROWSERSTACK_USERNAME", "")
         bs_access_key = os.environ.get("BROWSERSTACK_ACCESS_KEY", "")
         timeout_ms = int(os.environ.get("BROWSERSTACK_CONNECT_TIMEOUT_MS", "60000"))
-        bs_browser = _BS_BROWSER_MAP.get(browser_name, browser_name)
+        # Resolves the browser capability and raises ValueError fast on an
+        # unsupported browser name, before any connection attempt.
         # Credentials embedded in caps JSON inside endpoint URL — never printed or logged
         caps = json.dumps(
-            {
-                "browser": bs_browser,
-                "browser_version": "latest",
-                "os": "osx",
-                "os_version": "ventura",
-                "name": "playwright-api-automation smoke",
-                "build": "playwright-api-automation",
-                "browserstack.username": bs_username,
-                "browserstack.accessKey": bs_access_key,
-            }
+            build_browserstack_caps(browser_name, bs_username, bs_access_key)
         )
         endpoint = (
             f"wss://cdp.browserstack.com/playwright?caps={urllib.parse.quote(caps)}"
@@ -236,7 +224,7 @@ def browser(playwright, browser_name, browser_type_launch_args):
         except Exception as exc:
             raise RuntimeError(
                 f"BrowserStack remote session could not be provisioned.\n"
-                f"Provider: browserstack  Browser: {bs_browser}\n"
+                f"Provider: browserstack  Browser: {browser_name}\n"
                 f"Error type: {type(exc).__name__}\n"
                 f"Likely causes: invalid credentials, Automate plan limit reached,\n"
                 f"  unsupported browser/OS combination, or provider outage.\n"
@@ -259,30 +247,46 @@ def page(page):
     return page
 
 
-# Pytest hook to capture screenshots and HTML on UI test failure.
+# Pytest hook to capture screenshots/HTML on UI test failure and to mark
+# BrowserStack dashboard session status (best-effort, cosmetic only).
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
 
-    if report.when == "call" and report.failed:
-        page = item.funcargs.get("page")
-        if page:
-            artifacts_dir = Path("artifacts") / "failures"
-            artifacts_dir.mkdir(parents=True, exist_ok=True)
+    if report.when != "call":
+        return
 
-            safe_name = (
-                item.nodeid.replace("/", "_")
-                .replace("\\", "_")
-                .replace("::", "__")
-                .replace("[", "_")
-                .replace("]", "_")
-            )
-            screenshot_path = artifacts_dir / f"{safe_name}.png"
-            html_path = artifacts_dir / f"{safe_name}.html"
+    page = item.funcargs.get("page")
 
-            page.screenshot(path=str(screenshot_path), full_page=True)
-            html_path.write_text(page.content(), encoding="utf-8")
+    if (
+        page
+        and os.environ.get("CLOUD_GRID_PROVIDER", "").strip().lower() == "browserstack"
+    ):
+        try:
+            payload = browserstack_status_payload(not report.failed, item.nodeid)
+            page.evaluate(f"browserstack_executor: {json.dumps(payload)}")
+        except Exception:
+            # BrowserStack dashboard status is cosmetic only.
+            # GitHub Actions, JUnit, release gate, and notify.py remain authoritative.
+            pass
+
+    if report.failed and page:
+        artifacts_dir = Path("artifacts") / "failures"
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_name = (
+            item.nodeid.replace("/", "_")
+            .replace("\\", "_")
+            .replace("::", "__")
+            .replace("[", "_")
+            .replace("]", "_")
+        )
+        screenshot_path = artifacts_dir / f"{safe_name}.png"
+        html_path = artifacts_dir / f"{safe_name}.html"
+
+        page.screenshot(path=str(screenshot_path), full_page=True)
+        html_path.write_text(page.content(), encoding="utf-8")
 
 
 def pytest_collection_modifyitems(items):

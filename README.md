@@ -21,7 +21,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 |---|---|---|---|
 | API | 13 | pytest + Requests | CRUD + auth + contract validation — Restful Booker |
 | UI | 9 | pytest + Playwright | Login, cart, checkout, negative paths — SauceDemo |
-| Script unit | 78 | pytest | Release gate, CI summary, notification decision logic, cloud-grid preflight |
+| Script unit | 85 | pytest | Release gate, CI summary, notification decision logic, cloud-grid preflight, BrowserStack capability construction |
 
 ## Target Applications
 
@@ -149,7 +149,7 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | Cross-browser UI matrix | ✅ Activated (smoke, advisory) | Nightly + `workflow_dispatch`; chromium / firefox / webkit smoke suite; advisory — not in branch protection |
 | Cloud-grid CI preflight | ✅ Implemented | Validates cloud provider credentials before cloud-grid execution; `CLOUD_GRID_PROVIDER=none` by default; safe-skip on missing or invalid credentials |
 | Sauce Labs cloud-grid execution | ✅ Activated (smoke, advisory) | Nightly + `workflow_dispatch`; 3-browser (chromium, firefox, webkit) cloud matrix; provider-aware preflight (`none`, `sauce`, `browserstack`); `continue-on-error: true` — not in branch protection |
-| BrowserStack cloud-grid execution | ✅ Activated (smoke, advisory) | Live execution active as of ADR-036 / PR #74; set `CLOUD_GRID_PROVIDER=browserstack` with `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` secrets. BrowserStack is optional and account-dependent — dashboard integrations (Slack/GitHub) not required; CI reporting and notifications are handled by this repo. For trial accounts, validate with `workflow_dispatch` first and switch `CLOUD_GRID_PROVIDER` back to `sauce` or `none` after proof is captured to avoid consuming trial minutes unintentionally. |
+| BrowserStack cloud-grid execution | ✅ Activated (smoke, advisory) | Live execution active as of ADR-036 / PR #74; capability mapping, Playwright version pinning, fail-fast unsupported-browser handling, and best-effort dashboard status marking hardened in ADR-037 / PR #76. Set `CLOUD_GRID_PROVIDER=browserstack` with `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` secrets. BrowserStack is optional and account-dependent — dashboard integrations (Slack/GitHub) not required; CI reporting and notifications are handled by this repo. For trial accounts, validate with `workflow_dispatch` first and switch `CLOUD_GRID_PROVIDER` back to `sauce` or `none` after proof is captured to avoid consuming trial minutes unintentionally. |
 | Blueprint extraction | ⏳ Deferred | Phase 8; after README refresh |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.

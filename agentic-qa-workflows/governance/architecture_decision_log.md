@@ -2735,3 +2735,67 @@ None of these changes affect the required release lane.
 - `agentic-qa-workflows/governance/quality_gates.md` — Cloud Grid row updated; BrowserStack activation documented
 - `agentic-qa-workflows/governance/notification_wiring.md` — BrowserStack activation section updated; trial guard added
 - PR #75 — Firefox capability mapping fix (`firefox` → `playwright-firefox`)
+- ADR-037 — hardens BrowserStack capability construction, Playwright version pinning, unsupported-browser fail-fast behavior, and best-effort dashboard status marking after BrowserStack live execution was proven
+
+---
+
+## ADR-037: BrowserStack capability hardening and dashboard-status marking
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Context
+
+PR #74 activated BrowserStack live execution. PR #75 fixed the Firefox capability mapping after live validation surfaced a partial result (`chromium: PASS`, `firefox: FAIL`, `webkit: PASS`). After PR #75, live `workflow_dispatch` validation passed on all 3 browsers with `Release Confidence: High`.
+
+Four gaps remained:
+
+1. No regression test guarded `BS_BROWSER_MAP` — a future edit could silently reintroduce a wrong capability value, caught only by another live BrowserStack run.
+2. No Playwright-version capability was sent to BrowserStack, leaving version-skew risk between the pinned `playwright==1.60.0` package and whatever browser binary BrowserStack selects.
+3. An unsupported browser name silently fell through (`_BS_BROWSER_MAP.get(browser_name, browser_name)`) instead of failing fast.
+4. BrowserStack's dashboard showed every session as "Unknown" status, since no SDK or manual status marking was used.
+
+### Decision
+
+**1. Extract capability logic (`utils/browserstack_capabilities.py`, new):**
+`BS_BROWSER_MAP`, `resolve_browser_capability()`, `playwright_client_version()`, `build_browserstack_caps()`, and `browserstack_status_payload()` move out of `conftest.py` into a pure, dependency-free module — following the existing `utils/api_client.py` / `utils/timeouts.py` precedent already imported by `conftest.py`. This makes the BrowserStack capability surface directly unit-testable (TC-SCRIPT-073–079) without any Playwright or network dependency.
+
+**2. Fail fast on unsupported browser names:**
+`resolve_browser_capability()` raises `ValueError` listing supported browsers instead of silently passing the raw `browser_name` through as a capability value. The error surfaces before any connection attempt.
+
+**3. Playwright version pinning:**
+`build_browserstack_caps()` adds `client.playwrightVersion` and `browserstack.playwrightVersion`, both sourced from `importlib.metadata.version("playwright")` — a single source of truth that tracks `requirements.txt` automatically across future version bumps, with a `"0.0.0"` fallback only if package metadata is ever unavailable.
+
+**4. Best-effort BrowserStack dashboard status marking:**
+The existing `pytest_runtest_makereport` hook in `conftest.py` (previously failure-screenshot-only) is extended to call `browserstack_status_payload()` and `page.evaluate(f"browserstack_executor: {json.dumps(payload)}")` when `CLOUD_GRID_PROVIDER=browserstack`. The reason text contains only the pytest node ID — never exception text, traceback, or test data — consistent with this repo's existing redaction discipline. The call is wrapped in `try/except Exception: pass`; a marking failure never affects the test outcome or any required signal.
+
+**Explicitly deferred:** `BROWSERSTACK_OS` / `BROWSERSTACK_OS_VERSION` configurability — no proven need (the live run already passed 3/3 on `osx`/`ventura`), and adding it would require `ci.yml` changes with no evidence-backed justification.
+
+### Dashboard status is cosmetic, not authoritative
+
+BrowserStack's dashboard may now show `passed`/`failed` per session when marking succeeds. This is best-effort only. GitHub Actions, JUnit artifacts, the release readiness gate, and `scripts/notify.py` remain the sole authoritative signal — the BrowserStack dashboard is never a gate.
+
+### Consequences
+
+- A future accidental edit to `BS_BROWSER_MAP` is now caught by `test/scripts/test_browserstack_capabilities.py` instead of only by a live BrowserStack run.
+- BrowserStack dashboard sessions show `passed`/`failed` instead of `Unknown` when marking succeeds.
+- No CI workflow, preflight, or notification logic changes.
+- No new dependency — `importlib.metadata` and the `browserstack_executor:` JS-evaluate convention are both dependency-free.
+- 7 new script unit tests (TC-SCRIPT-073–079); total 107 nodes / 85 script tests.
+
+### Rollback
+
+1. Revert `conftest.py` to inline `_BS_BROWSER_MAP` and caps construction; remove the `utils.browserstack_capabilities` import.
+2. Delete `utils/browserstack_capabilities.py`.
+3. Revert the `pytest_runtest_makereport` extension — restore failure-screenshot-only logic.
+4. Delete `test/scripts/test_browserstack_capabilities.py`.
+
+None of these changes affect the required release lane.
+
+### Related docs
+
+- `utils/browserstack_capabilities.py` — new module: `BS_BROWSER_MAP`, `resolve_browser_capability()`, `playwright_client_version()`, `build_browserstack_caps()`, `browserstack_status_payload()`
+- `conftest.py` — BrowserStack branch now calls `build_browserstack_caps()`; `pytest_runtest_makereport` extended for status marking
+- `test/scripts/test_browserstack_capabilities.py` — TC-SCRIPT-073 through TC-SCRIPT-079
+- `agentic-qa-workflows/governance/notification_wiring.md` — dashboard status marking documented as cosmetic/best-effort
+- `README.md` — script unit test count updated; BrowserStack row updated

@@ -260,6 +260,8 @@ Secret values are never printed, logged, or written to artifacts. The endpoint U
 
 For trial accounts, validate with `workflow_dispatch` first and switch `CLOUD_GRID_PROVIDER` back to `sauce` or `none` after proof is captured to avoid consuming trial minutes unintentionally.
 
+**Dashboard status marking (ADR-037):** BrowserStack dashboard session status marking is best-effort and cosmetic. The repo may mark sessions passed/failed through the BrowserStack executor protocol (`browserstack_executor:` JS-evaluate convention) when `CLOUD_GRID_PROVIDER=browserstack`, but GitHub Actions, JUnit artifacts, release gate output, and Slack/Gmail notifications remain the authoritative reporting path. A marking failure is silently ignored and never affects test outcome or any required signal.
+
 ### Release Confidence line
 
 The notification includes a `Release Confidence` line after `Overall Release Readiness`. It provides a plain-language interpretation of the combined CI + release gate + advisory signal:

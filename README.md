@@ -34,11 +34,11 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 
 | Job | Runs | Depends on |
 |---|---|---|
-| Docker Test Suite | Builds image, validates pytest collection | — |
-| API Tests | Full API suite, JUnit report, dorny test panel | Docker Test Suite |
-| UI Tests | Full UI suite, JUnit report, dorny test panel, failure artifacts | Docker Test Suite |
-| UI Cross-Browser | Advisory chromium/firefox/webkit smoke matrix, JUnit report, dorny test panel | Docker Test Suite |
-| Cloud Grid | Advisory Sauce Labs 3-browser cloud matrix (chromium, firefox, webkit), preflight-gated, per-browser status artifacts | Docker Test Suite |
+| Docker Test Suite | Builds image, validates all gates, uploads image artifact | — |
+| API Tests | Downloads image artifact, full API suite, JUnit report, dorny test panel | Docker Test Suite |
+| UI Tests | Downloads image artifact, full UI suite, JUnit report, dorny test panel, failure artifacts | Docker Test Suite |
+| UI Cross-Browser | Downloads image artifact, advisory chromium/firefox/webkit smoke matrix, JUnit report, dorny test panel | Docker Test Suite |
+| Cloud Grid | Downloads image artifact, advisory Sauce Labs 3-browser cloud matrix (chromium, firefox, webkit), preflight-gated, per-browser status artifacts | Docker Test Suite |
 | Notify | Builds release readiness notification with required CI status, release gate, and advisory job results; delivers to configured channels | API Tests + UI Tests |
 
 ### Test scope by trigger

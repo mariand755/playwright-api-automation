@@ -2466,7 +2466,7 @@ ADR-033 (PR #71) proved the Sauce Labs 3-browser advisory cloud matrix end-to-en
 - Four levels: 🟢 High, 🟠 Low, 🟡 Medium, 🔴 Blocked.
 - `compute_overall_readiness()` is unchanged — confidence is display-only.
 
-**7. Live BrowserStack execution deferred to ADR-035 / PR #73.**
+**7. Live BrowserStack execution deferred to ADR-036.**
 
 ### Why provider abstraction before live execution
 
@@ -2533,3 +2533,96 @@ None of these changes affect the required release lane.
 - `scripts/notify.py` — `PROVIDER_LABELS`; `compute_release_confidence()`; `build_message_lines()` provider header and confidence line
 - `test/scripts/test_cloud_grid_preflight.py` — TC-SCRIPT-041 updated; TC-SCRIPT-065–TC-SCRIPT-066
 - `test/scripts/test_notify_readiness.py` — TC-SCRIPT-067–TC-SCRIPT-072
+
+---
+
+## ADR-035: Docker image build-once artifact reuse and registry-resilience hardening
+
+**Status:** Accepted
+**Date:** 2026-06-15
+
+### Context
+
+PR #72 introduced a Docker build retry loop scoped to the three required CI jobs (Docker Test Suite, API Tests, UI Tests) to mitigate repeated MCR (mcr.microsoft.com) rate-limit and auth failures on GitHub Actions shared runners. Each CI job ran independently on a fresh runner and rebuilt the Docker image from scratch, pulling the Playwright base image from MCR up to five times per run. The retry loop reduced blocking failures but did not eliminate the root cause: redundant base-image pulls that hit MCR's rate limits under shared-runner load.
+
+Three gaps remained:
+
+1. Four downstream jobs (API Tests, UI Tests, UI Cross-Browser, Cloud Grid) each rebuilt an identical image, paying the MCR pull cost independently.
+2. Advisory jobs (UI Cross-Browser, Cloud Grid) had no retry loop — a single MCR auth failure would silently skip an advisory run.
+3. The PR #72 retry comment `# Fresh runner — image must be rebuilt; Docker layer caching is a future optimization.` was deferred optimism with no implementation plan.
+
+### Decision
+
+Build the Docker image exactly once in the `Docker Test Suite` (`test`) job. After all validation passes (ruff, mypy, pip-audit, Trivy, pytest collection, script unit tests), export the image with `docker save | gzip` and upload it as a GitHub Actions artifact (`playwright-api-automation-image`, `retention-days: 1`). All downstream jobs download and `docker load` the artifact instead of rebuilding.
+
+**Workflow changes:**
+
+- `test` job: add `Save Docker image` and `Upload Docker image artifact` steps after `Publish Script Unit Test Results`. Upload uses `if-no-files-found: error` — a failed save is a hard failure, not a silent skip.
+- `api`, `ui`, `ui-cross-browser`, `cloud-grid` jobs: replace `Build Docker image` step with `Download Docker image artifact` + `Load Docker image`. Remove retry loops from `api` and `ui` (no longer building — nothing to retry). Remove stale `# Fresh runner` comments.
+- All `docker run` steps remain identical — same commands, same env vars, same volume mounts.
+- `notify` job: unchanged.
+
+**Artifact design:**
+
+| Property | Value |
+| --- | --- |
+| Name | `playwright-api-automation-image` |
+| Path | `/tmp/playwright-api-automation.tar.gz` |
+| Format | `docker save \| gzip` |
+| Retention | 1 day |
+| Upload condition | Default (success only) — downstream jobs never run if `test` fails |
+| if-no-files-found | `error` |
+
+### Alternatives considered
+
+**Option B — Buildx / GitHub Actions cache:** Reduces layer transfer size but still contacts MCR on each job to validate layer hashes. Does not eliminate rate-limit exposure. Requires `docker/setup-buildx-action` and `docker/build-push-action` — new dependencies not justified by the benefit.
+
+**Option C — GHCR mirror:** Eliminates MCR dependency entirely (mirror the Playwright base image or final project image to GitHub Container Registry). More durable long-term but requires credentials, package visibility settings, manual push steps, and a new registry dependency. Out of scope for a consulting blueprint; deferred to a future slice if MCR rate-limit incidents recur after this PR.
+
+### Why the artifact approach fits this repo
+
+The existing workflow already uses `actions/upload-artifact@v7` and `actions/download-artifact@v8` for JUnit reports, status artifacts, and failure screenshots. An image artifact is the same pattern at larger scale. No new actions, no new registry, no new credentials.
+
+All downstream jobs already `needs: [test]`, so the artifact is guaranteed present whenever a downstream job starts. No fallback rebuild path is needed.
+
+### Why no fallback rebuild
+
+A conditional fallback (`if: failure()`) docker build in downstream jobs would re-introduce MCR exposure and add complexity. Because all downstream jobs `need: [test]`, if the `test` job fails (and thus the artifact was never uploaded), the downstream jobs are skipped by GitHub Actions before they reach the download step. The artifact is always present when downstream jobs run.
+
+### Performance trade-off
+
+| Metric | Before (per job rebuild) | After (artifact reuse) |
+| --- | --- | --- |
+| MCR pulls per run | Up to 5 | 1 |
+| `docker build` executions | 5 | 1 |
+| Extra steps per downstream job | 0 | 2 (download + load, ~60–90s each) |
+| Estimated net CI time savings | — | ~8–15 min per run |
+| Artifact size | — | ~800 MB–1.2 GB compressed |
+
+The upload/download overhead is accepted as the cost of eliminating four redundant MCR pulls.
+
+### Rollback
+
+1. Remove `Save Docker image` and `Upload Docker image artifact` steps from the `test` job.
+2. In `api` and `ui` jobs: replace `Download Docker image artifact` + `Load Docker image` with the retry `Build Docker image` block from PR #72.
+3. In `ui-cross-browser` and `cloud-grid` jobs: replace `Download Docker image artifact` + `Load Docker image` with `docker build -t playwright-api-automation .` (simple, no retry — advisory jobs).
+4. Mark ADR-035 `Superseded`.
+
+None of these changes affect the required release lane, test behavior, or notification behavior.
+
+### Consequences
+
+- MCR is contacted exactly once per CI run (in the `test` job build step with retry).
+- Retry loop remains only on the `test` job `Build Docker image` step; removed from `api` and `ui`.
+- Downstream jobs run the same image that passed all validation gates — identical binary to what ruff, mypy, Trivy, pip-audit, and pytest verified.
+- `docker save | gzip` adds ~60–90s to `test` job wall time.
+- `docker load` in each downstream job takes ~60–90s (replacing a ~2–4 min docker build).
+- Artifact stored on GitHub Actions storage; `retention-days: 1` prevents accumulation.
+- No Dockerfile changes, no new registry dependencies, no new credentials.
+
+### Related docs
+
+- `.github/workflows/ci.yml` — `Save Docker image`, `Upload Docker image artifact` in `test`; `Download Docker image artifact`, `Load Docker image` in `api`, `ui`, `ui-cross-browser`, `cloud-grid`; `timeout-minutes` on `test` job bumped to 40 to accommodate save/upload
+- `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table updated; Docker image artifact reuse documented
+- `agentic-qa-workflows/README.md` — ADR range updated to `ADR-001–ADR-035`
+- `agentic-qa-workflows/governance/architecture_decision_log.md` (ADR-034) — corrected BrowserStack live execution deferral from `ADR-035` to `ADR-036`

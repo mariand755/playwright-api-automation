@@ -153,15 +153,38 @@ Never hardcode credential values in the Jenkinsfile.
 
 ## Notification Integration
 
-`scripts/notify.py` works identically from a Jenkins Docker exec call. The pipeline sets `NOTIFY_DRY_RUN=true` by default — no credentials required, no Slack or SMTP calls are made.
+`scripts/notify.py` can be called from Jenkins via a Docker exec in `post { always { ... } }`. The pipeline sets `NOTIFY_DRY_RUN=true` by default — no credentials required, no Slack or SMTP calls are made.
 
-**To enable live Slack delivery:**
+**Important limitation:** `notify.py` reads per-job status env vars set by the GitHub Actions `notify` job (`JOBS_STATUS_TEST`, `JOBS_STATUS_API`, `JOBS_STATUS_UI`, `JOBS_STATUS_UI_CROSS_BROWSER`, `JOBS_STATUS_CLOUD_GRID`). These are populated from GitHub Actions job outcomes and are not present in a Jenkins run. In dry-run mode this is safe — no outbound call is made and there is no visible gap. For live delivery, the notification message will be missing individual job pass/fail context unless you map Jenkins stage results to these variables before calling `notify.py`.
+
+**Jenkins-to-notify.py env var mapping pattern:**
+
+```groovy
+// Capture stage results via currentBuild.result or per-stage result tracking,
+// then expose as JOBS_STATUS_* vars before calling notify.py.
+// Example (simplified — adapt to match your stage result tracking):
+sh """
+    docker run --rm \
+      -v "$ARTIFACTS_DIR:/app/artifacts" \
+      -e JOBS_STATUS_TEST=success \
+      -e JOBS_STATUS_API="${apiTestsResult}" \
+      -e JOBS_STATUS_UI="${uiTestsResult}" \
+      -e NOTIFY_DRY_RUN=false \
+      "$IMAGE_NAME" \
+      python scripts/notify.py
+"""
+```
+
+Per-stage result tracking in Jenkins requires a `script {}` block and Groovy variables — see [Jenkins Pipeline documentation](https://www.jenkins.io/doc/book/pipeline/getting-started/) for patterns.
+
+**To enable live Slack delivery (dry-run → live):**
 1. Add a Jenkins secret text credential with the Slack webhook URL.
-2. Wrap the notify `sh` step in `withCredentials([string(...)])` as shown above.
-3. Set `NOTIFY_DRY_RUN=false` (or remove the env var).
+2. Wrap the notify `sh` step in `withCredentials([string(...)])` as shown in the Credential Mapping section.
+3. Add the `JOBS_STATUS_*` env var mapping above.
+4. Set `NOTIFY_DRY_RUN=false`.
 
 **To enable live SMTP email delivery:**
-Follow the same steps as `notification_wiring.md` for activation — the credential setup is identical; only the binding mechanism differs (Jenkins `withCredentials` vs GitHub Actions `secrets`).
+Follow the same steps as `notification_wiring.md` — the activation requirements are identical; only the binding mechanism differs (Jenkins `withCredentials` vs GitHub Actions `secrets`).
 
 ---
 

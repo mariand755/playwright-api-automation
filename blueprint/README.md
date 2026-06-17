@@ -14,11 +14,12 @@ This guide explains how to adapt the patterns from this repo to another Python/p
 
 This repo demonstrates each blueprint pattern in a working, production-style context:
 
-- 7 API + 6 UI + 25 script unit tests with TC-ID traceability and JUnit reporting
-- Docker-first 4-job CI pipeline with smoke/full scope gating and nightly regression
+- 13 API + 9 UI + 85 script unit tests with TC-ID traceability and JUnit reporting
+- Docker-first multi-job CI pipeline: required release lane (Docker Test Suite → API Tests ∥ UI Tests → Release Gate) and advisory confidence lane (cross-browser matrix, cloud-grid, Release Confidence signal) with smoke/full scope gating and nightly regression
 - Multi-signal release readiness gate (JUnit + observability + defect signals → GO/NO_GO)
-- Slack + SMTP notification delivery, dry-run by default, activation-gated
+- Slack + SMTP notification delivery, dry-run by default, activation-gated; Gmail SMTP live delivery validated
 - ADR-backed governance layer with suite taxonomy, quality gates, and activation guides
+- Jenkins reference CI/CD adapter demonstrating blueprint portability to enterprise environments
 
 Every blueprint area below points to working source files. Use them as the reference, not as files to copy.
 
@@ -27,12 +28,13 @@ Every blueprint area below points to working source files. Use them as the refer
 Apply these patterns in order. Each builds on the previous:
 
 1. Test suite structure — pytest.ini, conftest.py, marker taxonomy, TC-ID system
-2. CI quality gate pipeline — Docker-first 4-job pipeline, smoke/full scope gating, code quality gates
+2. CI quality gate pipeline — Docker-first pipeline, required/advisory lane split, smoke/full scope gating, code quality gates
 3. Release readiness gate — JUnit + observability + defect signals → GO/NO_GO
 4. Notification delivery — Slack + SMTP, dry-run default, activation-gated
 5. Governance layer — ADR-backed decisions, suite taxonomy, quality gates, activation guides
 6. Agentic QA workflow — Mode A/B review gates, planning templates, governance-first prompts
 7. Observability integration — stub-first, explicit activation conditions, provider-independent
+8. CI portability adapter (optional) — Jenkins reference adapter for enterprise environments
 
 ---
 
@@ -42,15 +44,28 @@ Sections below are grouped by dependency complexity, not by application order �
 
 ### 1. CI Quality Gate Pattern
 
-A 4-job pipeline (Docker Test Suite → API Tests ∥ UI Tests → Notify) with smoke-only runs on PR/feature branch push and full-suite runs on push to main, nightly, and `workflow_dispatch`. The Docker Test Suite job runs all code quality gates (Ruff, mypy, pip-audit, Trivy) and script unit tests before any behavioral tests run.
+A multi-job CI pipeline with smoke-only runs on PR/feature branch push and full-suite runs on push to main, nightly, and `workflow_dispatch`.
 
-**Reference:** [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) · [`../agentic-qa-workflows/governance/quality_gates.md`](../agentic-qa-workflows/governance/quality_gates.md)
+**Required release lane** (branch-protected):
+- Docker Test Suite — quality gates (Ruff, mypy, pip-audit, Trivy) and script unit tests
+- API Tests ∥ UI Tests — parallel behavioral test execution with pytest-xdist and JUnit reporting
+- Release Gate — multi-signal GO/NO_GO decision (JUnit + observability + defect signals)
+
+**Advisory confidence lane** (continue-on-error; not in branch protection):
+- UI Cross-Browser — chromium/firefox/webkit smoke matrix
+- Cloud Grid — Sauce Labs and BrowserStack multi-browser smoke execution; preflight-gated
+
+**Reference adapter:**
+- `ci/jenkins/Jenkinsfile` — shows how the same Docker-first pipeline runs on enterprise Jenkins environments without modifying the test framework or release gate; GitHub Actions remains the working CI implementation for this repo
+
+**Reference:** [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) · [`../agentic-qa-workflows/governance/quality_gates.md`](../agentic-qa-workflows/governance/quality_gates.md) · [`../agentic-qa-workflows/governance/jenkins_wiring.md`](../agentic-qa-workflows/governance/jenkins_wiring.md)
 
 **Configure for a new repo:**
 - Job names (rename `API Tests` / `UI Tests` to match your test domains)
 - Docker image name and `COPY` paths
 - `if:` condition on the `Notify` job (trigger rules for your project)
 - Remove the prod-read-only guarded steps until you have an equivalent ADR
+- Cloud-grid stages require operator-managed provider credentials (Sauce Labs or BrowserStack)
 
 ---
 
@@ -173,11 +188,11 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 ## What This Blueprint Does Not Provide
 
 - A packaged or SaaS-deployable product
-- Cross-browser test execution (architecture is xdist-ready; not yet activated)
-- Live production observability (stub-backed until a provider is connected)
-- Validated SMTP email delivery (infrastructure-ready; runner SMTP restrictions may require a transactional API)
+- Cloud-grid provider accounts — Sauce Labs and BrowserStack execution is supported but requires operator-managed credentials and usage controls
+- Jenkins as primary CI — the Jenkins adapter is a reference implementation; GitHub Actions is the working CI for this repo
+- Live observability provider integration — current observability data is sample/stub-backed; Datadog, Grafana, and PagerDuty interfaces are documented and activation-ready (see `observability_wiring.md`)
 - Compliance certification
-- A second-repo case study (planned in a future extraction slice)
+- Future blueprint expansion areas include critical-alert delivery policy, CI run-control optimization, observability provider contracts, MCP evaluation, reusable agent skills, and second-repo application
 
 ---
 
@@ -202,4 +217,4 @@ These files are already the blueprint. Copy both to a new repo. Follow the 5-con
 | Slice 4 | [`blueprint/scripts/release_gate.py`](scripts/release_gate.py) — release readiness gate with adaptation points annotated | Done — PR #50 |
 | Slice 5 | [`blueprint/governance/`](governance/) — blank ADR template, suite taxonomy template, governance index | Done — PR #51 |
 | Slice 6 | [`blueprint/governance/qa_standards_template.md`](governance/qa_standards_template.md) + [`blueprint/governance/failure_evidence_template.md`](governance/failure_evidence_template.md) — QA standards and failure evidence templates | Done — this PR |
-| Slice 7 | Second repo application + case study | Future — after full `blueprint/` folder stable |
+| Slice 7 | Second repo application + case study | Future — after pre-replication documentation refresh |

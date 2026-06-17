@@ -42,6 +42,12 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-030](#adr-030-cross-browser-ui-matrix-and-cloud-grid-preflight-with-safe-skip-policy) | Cross-browser UI matrix and cloud-grid preflight with safe-skip policy | Accepted | 2026-06-14 |
 | [ADR-031](#adr-031-sauce-labs-cloud-grid-execution-gated-by-preflight-readiness) | Sauce Labs cloud-grid execution gated by preflight readiness | Accepted | 2026-06-14 |
 | [ADR-032](#adr-032-advisory-job-notification-and-cloud-grid-provider-failure-messaging) | Advisory job notification and cloud-grid provider-failure messaging | Accepted | 2026-06-15 |
+| [ADR-033](#adr-033-sauce-labs-multi-browser-cloud-matrix-and-advisory-browser-detail-rendering) | Sauce Labs multi-browser cloud matrix and advisory browser-detail rendering | Accepted | 2026-06-15 |
+| [ADR-034](#adr-034-cloud-grid-provider-abstraction-browserstack-readiness-preflight-and-release-confidence-notification-signal) | Cloud-grid provider abstraction, BrowserStack readiness preflight, and release-confidence notification signal | Accepted | 2026-06-15 |
+| [ADR-035](#adr-035-docker-image-build-once-artifact-reuse-and-registry-resilience-hardening) | Docker image build-once artifact reuse and registry-resilience hardening | Accepted | 2026-06-15 |
+| [ADR-036](#adr-036-browserstack-live-cloud-grid-smoke-execution) | BrowserStack live cloud-grid smoke execution | Accepted | 2026-06-15 |
+| [ADR-037](#adr-037-browserstack-capability-hardening-and-dashboard-status-marking) | BrowserStack capability hardening and dashboard-status marking | Accepted | 2026-06-16 |
+| [ADR-038](#adr-038-jenkins-reference-cicd-adapter-for-qa-blueprint-portability) | Jenkins reference CI/CD adapter for QA blueprint portability | Accepted | 2026-06-16 |
 
 ---
 
@@ -2799,3 +2805,51 @@ None of these changes affect the required release lane.
 - `test/scripts/test_browserstack_capabilities.py` — TC-SCRIPT-073 through TC-SCRIPT-079
 - `agentic-qa-workflows/governance/notification_wiring.md` — dashboard status marking documented as cosmetic/best-effort
 - `README.md` — script unit test count updated; BrowserStack row updated
+- ADR-038 — Jenkins reference adapter demonstrating portability of the Docker-first QA blueprint to enterprise CI/CD environments
+
+---
+
+## ADR-038: Jenkins reference CI/CD adapter for QA blueprint portability
+
+**Status:** Accepted
+**Date:** 2026-06-16
+
+### Context
+
+GitHub Actions is the working CI implementation for this repo (ADR-001 through ADR-037). Enterprise and client environments frequently standardize on Jenkins and cannot adopt GitHub Actions. The QA blueprint — Docker-first execution, multi-layer test suite, release-readiness gate, notification delivery — should be demonstrably portable without rewriting tests, the release gate, notification scripts, the Dockerfile, or any GitHub Actions configuration.
+
+### Decision
+
+1. Add a Jenkins reference pipeline at `ci/jenkins/Jenkinsfile` (not the repository root, to avoid auto-detection ambiguity and signal that GitHub Actions remains primary CI).
+2. Implement the same required lane as `ci.yml`: static quality gates (format, lint, type check, dependency audit), script unit tests, API tests, UI tests (API/UI parallel with `failFast: false`), release gate, artifact archival, and a manual-approval client deploy hook placeholder.
+3. Rely on the single Jenkins agent's shared Docker daemon for image reuse across stages — no `docker save`/`docker load` artifact step needed (contrast with the multi-job GitHub Actions approach from ADR-035).
+4. Run `scripts/notify.py` with `NOTIFY_DRY_RUN=true` by default in `post { always { ... } }`; live delivery follows the same credential pattern as `notification_wiring.md`.
+5. Keep cloud-grid advisory stages (Sauce Labs, BrowserStack) out of the Jenkinsfile; document the extension path in `jenkins_wiring.md`.
+6. GitHub Actions remains the primary working CI; the Jenkinsfile is a reference adapter only.
+
+### Release gate behavior
+
+The release gate runs `scripts/release_gate.py artifacts/api-report.xml` after both parallel test branches complete. A missing or malformed `api-report.xml` causes the gate to write an error artifact and exit 1, failing the Jenkins build. The smoke/skipped gate path (`--skipped <scope>`) is not implemented in the Jenkins reference; `jenkins_wiring.md` documents how to add branch-conditional smoke behavior if needed by a client.
+
+### Consequences
+
+- Consulting teams can adapt `ci/jenkins/Jenkinsfile` to client infrastructure without any framework changes.
+- The same JUnit artifact filenames, release-readiness report, and `notify.py` interface work identically from Jenkins.
+- No Jenkins server or live deployment is required to validate this repo.
+- Documentation must clearly position Jenkins as a reference adapter, not the authoritative CI.
+- No test, gate, or notification behavior is affected.
+
+### Rollback
+
+1. Delete `ci/jenkins/Jenkinsfile` and the `ci/jenkins/` directory.
+2. Delete `agentic-qa-workflows/governance/jenkins_wiring.md`.
+3. Revert the one-line additions to `README.md`, `agentic-qa-workflows/README.md`, `agentic-qa-workflows/governance/README.md`, and the ADR-037 Related docs cross-reference.
+4. No test, gate, notification, or GitHub Actions behavior is affected.
+
+### Related docs
+
+- `ci/jenkins/Jenkinsfile` — reference declarative pipeline (required lane)
+- `agentic-qa-workflows/governance/jenkins_wiring.md` — credential mapping, GitHub Actions vs Jenkins stage translation, cloud-grid advisory extension path
+- `README.md` — Jenkins portability note added
+- ADR-035 — Docker image build-once artifact reuse (GitHub Actions); Jenkins adapter simplifies this via shared Docker daemon
+- ADR-036 — BrowserStack live execution (cloud-grid extension path documented in `jenkins_wiring.md`)

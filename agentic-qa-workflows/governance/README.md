@@ -19,3 +19,4 @@ This folder contains the rules, standards, and architectural records that govern
 | `notification_wiring.md` | Step-by-step guide for wiring live Slack and SMTP email notifications through GitHub Actions repository secrets | When enabling live notification delivery |
 | `architecture_decision_log.md` | ADR entries for major architectural decisions: what was decided, why, what alternatives were rejected, and what is deferred | When making tooling or architecture decisions; when onboarding to the repo |
 | `observability_wiring.md` | Step-by-step guide for wiring live Datadog/Grafana/PagerDuty observability providers into the release-readiness flow | When enabling live observability data pulls |
+| `jenkins_wiring.md` | Reference adapter guide for running the QA blueprint on Jenkins — credential mapping, stage translation, cloud-grid extension path | When adapting the CI pipeline to an enterprise or client Jenkins environment |

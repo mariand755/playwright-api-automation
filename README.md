@@ -52,6 +52,8 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 
 `workflow_dispatch` also accepts a `notification_mode` input (`repo_default` / `dry_run` / `live`) for manual notification control during a run.
 
+The repo also includes a Jenkins reference adapter (`ci/jenkins/Jenkinsfile`) showing how the same Docker-first QA blueprint ports to enterprise CI/CD environments without rewriting the test framework or release gate. See [agentic-qa-workflows/governance/jenkins_wiring.md](agentic-qa-workflows/governance/jenkins_wiring.md) for credential mapping and stage translation (ADR-038).
+
 ## Code Quality and Supply-Chain Gates
 
 - **Ruff** — formatting and linting (CI-enforced in Docker)

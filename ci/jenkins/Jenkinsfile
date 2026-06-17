@@ -1,0 +1,189 @@
+// Jenkins reference CI/CD adapter for the playwright-api-automation QA blueprint.
+//
+// Runs the same Docker-first required lane as .github/workflows/ci.yml:
+//   static quality gates → script unit tests → API tests → UI tests →
+//   release gate → artifact archival → optional client deploy hook.
+//
+// GitHub Actions remains the primary CI. This file is a reference adapter for
+// enterprise/client Jenkins environments.
+//
+// See agentic-qa-workflows/governance/jenkins_wiring.md for credential mapping,
+// stage translation notes, and the cloud-grid extension path.
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        timeout(time: 45, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        IMAGE_NAME     = 'playwright-api-automation'
+        ARTIFACTS_DIR  = "${env.WORKSPACE}/artifacts"
+        NOTIFY_DRY_RUN = 'true'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'mkdir -p "$ARTIFACTS_DIR"'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    for i in 1 2 3; do
+                        docker build -t "$IMAGE_NAME" . && break
+                        if [ "$i" -lt 3 ]; then
+                            wait_seconds=$((i * 30))
+                            echo "Docker build attempt $i/3 failed — retrying in ${wait_seconds}s"
+                            sleep "$wait_seconds"
+                        else
+                            echo "Docker build failed after 3 attempts"
+                            exit 1
+                        fi
+                    done
+                '''
+            }
+        }
+
+        stage('Static Quality Gates') {
+            parallel {
+                stage('Format') {
+                    steps {
+                        sh 'docker run --rm "$IMAGE_NAME" ruff format --check .'
+                    }
+                }
+                stage('Lint') {
+                    steps {
+                        sh 'docker run --rm "$IMAGE_NAME" ruff check .'
+                    }
+                }
+                stage('Type Check') {
+                    steps {
+                        sh 'docker run --rm "$IMAGE_NAME" mypy utils/ pages/ scripts/'
+                    }
+                }
+                stage('Dependency Audit') {
+                    steps {
+                        sh 'docker run --rm "$IMAGE_NAME" pip-audit -r requirements.txt --progress-spinner off'
+                    }
+                }
+            }
+        }
+
+        stage('Script Unit Tests') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v "$ARTIFACTS_DIR:/app/artifacts" \
+                      "$IMAGE_NAME" \
+                      pytest test/scripts/ -v --junitxml=artifacts/scripts-report.xml
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'artifacts/scripts-report.xml'
+                }
+            }
+        }
+
+        stage('Behavioral Tests') {
+            parallel {
+                stage('API Tests') {
+                    steps {
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            sh '''
+                                docker run --rm \
+                                  -v "$ARTIFACTS_DIR:/app/artifacts" \
+                                  "$IMAGE_NAME" \
+                                  pytest test/api -v -n auto --junitxml=artifacts/api-report.xml
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'artifacts/api-report.xml'
+                        }
+                    }
+                }
+                stage('UI Tests') {
+                    steps {
+                        catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                            sh '''
+                                mkdir -p "$ARTIFACTS_DIR/failures"
+                                docker run --rm \
+                                  -v "$ARTIFACTS_DIR:/app/artifacts" \
+                                  "$IMAGE_NAME" \
+                                  pytest test/ui -v -n auto --junitxml=artifacts/ui-report.xml
+                            '''
+                        }
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'artifacts/ui-report.xml'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Release Gate') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v "$ARTIFACTS_DIR:/app/artifacts" \
+                      "$IMAGE_NAME" \
+                      python scripts/release_gate.py artifacts/api-report.xml
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'artifacts/release-readiness.*', allowEmptyArchive: true
+                }
+            }
+        }
+
+        stage('Archive Reports') {
+            steps {
+                archiveArtifacts artifacts: 'artifacts/**/*', allowEmptyArchive: true
+            }
+        }
+
+        stage('Client Deploy Hook (Placeholder)') {
+            when {
+                branch 'main'
+            }
+            steps {
+                input message: 'Release gate passed. Proceed to client deploy hook?',
+                      ok: 'Continue'
+                echo 'Placeholder only: connect this stage to the client deployment system.'
+            }
+        }
+    }
+
+    post {
+        always {
+            // Archive everything that survived, including any failure screenshots/HTML.
+            archiveArtifacts artifacts: 'artifacts/**/*', allowEmptyArchive: true
+            junit allowEmptyResults: true, testResults: 'artifacts/*-report.xml'
+            // Dry-run notification — safe to run on every build with no credentials.
+            // To enable live delivery, set NOTIFY_DRY_RUN=false and bind credentials.
+            // See agentic-qa-workflows/governance/jenkins_wiring.md.
+            catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+                sh '''
+                    docker run --rm \
+                      -v "$ARTIFACTS_DIR:/app/artifacts" \
+                      -e NOTIFY_DRY_RUN=true \
+                      "$IMAGE_NAME" \
+                      python scripts/notify.py
+                '''
+            }
+        }
+    }
+}

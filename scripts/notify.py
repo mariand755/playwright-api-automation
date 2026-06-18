@@ -17,8 +17,13 @@ Optional env vars:
   EMAIL_FROM      Sender address (defaults to SMTP_USER if not set)
   NOTIFY_DRY_RUN  Set to 'true' or '1' to force dry-run for all channels
 
-GitHub Actions env vars (auto-set, used to construct the run URL):
-  GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID
+GitHub Actions env vars (auto-set, used by this script):
+  GITHUB_SERVER_URL    Used to construct the run URL
+  GITHUB_REPOSITORY    Used to construct the run URL and email subject
+  GITHUB_RUN_ID        Used to construct the run URL
+  GITHUB_ACTIONS       Forced-live guard: policy only activates inside GitHub Actions
+  GITHUB_EVENT_NAME    Forced-live guard: 'push' or 'schedule' triggers
+  GITHUB_REF           Forced-live guard: 'refs/heads/main' for push-to-main
 
 CI job result env vars (set by the notify job via needs.*.result):
   DOCKER_TEST_SUITE_RESULT   Result of the Docker Test Suite job
@@ -89,6 +94,31 @@ def get_ci_status() -> dict[str, str]:
         "api_tests": os.environ.get("API_TESTS_RESULT", ""),
         "ui_tests": os.environ.get("UI_TESTS_RESULT", ""),
     }
+
+
+def is_critical_event(ci_status: dict[str, str]) -> bool:
+    if os.environ.get("GITHUB_ACTIONS", "").strip().lower() != "true":
+        return False
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "").strip()
+    ref = os.environ.get("GITHUB_REF", "").strip()
+    is_critical_trigger = event_name == "schedule" or (
+        event_name == "push" and ref == "refs/heads/main"
+    )
+    if not is_critical_trigger:
+        return False
+    required_results = [
+        ci_status.get("docker_test_suite", ""),
+        ci_status.get("api_tests", ""),
+        ci_status.get("ui_tests", ""),
+    ]
+    return any(r != "" and r != "success" for r in required_results)
+
+
+def should_force_live_delivery(
+    requested_dry_run: bool,
+    ci_status: dict[str, str],
+) -> bool:
+    return requested_dry_run and is_critical_event(ci_status)
 
 
 def load_advisory_status() -> dict[str, object]:
@@ -266,6 +296,7 @@ def build_message_lines(
     run_url: str,
     ci_status: dict[str, str],
     advisory_status: dict[str, object] | None = None,
+    forced_live: bool = False,
 ) -> list[str]:
     """Build channel-agnostic message lines including overall CI status and release gate."""
     gate_decision = str(data.get("overall_decision", "")) if data is not None else None
@@ -273,7 +304,13 @@ def build_message_lines(
     _overall_emoji = {"GO": "✅", "NO_GO": "❌"}
     overall_emoji = _overall_emoji.get(overall, "⚠️")
 
-    lines: list[str] = [f"Overall Release Readiness: {overall_emoji} {overall}"]
+    lines: list[str] = []
+    if forced_live:
+        lines.append(
+            "🚨 Critical Alert Policy: Live-delivery override applied"
+            " — required release lane failed on main or scheduled run."
+        )
+    lines.append(f"Overall Release Readiness: {overall_emoji} {overall}")
 
     conf_emoji, conf_label, conf_meaning = compute_release_confidence(
         overall, advisory_status
@@ -415,12 +452,18 @@ def send_slack(
     dry_run_forced: bool,
     ci_status: dict[str, str],
     advisory_status: dict[str, object] | None = None,
+    forced_live: bool = False,
 ) -> bool:
     webhook_url = os.environ.get("SLACK_WEBHOOK_URL", "")
-    lines = build_message_lines(data, run_url, ci_status, advisory_status)
+    lines = build_message_lines(data, run_url, ci_status, advisory_status, forced_live)
 
     if dry_run_forced or not webhook_url:
-        if dry_run_forced and webhook_url:
+        if forced_live and not webhook_url:
+            print(
+                "[CRITICAL] Slack: live-delivery override applied, but channel"
+                " unavailable — SLACK_WEBHOOK_URL not configured"
+            )
+        elif dry_run_forced and webhook_url:
             print("[DRY RUN] Slack: NOTIFY_DRY_RUN is set — skipping live delivery")
         else:
             print("[DRY RUN] Slack: SLACK_WEBHOOK_URL not set — skipping live delivery")
@@ -460,6 +503,7 @@ def send_email(
     dry_run_forced: bool,
     ci_status: dict[str, str],
     advisory_status: dict[str, object] | None = None,
+    forced_live: bool = False,
 ) -> bool:
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_port_str = os.environ.get("SMTP_PORT", "587")
@@ -478,10 +522,16 @@ def send_email(
     if not recipients_str:
         required_missing.append("NOTIFY_RECIPIENTS")
 
-    lines = build_message_lines(data, run_url, ci_status, advisory_status)
+    lines = build_message_lines(data, run_url, ci_status, advisory_status, forced_live)
 
     if dry_run_forced or required_missing:
-        if dry_run_forced and not required_missing:
+        if forced_live and required_missing:
+            missing_str = ", ".join(required_missing)
+            print(
+                "[CRITICAL] Email: live-delivery override applied, but channel"
+                f" unavailable — {missing_str} not configured"
+            )
+        elif dry_run_forced and not required_missing:
             print("[DRY RUN] Email: NOTIFY_DRY_RUN is set — skipping live delivery")
         else:
             missing_str = ", ".join(required_missing)
@@ -546,9 +596,12 @@ def send_email(
 def main() -> int:
     data = load_release_data()
     run_url = get_run_url()
-    dry_run_forced = is_dry_run_forced()
+    requested_dry_run = is_dry_run_forced()
     ci_status = get_ci_status()
     advisory_status = load_advisory_status()
+
+    forced_live = should_force_live_delivery(requested_dry_run, ci_status)
+    effective_dry_run = requested_dry_run and not forced_live
 
     if data is None:
         print(
@@ -556,8 +609,22 @@ def main() -> int:
             " — release gate data unavailable"
         )
 
-    slack_ok = send_slack(data, run_url, dry_run_forced, ci_status, advisory_status)
-    email_ok = send_email(data, run_url, dry_run_forced, ci_status, advisory_status)
+    slack_ok = send_slack(
+        data,
+        run_url,
+        effective_dry_run,
+        ci_status,
+        advisory_status,
+        forced_live=forced_live,
+    )
+    email_ok = send_email(
+        data,
+        run_url,
+        effective_dry_run,
+        ci_status,
+        advisory_status,
+        forced_live=forced_live,
+    )
 
     if not slack_ok or not email_ok:
         print("WARNING: one or more notification channels failed — see above")

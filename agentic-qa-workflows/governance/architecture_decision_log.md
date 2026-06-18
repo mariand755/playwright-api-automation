@@ -48,6 +48,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-036](#adr-036-browserstack-live-cloud-grid-smoke-execution) | BrowserStack live cloud-grid smoke execution | Accepted | 2026-06-15 |
 | [ADR-037](#adr-037-browserstack-capability-hardening-and-dashboard-status-marking) | BrowserStack capability hardening and dashboard-status marking | Accepted | 2026-06-16 |
 | [ADR-038](#adr-038-jenkins-reference-cicd-adapter-for-qa-blueprint-portability) | Jenkins reference CI/CD adapter for QA blueprint portability | Accepted | 2026-06-16 |
+| [ADR-039](#adr-039-forced-live-critical-failure-alert-policy) | Forced-live critical failure alert policy | Accepted | 2026-06-18 |
 
 ---
 
@@ -2919,4 +2920,89 @@ The release gate runs `scripts/release_gate.py artifacts/api-report.xml` after b
 - `agentic-qa-workflows/governance/jenkins_wiring.md` — credential mapping, GitHub Actions vs Jenkins stage translation, cloud-grid advisory extension path
 - `README.md` — Jenkins portability note added
 - ADR-035 — Docker image build-once artifact reuse (GitHub Actions); Jenkins adapter simplifies this via shared Docker daemon
+
+---
+
+## ADR-039: Forced-live critical failure alert policy
+
+**Status:** Accepted
+**Date:** 2026-06-18
+
+### Context
+
+`NOTIFY_DRY_RUN=true` is the standard noise-control default (ADR-011). It suppresses live notification delivery for all CI events — including push to `main` with required lane failures and nightly scheduled runs. A required-lane failure on either of these triggers is a genuine release-blocking event: it means a merge to main or a nightly regression produced a broken build. Silencing it when `NOTIFY_DRY_RUN=true` is set defeats the purpose of having failure alerts.
+
+PR #79 (ADR-009 addendum) documented the gate severity model. The remaining gap was notification policy: no mechanism existed to guarantee delivery of critical failure signals when dry-run was active.
+
+### Decision
+
+Implement a narrow forced-live override in `scripts/notify.py` only. When `NOTIFY_DRY_RUN=true` is active **and** a critical event is detected, `notify.py` overrides the dry-run flag and attempts live delivery to each configured channel.
+
+**Policy location: `scripts/notify.py` — not `ci.yml`.** `GITHUB_EVENT_NAME`, `GITHUB_REF`, and `GITHUB_ACTIONS` are GitHub Actions default env vars, auto-injected into all runner steps without explicit `env:` entries. Python logic is directly unit-testable; YAML conditions are not. No `ci.yml` changes are needed.
+
+### Critical failure definition
+
+All three conditions must hold simultaneously:
+
+1. `GITHUB_ACTIONS=true` — the policy activates only inside GitHub Actions; absent on local runs and the Jenkins reference adapter
+2. `GITHUB_EVENT_NAME` is `"schedule"` or (`"push"` and `GITHUB_REF` is `"refs/heads/main"`)
+3. At least one required lane result is non-empty and not `"success"`: `docker_test_suite`, `api_tests`, or `ui_tests`
+
+Any non-empty value other than `"success"` qualifies as a failure: `failure`, `cancelled`, `skipped`, `timed_out`, or any other non-success string.
+
+Excluded triggers: `workflow_dispatch` (user-controlled via `notification_mode` input), `pull_request` (opt-in via `NOTIFY_PR_FAILURES`), feature branch pushes, advisory-only failures when required lanes pass.
+
+### Effective dry-run precedence model
+
+```python
+requested_dry_run  = is_dry_run_forced()                                     # reads NOTIFY_DRY_RUN
+forced_live        = should_force_live_delivery(requested_dry_run, ci_status)
+effective_dry_run  = requested_dry_run and not forced_live
+```
+
+`forced_live` is only ever `True` when `requested_dry_run` was `True`. When `NOTIFY_DRY_RUN` is already `False`, `forced_live` stays `False` — delivery is already live and the alert banner is suppressed, avoiding false "override applied" messages on ordinary live runs.
+
+### Implementation
+
+Three new surfaces in `scripts/notify.py`:
+
+- `is_critical_event(ci_status)` — evaluates the `GITHUB_ACTIONS` guard, trigger, ref, and required lane results
+- `should_force_live_delivery(requested_dry_run, ci_status)` — named helper that composes the precedence model; directly unit-testable
+- `forced_live: bool = False` parameter on `build_message_lines`, `send_slack`, and `send_email` — default `False` preserves all existing behavior
+
+When `forced_live=True` and a channel's credentials are absent, each channel logs:
+
+```text
+[CRITICAL] Slack: live-delivery override applied, but channel unavailable — SLACK_WEBHOOK_URL not configured
+[CRITICAL] Email: live-delivery override applied, but channel unavailable — SMTP_HOST not configured
+```
+
+No secret values, endpoint details, or recipient addresses appear in these log lines.
+
+### Consequences
+
+- Required-lane failures on push to `main` and nightly schedule will attempt live delivery even when `NOTIFY_DRY_RUN=true`, provided channel credentials are configured.
+- Local runs, Jenkins adapter runs, `workflow_dispatch`, and PR events are unaffected — `is_critical_event()` returns `False` for all.
+- `notify.py` still returns `0` always — forced-live delivery failure does not block CI.
+- All existing `build_message_lines`, `send_slack`, and `send_email` call sites are unaffected — `forced_live=False` default preserves prior behavior.
+- 13 new script unit tests (TC-SCRIPT-080 through TC-SCRIPT-092) cover all policy branches, the `GITHUB_ACTIONS` guard, the missing-credentials CRITICAL path, and the `should_force_live_delivery` edge case.
+
+### Rollback
+
+1. Remove `is_critical_event()` and `should_force_live_delivery()` from `scripts/notify.py`.
+2. Remove `forced_live` parameter from `build_message_lines`, `send_slack`, `send_email`.
+3. Restore original `main()`: use `dry_run_forced = is_dry_run_forced()` directly, remove `forced_live` / `effective_dry_run` computation.
+4. Remove TC-SCRIPT-080 through TC-SCRIPT-092 from `test/scripts/test_notify_readiness.py`.
+5. Remove the "Forced-Live Critical Alert Policy" section from `notification_wiring.md`.
+6. Remove this ADR entry and its index row from `architecture_decision_log.md`.
+
+No release-gate, CI workflow, test, or branch protection changes are needed for rollback.
+
+### Related docs
+
+- `scripts/notify.py` — `is_critical_event()`, `should_force_live_delivery()`, `build_message_lines()`, `send_slack()`, `send_email()`, `main()`
+- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-080 through TC-SCRIPT-092
+- `agentic-qa-workflows/governance/notification_wiring.md` — Forced-Live Critical Alert Policy section
+- ADR-011 — dry-run default when secrets are absent
+- ADR-009 — gate severity classification (PR #79); forced-live complements the gate model by ensuring critical gate failures generate live alerts
 - ADR-036 — BrowserStack live execution (cloud-grid extension path documented in `jenkins_wiring.md`)

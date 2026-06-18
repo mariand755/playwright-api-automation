@@ -1,8 +1,9 @@
 """Unit tests for notify readiness helpers in scripts/notify.py.
 
-Covers TC-SCRIPT-014 to TC-SCRIPT-018, TC-SCRIPT-026 to TC-SCRIPT-030.
-Delivery functions (send_slack, send_email) are excluded — they require
-network calls outside the scope of this slice.
+Covers TC-SCRIPT-014 to TC-SCRIPT-018, TC-SCRIPT-026 to TC-SCRIPT-030,
+TC-SCRIPT-042 to TC-SCRIPT-072, TC-SCRIPT-080 to TC-SCRIPT-092.
+Delivery functions (send_slack, send_email) are tested for the forced-live
+missing-credentials path only (no network calls).
 """
 
 import pytest
@@ -11,7 +12,11 @@ from scripts.notify import (
     build_message_lines,
     compute_overall_readiness,
     get_smtp_transport_mode,
+    is_critical_event,
     load_advisory_status,
+    send_email,
+    send_slack,
+    should_force_live_delivery,
 )
 
 _ALL_SUCCESS = {
@@ -960,3 +965,203 @@ def test_build_message_lines_release_confidence_low_when_advisory_fails(monkeypa
         "Release Confidence: 🟠 Low — required CI passed, but release gate "
         "or advisory signal failed; review before release"
     ) in combined
+
+
+# ---------------------------------------------------------------------------
+# TC-SCRIPT-080–092 — Forced-live critical alert policy (ADR-039)
+# ---------------------------------------------------------------------------
+
+
+# TC-SCRIPT-080 — is_critical_event: push to main + required failure (parametrized: failure, timed_out) → True
+# Verifies any non-empty non-success value triggers the policy, not just known failure strings.
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-080")
+@pytest.mark.parametrize("result", ["failure", "timed_out"])
+def test_is_critical_event_push_to_main_required_failure(result, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    ci_status = {**_ALL_SUCCESS, "api_tests": result}
+    assert is_critical_event(ci_status) is True, (
+        f"Expected True for push-to-main with api_tests='{result}', got False"
+    )
+
+
+# TC-SCRIPT-081 — is_critical_event: push to main + cancelled UI job → True
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-081")
+def test_is_critical_event_push_to_main_cancelled_ui(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    ci_status = {**_ALL_SUCCESS, "ui_tests": "cancelled"}
+    assert is_critical_event(ci_status) is True
+
+
+# TC-SCRIPT-082 — is_critical_event: scheduled run + skipped Docker Test Suite → True
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-082")
+def test_is_critical_event_schedule_skipped_docker(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    monkeypatch.delenv("GITHUB_REF", raising=False)
+    ci_status = {**_ALL_SUCCESS, "docker_test_suite": "skipped"}
+    assert is_critical_event(ci_status) is True
+
+
+# TC-SCRIPT-083 — is_critical_event: push to feature branch + required failure → False
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-083")
+def test_is_critical_event_feature_branch_not_critical(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/feature/my-feature")
+    ci_status = {**_ALL_SUCCESS, "api_tests": "failure"}
+    assert is_critical_event(ci_status) is False
+
+
+# TC-SCRIPT-084 — is_critical_event: pull_request + required failure → False
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-084")
+def test_is_critical_event_pull_request_not_critical(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_REF", "refs/pull/42/merge")
+    ci_status = {**_ALL_SUCCESS, "api_tests": "failure"}
+    assert is_critical_event(ci_status) is False
+
+
+# TC-SCRIPT-085 — is_critical_event: workflow_dispatch + required failure → False
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-085")
+def test_is_critical_event_workflow_dispatch_not_critical(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    ci_status = {**_ALL_SUCCESS, "api_tests": "failure"}
+    assert is_critical_event(ci_status) is False
+
+
+# TC-SCRIPT-086 — is_critical_event: push to main + all required success → False
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-086")
+def test_is_critical_event_push_to_main_all_success_not_critical(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    assert is_critical_event(_ALL_SUCCESS) is False
+
+
+# TC-SCRIPT-087 — is_critical_event: GITHUB_ACTIONS absent + push/main + required failure → False
+# Verifies the guard enforces GitHub Actions-only scope; local and Jenkins runs are excluded.
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-087")
+def test_is_critical_event_no_github_actions_env_not_critical(monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    ci_status = {**_ALL_SUCCESS, "api_tests": "failure"}
+    assert is_critical_event(ci_status) is False, (
+        "GITHUB_ACTIONS absent must suppress the forced-live policy (local/Jenkins safety)"
+    )
+
+
+# TC-SCRIPT-088 — build_message_lines: alert line present when forced_live=True, absent when False
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-088")
+@pytest.mark.parametrize("forced_live,expected_present", [(True, True), (False, False)])
+def test_build_message_lines_alert_line_presence(forced_live, expected_present):
+    lines = build_message_lines(None, "", _ALL_SUCCESS, forced_live=forced_live)
+    combined = "\n".join(lines)
+    assert ("Live-delivery override applied" in combined) is expected_present, (
+        f"forced_live={forced_live}: alert line presence mismatch in: {combined!r}"
+    )
+
+
+# TC-SCRIPT-089 — build_message_lines: alert line is first line when forced_live=True
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-089")
+def test_build_message_lines_alert_line_is_first_when_forced_live():
+    lines = build_message_lines(None, "", _ALL_SUCCESS, forced_live=True)
+    assert lines[0].startswith("🚨 Critical Alert Policy"), (
+        f"Expected alert line first, got: {lines[0]!r}"
+    )
+
+
+# TC-SCRIPT-090 — send_slack/send_email: missing credentials + forced_live=True
+# → logs CRITICAL override+unavailable, returns True, no credential values in output
+@pytest.mark.scripts
+@pytest.mark.negative
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-090")
+def test_send_channels_forced_live_missing_credentials_logs_critical(
+    monkeypatch, capsys
+):
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+    monkeypatch.delenv("NOTIFY_RECIPIENTS", raising=False)
+
+    slack_ok = send_slack(None, "", False, {}, forced_live=True)
+    email_ok = send_email(None, "", False, {}, forced_live=True)
+    captured = capsys.readouterr()
+
+    assert slack_ok is True, (
+        "send_slack must return True even on forced-live missing-credentials path"
+    )
+    assert email_ok is True, (
+        "send_email must return True even on forced-live missing-credentials path"
+    )
+    assert (
+        "[CRITICAL] Slack: live-delivery override applied, but channel unavailable"
+        in captured.out
+    ), f"Expected CRITICAL Slack log, got: {captured.out!r}"
+    assert (
+        "[CRITICAL] Email: live-delivery override applied, but channel unavailable"
+        in captured.out
+    ), f"Expected CRITICAL Email log, got: {captured.out!r}"
+
+
+# TC-SCRIPT-091 — should_force_live_delivery: NOTIFY_DRY_RUN=false + push/main + required failure
+# → False (no override when live delivery was already the norm)
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-091")
+def test_should_force_live_delivery_false_when_dry_run_not_requested(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    ci_status = {**_ALL_SUCCESS, "api_tests": "failure"}
+    result = should_force_live_delivery(False, ci_status)
+    assert result is False, (
+        "No forced-live override when requested_dry_run=False — delivery was already live"
+    )
+
+
+# TC-SCRIPT-092 — is_critical_event: GITHUB_ACTIONS='false' + schedule + required failure → False
+# Explicit guard: even when GITHUB_ACTIONS is set but not 'true', policy must not activate.
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-092")
+def test_is_critical_event_github_actions_false_not_critical(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "false")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    monkeypatch.delenv("GITHUB_REF", raising=False)
+    ci_status = {**_ALL_SUCCESS, "docker_test_suite": "failure"}
+    assert is_critical_event(ci_status) is False, (
+        "GITHUB_ACTIONS='false' must suppress the forced-live policy"
+    )

@@ -49,6 +49,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-037](#adr-037-browserstack-capability-hardening-and-dashboard-status-marking) | BrowserStack capability hardening and dashboard-status marking | Accepted | 2026-06-16 |
 | [ADR-038](#adr-038-jenkins-reference-cicd-adapter-for-qa-blueprint-portability) | Jenkins reference CI/CD adapter for QA blueprint portability | Accepted | 2026-06-16 |
 | [ADR-039](#adr-039-forced-live-critical-failure-alert-policy) | Forced-live critical failure alert policy | Accepted | 2026-06-18 |
+| [ADR-040](#adr-040-relevant-change-detection-and-stale-run-cancellation-policy) | Relevant-change detection and stale-run cancellation policy | Accepted | 2026-06-18 |
 
 ---
 
@@ -3006,3 +3007,87 @@ No release-gate, CI workflow, test, or branch protection changes are needed for 
 - ADR-011 — dry-run default when secrets are absent
 - ADR-009 — gate severity classification (PR #79); forced-live complements the gate model by ensuring critical gate failures generate live alerts
 - ADR-036 — BrowserStack live execution (cloud-grid extension path documented in `jenkins_wiring.md`)
+
+---
+
+## ADR-040: Relevant-change detection and stale-run cancellation policy
+
+**Status:** Accepted
+**Date:** 2026-06-18
+
+### Context
+
+Feature and PR workflows run API and UI smoke suites on every push, regardless of whether any changed file could affect those layers. Documentation, governance, and script-only changes trigger unnecessary test execution. Stale workflow runs accumulate when commits push quickly on a feature branch. ADR-039 forces live alert delivery for main/nightly required-lane failures, which creates a hard constraint: any cancellation mechanism must never touch push-to-main, scheduled, or workflow_dispatch runs.
+
+### Decision
+
+1. Add a workflow-level concurrency block with `cancel-in-progress` enabled only for PR and feature-branch push events. Push-to-main, schedule, and workflow_dispatch are excluded from cancellation.
+2. Add a `changes` job that runs a conservative Python file classifier (`scripts/detect_relevant_changes.py`) in parallel with the `test` job.
+3. Suppress API and UI smoke execution within their jobs (not at the job level) when the classifier determines no relevant files changed. Required job names (`api`, `ui`) and branch-protection rules are unchanged.
+4. Bypass classification for push-to-main and schedule (always full coverage) and workflow_dispatch (always executes API and UI at the operator-selected full or smoke scope; file classification never suppresses that execution).
+5. Fail-closed: unknown paths, empty diffs, git errors, null SHA, and classifier errors all default to `run_api=true, run_ui=true`.
+6. Preserve all required job names and branch-protection behavior. `api` and `ui` jobs always exist in the workflow graph and always produce a `success` result when tests either run-and-pass or are intentionally skipped.
+
+### Concurrency expression
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main') }}
+```
+
+Including `github.event_name` in the group key isolates `workflow_dispatch` runs on a feature branch from `push` runs on the same branch, preventing a push from cancelling a manually requested run.
+
+### Bypass events
+
+Change detection is bypassed when:
+
+- `GITHUB_EVENT_NAME` is `schedule` → always runs full coverage
+- `GITHUB_EVENT_NAME` is `push` AND `GITHUB_REF` is `refs/heads/main` → always runs full coverage
+- `GITHUB_EVENT_NAME` is `workflow_dispatch` → API and UI execution always runs; scope (full or smoke) honors the operator-selected `test_scope` input, not file classification
+
+### Classification — ordered precedence (first match wins)
+
+| Priority | Rule | run_api | run_ui |
+|---|---|---|---|
+| 1 | SHARED_EXACT — named CI scripts + single-file config (exact match) | true | true |
+| 2 | SHARED_PREFIX — `.github/workflows/`, `utils/`, `data/` | true | true |
+| 3 | `.md` suffix (any path not already matched) | false | false |
+| 4 | DOC_ONLY prefix — `agentic-qa-workflows/`, `blueprint/` | false | false |
+| 5 | `ci/` prefix (non-.md) → UNKNOWN → conservative | true | true |
+| 6 | `test/api/` prefix | true | false |
+| 7 | `test/ui/`, `pages/` prefix | false | true |
+| 8 | `test/scripts/` prefix → script-test-only | false | false |
+| 9 | `scripts/` not in SHARED_EXACT → UNKNOWN → conservative | true | true |
+| 10 | No match → UNKNOWN → conservative | true | true |
+
+SHARED_EXACT entries: `scripts/detect_relevant_changes.py`, `scripts/release_gate.py`, `scripts/notify.py`, `scripts/cloud_grid_preflight.py`, `scripts/ci_summary.py`, `Dockerfile`, `requirements.txt`, `pytest.ini`, `conftest.py`. CI control-plane scripts are named explicitly so the classifier cannot suppress its own validation.
+
+### Consequences
+
+- PR/feature-branch compute reduced for documentation, governance, and script-only changes.
+- Main, nightly, and manual validation evidence unaffected.
+- When API or UI tests are suppressed, the job writes an authoritative step summary and (for API) a `gate_skipped: true` release-readiness artifact so the `notify` job always has an artifact to consume.
+- Classifier logic is a governed CI component with unit tests (TC-SCRIPT-095–113).
+- `changes` job becomes part of the workflow graph but is not a required check.
+
+### Rollback
+
+1. Remove `concurrency:` block from `.github/workflows/ci.yml`.
+2. Remove `changes` job from `.github/workflows/ci.yml`.
+3. Restore `needs: [test]` on `api` and `ui` jobs; remove `if: always() && needs.test.result == 'success'`.
+4. Remove conditional skip steps and `if:` guards on test-execution steps from `api` and `ui` jobs.
+5. Restore original "Write test scope to summary" and "Write release gate summary" steps (remove `run_api`/`run_ui` guards).
+6. Delete `scripts/detect_relevant_changes.py` and `test/scripts/test_detect_relevant_changes.py`.
+7. Remove ADR-040 index entry and this section from `architecture_decision_log.md`.
+8. Update `agentic-qa-workflows/governance/quality_gates.md` CI job table (remove `changes` row).
+
+No test behavior, release gate, notification, or branch protection changes required for rollback.
+
+### Related docs
+
+- `scripts/detect_relevant_changes.py` — classifier implementation
+- `test/scripts/test_detect_relevant_changes.py` — TC-SCRIPT-095 through TC-SCRIPT-113
+- `.github/workflows/ci.yml` — concurrency block, `changes` job, `api`/`ui` conditional steps
+- `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table
+- ADR-039 — forced-live critical alert policy; ADR-040 cancellation mechanism preserves the ADR-039 guarantee by never cancelling push-to-main or schedule runs

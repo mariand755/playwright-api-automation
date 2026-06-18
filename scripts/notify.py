@@ -463,11 +463,15 @@ def send_slack(
                 "[CRITICAL] Slack: live-delivery override applied, but channel"
                 " unavailable — SLACK_WEBHOOK_URL not configured"
             )
-        elif dry_run_forced and webhook_url:
-            print("[DRY RUN] Slack: NOTIFY_DRY_RUN is set — skipping live delivery")
+            print("[CRITICAL] Slack message preview — delivery unavailable:")
         else:
-            print("[DRY RUN] Slack: SLACK_WEBHOOK_URL not set — skipping live delivery")
-        print("[DRY RUN] Slack message preview:")
+            if dry_run_forced and webhook_url:
+                print("[DRY RUN] Slack: NOTIFY_DRY_RUN is set — skipping live delivery")
+            else:
+                print(
+                    "[DRY RUN] Slack: SLACK_WEBHOOK_URL not set — skipping live delivery"
+                )
+            print("[DRY RUN] Slack message preview:")
         for line in lines:
             print(f"  {line}")
         return True
@@ -531,16 +535,23 @@ def send_email(
                 "[CRITICAL] Email: live-delivery override applied, but channel"
                 f" unavailable — {missing_str} not configured"
             )
-        elif dry_run_forced and not required_missing:
-            print("[DRY RUN] Email: NOTIFY_DRY_RUN is set — skipping live delivery")
+            print(
+                "[CRITICAL] Email recipients unavailable due to missing configuration"
+            )
+            print("[CRITICAL] Email body preview — delivery unavailable:")
         else:
-            missing_str = ", ".join(required_missing)
-            print(f"[DRY RUN] Email: {missing_str} not set — skipping live delivery")
-        recipients_status = "configured" if recipients_str else "not set"
-        print(
-            f"[DRY RUN] Email would be sent to: NOTIFY_RECIPIENTS {recipients_status}"
-        )
-        print("[DRY RUN] Email body preview:")
+            if dry_run_forced and not required_missing:
+                print("[DRY RUN] Email: NOTIFY_DRY_RUN is set — skipping live delivery")
+            else:
+                missing_str = ", ".join(required_missing)
+                print(
+                    f"[DRY RUN] Email: {missing_str} not set — skipping live delivery"
+                )
+            recipients_status = "configured" if recipients_str else "not set"
+            print(
+                f"[DRY RUN] Email would be sent to: NOTIFY_RECIPIENTS {recipients_status}"
+            )
+            print("[DRY RUN] Email body preview:")
         for line in lines:
             print(f"  {line}")
         return True

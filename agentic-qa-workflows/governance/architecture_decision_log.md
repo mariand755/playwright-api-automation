@@ -2985,14 +2985,14 @@ No secret values, endpoint details, or recipient addresses appear in these log l
 - Local runs, Jenkins adapter runs, `workflow_dispatch`, and PR events are unaffected — `is_critical_event()` returns `False` for all.
 - `notify.py` still returns `0` always — forced-live delivery failure does not block CI.
 - All existing `build_message_lines`, `send_slack`, and `send_email` call sites are unaffected — `forced_live=False` default preserves prior behavior.
-- 13 new script unit tests (TC-SCRIPT-080 through TC-SCRIPT-092) cover all policy branches, the `GITHUB_ACTIONS` guard, the missing-credentials CRITICAL path, and the `should_force_live_delivery` edge case.
+- 15 new script unit tests (TC-SCRIPT-080 through TC-SCRIPT-094) cover all policy branches, the `GITHUB_ACTIONS` guard, the missing-credentials CRITICAL path, the `should_force_live_delivery` positive and edge cases, and the empty-ci-status safety invariant.
 
 ### Rollback
 
 1. Remove `is_critical_event()` and `should_force_live_delivery()` from `scripts/notify.py`.
 2. Remove `forced_live` parameter from `build_message_lines`, `send_slack`, `send_email`.
 3. Restore original `main()`: use `dry_run_forced = is_dry_run_forced()` directly, remove `forced_live` / `effective_dry_run` computation.
-4. Remove TC-SCRIPT-080 through TC-SCRIPT-092 from `test/scripts/test_notify_readiness.py`.
+4. Remove TC-SCRIPT-080 through TC-SCRIPT-094 from `test/scripts/test_notify_readiness.py`.
 5. Remove the "Forced-Live Critical Alert Policy" section from `notification_wiring.md`.
 6. Remove this ADR entry and its index row from `architecture_decision_log.md`.
 
@@ -3001,7 +3001,7 @@ No release-gate, CI workflow, test, or branch protection changes are needed for 
 ### Related docs
 
 - `scripts/notify.py` — `is_critical_event()`, `should_force_live_delivery()`, `build_message_lines()`, `send_slack()`, `send_email()`, `main()`
-- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-080 through TC-SCRIPT-092
+- `test/scripts/test_notify_readiness.py` — TC-SCRIPT-080 through TC-SCRIPT-094
 - `agentic-qa-workflows/governance/notification_wiring.md` — Forced-Live Critical Alert Policy section
 - ADR-011 — dry-run default when secrets are absent
 - ADR-009 — gate severity classification (PR #79); forced-live complements the gate model by ensuring critical gate failures generate live alerts

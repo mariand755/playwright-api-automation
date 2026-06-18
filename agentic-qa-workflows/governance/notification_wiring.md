@@ -352,18 +352,28 @@ A forced-live override attempts delivery — it does not guarantee it. Each chan
 - **Slack:** `SLACK_WEBHOOK_URL` must be provisioned as a GitHub Actions secret
 - **Email:** `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_RECIPIENTS` must be set
 
-When the override fires but a channel's credentials are absent, `notify.py` logs:
+When the override fires but a channel's credentials are absent, `notify.py` logs an unambiguous incident trail — all lines prefixed `[CRITICAL]` so the override is not confused with an ordinary dry-run:
 
-```
+```text
 [CRITICAL] Slack: live-delivery override applied, but channel unavailable — SLACK_WEBHOOK_URL not configured
-[CRITICAL] Email: live-delivery override applied, but channel unavailable — SMTP_HOST not configured
+[CRITICAL] Slack message preview — delivery unavailable:
+  🚨 Critical Alert Policy: Live-delivery override applied — required release lane failed on main or scheduled run.
+  Overall Release Readiness: ⚠️ BLOCKED
+  ...
+
+[CRITICAL] Email: live-delivery override applied, but channel unavailable — SMTP_HOST, SMTP_USER, SMTP_PASSWORD, NOTIFY_RECIPIENTS not configured
+[CRITICAL] Email recipients unavailable due to missing configuration
+[CRITICAL] Email body preview — delivery unavailable:
+  🚨 Critical Alert Policy: Live-delivery override applied — required release lane failed on main or scheduled run.
+  Overall Release Readiness: ⚠️ BLOCKED
+  ...
 ```
 
-No credential values appear in these log lines — only variable names.
+No credential values appear in these log lines — only variable names. The `[DRY RUN]` prefix never appears in a forced-live CRITICAL path — if you see `[DRY RUN]` in the logs, the override did not fire.
 
 ### Testing without intentional main failure
 
-Unit tests in `test/scripts/test_notify_readiness.py` (TC-SCRIPT-080 through TC-SCRIPT-092) cover all policy branches using `monkeypatch.setenv` / `monkeypatch.delenv`. No intentional CI failure is needed to validate policy logic.
+Unit tests in `test/scripts/test_notify_readiness.py` (TC-SCRIPT-080 through TC-SCRIPT-094) cover all policy branches using `monkeypatch.setenv` / `monkeypatch.delenv`. No intentional CI failure is needed to validate policy logic.
 
 ### Disabling the override
 

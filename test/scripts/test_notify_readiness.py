@@ -1,7 +1,7 @@
 """Unit tests for notify readiness helpers in scripts/notify.py.
 
 Covers TC-SCRIPT-014 to TC-SCRIPT-018, TC-SCRIPT-026 to TC-SCRIPT-030,
-TC-SCRIPT-042 to TC-SCRIPT-072, TC-SCRIPT-080 to TC-SCRIPT-092.
+TC-SCRIPT-042 to TC-SCRIPT-072, TC-SCRIPT-080 to TC-SCRIPT-094.
 Delivery functions (send_slack, send_email) are tested for the forced-live
 missing-credentials path only (no network calls).
 """
@@ -1134,6 +1134,15 @@ def test_send_channels_forced_live_missing_credentials_logs_critical(
         "[CRITICAL] Email: live-delivery override applied, but channel unavailable"
         in captured.out
     ), f"Expected CRITICAL Email log, got: {captured.out!r}"
+    assert "[CRITICAL] Slack message preview — delivery unavailable:" in captured.out, (
+        f"Expected CRITICAL Slack preview label, got: {captured.out!r}"
+    )
+    assert "[CRITICAL] Email body preview — delivery unavailable:" in captured.out, (
+        f"Expected CRITICAL Email preview label, got: {captured.out!r}"
+    )
+    assert "[DRY RUN]" not in captured.out, (
+        f"No [DRY RUN] label must appear in forced-live CRITICAL path output, got: {captured.out!r}"
+    )
 
 
 # TC-SCRIPT-091 — should_force_live_delivery: NOTIFY_DRY_RUN=false + push/main + required failure
@@ -1164,4 +1173,35 @@ def test_is_critical_event_github_actions_false_not_critical(monkeypatch):
     ci_status = {**_ALL_SUCCESS, "docker_test_suite": "failure"}
     assert is_critical_event(ci_status) is False, (
         "GITHUB_ACTIONS='false' must suppress the forced-live policy"
+    )
+
+
+# TC-SCRIPT-093 — should_force_live_delivery: requested_dry_run=True + push/main + required failure → True
+# Direct positive-path test for the helper's composition of requested_dry_run and is_critical_event.
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-093")
+def test_should_force_live_delivery_true_when_critical_and_dry_run_requested(
+    monkeypatch,
+):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    ci_status = {**_ALL_SUCCESS, "api_tests": "failure"}
+    assert should_force_live_delivery(True, ci_status) is True, (
+        "should_force_live_delivery must return True when requested_dry_run=True and a critical event is detected"
+    )
+
+
+# TC-SCRIPT-094 — is_critical_event: empty ci_status + push/main → False
+# Documents the invariant: no reported required-lane results is not evidence of a critical failure.
+@pytest.mark.scripts
+@pytest.mark.regression
+@pytest.mark.tc_id("TC-SCRIPT-094")
+def test_is_critical_event_empty_ci_status_not_critical(monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    assert is_critical_event({}) is False, (
+        "Empty ci_status (no reported results) must not trigger the forced-live policy"
     )

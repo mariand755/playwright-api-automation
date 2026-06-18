@@ -411,6 +411,73 @@ Implement multi-source release gate consolidation when both API and UI suites ea
 
 Minimal change to `release_gate.py` (one-line addition). No new script required. UI failures are still blocked by the `UI Tests` required check. Trade-off: the gate is narrower than the full test signal — API results alone do not represent overall product release readiness. For a consulting client, this demonstrates a pragmatic deferral pattern with a documented activation condition: the decision is not "we forgot UI results," it is a deliberate scope choice with a clear trigger for the next step.
 
+### Gate Condition Severity Classification
+
+`release_gate.py` implements a graduated severity model. This classification documents the current blueprint implementation; operators adapting the blueprint for a client or production environment may choose to escalate warning or display-only signals into blocking policy.
+
+Not every signal that exceeds a threshold should automatically block a release in a blueprint/reference context. The gate separates conclusive release blockers from warning signals that warrant human attention.
+
+#### Blocking conditions — `gate_failures` → `NO_GO`
+
+| Condition | Rationale |
+|---|---|
+| JUnit test failures > 0 | Failing tests are conclusive evidence that the build is not releasable. |
+| JUnit test errors > 0 | Test execution errors indicate an environment, fixture, or configuration problem that must be resolved before release readiness can be asserted. |
+| `production_error_rate_pct` > `max_error_rate_pct` | Elevated production error rate is evidence that production stability is already compromised. |
+| `open_blocker_defects` > 0 | Open blocker defects represent a formal recorded decision to withhold release. |
+| Missing or invalid JUnit XML | The gate cannot assert release readiness without test evidence. |
+| Missing or invalid observability JSON | The gate cannot assert release readiness without production-signal evidence. |
+| Missing or invalid defect metrics JSON | The gate cannot assert release readiness without defect-signal evidence. |
+
+#### Warning conditions — `warnings` → `GO` with warnings
+
+| Condition | Rationale |
+|---|---|
+| `p95_latency_ms` > `max_p95_latency_ms` | Latency degradation warrants attention but does not prove release failure in the reference blueprint. A production operator may escalate this to blocking. |
+| `p99_latency_ms` > `max_p99_latency_ms` | Same rationale as p95 latency. |
+| `recent_incident_count` > `max_recent_incident_count` | Recent incidents may already be resolved; blocking on count alone without incident severity can create false negatives during active recovery. |
+| `defect_escape_count` > 0 | Escape count is a lagging indicator; blocking on any non-zero count can make the gate unusable during active triage periods. |
+
+#### Display-only fields
+
+| Field | Rationale |
+|---|---|
+| `open_critical_defects` | Collected for transparency in the release-readiness output, but not currently evaluated as block or warn. Operators adapting the blueprint may choose to escalate this to a warning or blocking condition. |
+
+#### `UNKNOWN` / skipped-gate path
+
+The gate writes `overall_decision: "UNKNOWN"` only when invoked with:
+
+```bash
+python scripts/release_gate.py --skipped <scope>
+```
+
+This is used for intentionally skipped release-readiness paths, such as smoke-only runs on feature branches. It produces a `gate_skipped: true` placeholder artifact and exits `0`.
+
+Missing or invalid input files do **not** produce `UNKNOWN`. Missing evidence writes a `NO_GO` error artifact and exits nonzero — the gate cannot assert release readiness without required inputs.
+
+#### Output contract
+
+The gate decision is exposed as `overall_decision` in `artifacts/release-readiness.json`. This key is consumed by `scripts/notify.py` when calculating release confidence for notification messages.
+
+#### Note on `MANUAL_REVIEW`
+
+An earlier design iteration described a `MANUAL_REVIEW` decision state for cases where data is present but signals are ambiguous. The implemented public gate uses three states:
+
+- `GO` — no gate failures
+- `NO_GO` — one or more gate failures
+- `UNKNOWN` — gate intentionally skipped (smoke scope)
+
+The manual-review concept is represented through the warning system: a `GO` decision with warnings surfaces ambiguous or degraded signals without blocking the pipeline. `UNKNOWN` is reserved for intentionally skipped or insufficient-evidence paths, not for data-present-but-ambiguous cases.
+
+#### Potential future extensions
+
+Future release-gate enhancements may include:
+
+- TC-ID coverage floor evaluation to verify required TC-IDs are present in JUnit XML before asserting `GO` — guards against partial test execution producing a misleading `GO`
+- Explicit `open_critical_defects` gating policy with operator-configurable threshold
+- A formal `MANUAL_REVIEW` decision state if a client requires a human-review checkpoint before deployment
+
 ---
 
 ## ADR-010: Branch protection operates on job names, not step names

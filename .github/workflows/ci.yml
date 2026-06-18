@@ -162,13 +162,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: No API-relevant changes — skip API suite
+        if: needs.changes.outputs.run_api == 'false'
+        run: |
+          mkdir -p artifacts
+          python scripts/release_gate.py --skipped no_api_relevant_changes
+          {
+            echo "## No API-Relevant Changes Detected"
+            echo ""
+            echo "API smoke execution was intentionally not run for this feature/PR workflow."
+            echo "Required static checks and script unit tests completed in the Docker Test Suite."
+            echo "Full API coverage remains mandatory on main and scheduled runs."
+            echo "Manual validation runs honor the selected scope but are never suppressed by change detection."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Download Docker image artifact
+        if: needs.changes.outputs.run_api != 'false'
         uses: actions/download-artifact@v8
         with:
           name: playwright-api-automation-image
           path: /tmp
 
       - name: Load Docker image
+        if: needs.changes.outputs.run_api != 'false'
         run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
@@ -193,20 +209,6 @@ jobs:
             echo "TEST_SCOPE=smoke" >> "$GITHUB_ENV"
             echo "MARKER_ARGS=-m smoke" >> "$GITHUB_ENV"
           fi
-
-      - name: No API-relevant changes — skip API suite
-        if: needs.changes.outputs.run_api == 'false'
-        run: |
-          mkdir -p artifacts
-          python scripts/release_gate.py --skipped no_api_relevant_changes
-          {
-            echo "## No API-Relevant Changes Detected"
-            echo ""
-            echo "API smoke execution was intentionally not run for this feature/PR workflow."
-            echo "Required static checks and script unit tests completed in the Docker Test Suite."
-            echo "Full API coverage remains mandatory on main and scheduled runs."
-            echo "Manual validation runs honor the selected scope but are never suppressed by change detection."
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run API test suite
         if: needs.changes.outputs.run_api != 'false'
@@ -249,6 +251,8 @@ jobs:
         run: |
           if [[ -f artifacts/api-report.xml ]]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ needs.changes.outputs.run_api }}" == "false" ]]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           else
             echo "API test report not found — upstream step did not produce artifacts/api-report.xml" >> "$GITHUB_STEP_SUMMARY"
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -332,13 +336,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: No UI-relevant changes — skip UI suite
+        if: needs.changes.outputs.run_ui == 'false'
+        run: |
+          {
+            echo "## No UI-Relevant Changes Detected"
+            echo ""
+            echo "UI smoke execution was intentionally not run for this feature/PR workflow."
+            echo "Required static checks and script unit tests completed in the Docker Test Suite."
+            echo "Full UI coverage remains mandatory on main and scheduled runs."
+            echo "Manual validation runs honor the selected scope but are never suppressed by change detection."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Download Docker image artifact
+        if: needs.changes.outputs.run_ui != 'false'
         uses: actions/download-artifact@v8
         with:
           name: playwright-api-automation-image
           path: /tmp
 
       - name: Load Docker image
+        if: needs.changes.outputs.run_ui != 'false'
         run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
@@ -366,18 +384,6 @@ jobs:
             echo "TEST_SCOPE=smoke" >> "$GITHUB_ENV"
             echo "MARKER_ARGS=-m smoke" >> "$GITHUB_ENV"
           fi
-
-      - name: No UI-relevant changes — skip UI suite
-        if: needs.changes.outputs.run_ui == 'false'
-        run: |
-          {
-            echo "## No UI-Relevant Changes Detected"
-            echo ""
-            echo "UI smoke execution was intentionally not run for this feature/PR workflow."
-            echo "Required static checks and script unit tests completed in the Docker Test Suite."
-            echo "Full UI coverage remains mandatory on main and scheduled runs."
-            echo "Manual validation runs honor the selected scope but are never suppressed by change detection."
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run UI test suite
         if: needs.changes.outputs.run_ui != 'false'
@@ -420,6 +426,8 @@ jobs:
         run: |
           if [[ -f artifacts/ui-report.xml ]]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ needs.changes.outputs.run_ui }}" == "false" ]]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           else
             echo "UI test report not found — upstream step did not produce artifacts/ui-report.xml" >> "$GITHUB_STEP_SUMMARY"
             echo "exists=false" >> "$GITHUB_OUTPUT"

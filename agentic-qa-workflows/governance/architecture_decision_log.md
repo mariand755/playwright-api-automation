@@ -466,7 +466,7 @@ An earlier design iteration described a `MANUAL_REVIEW` decision state for cases
 
 - `GO` — no gate failures
 - `NO_GO` — one or more gate failures
-- `UNKNOWN` — gate intentionally skipped (smoke scope) or missing evidence
+- `UNKNOWN` — gate intentionally skipped (smoke scope)
 
 The manual-review concept is represented through the warning system: a `GO` decision with warnings surfaces ambiguous or degraded signals without blocking the pipeline. `UNKNOWN` is reserved for intentionally skipped or insufficient-evidence paths, not for data-present-but-ambiguous cases.
 

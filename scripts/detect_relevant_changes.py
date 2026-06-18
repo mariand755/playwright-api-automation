@@ -151,18 +151,17 @@ def main() -> None:
         write_output("classification", "bypass_change_detection_event")
         sys.exit(0)
 
-    base_sha = os.environ.get("BASE_SHA", "").strip()
+    base_ref = os.environ.get("BASE_REF", "").strip()
 
-    # First push to a new branch — github.event.before is all zeros
-    if base_sha == "0000000000000000000000000000000000000000" or not base_sha:
+    if not base_ref:
         write_output("run_api", "true")
         write_output("run_ui", "true")
-        write_output("classification", "classifier_error_null_base_sha")
+        write_output("classification", "classifier_error_missing_base_ref")
         sys.exit(0)
 
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", base_sha, "HEAD"],
+            ["git", "diff", "--name-only", base_ref, "HEAD"],
             capture_output=True,
             text=True,
             check=True,

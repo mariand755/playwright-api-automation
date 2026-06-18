@@ -2,7 +2,7 @@
 
 Covers TC-SCRIPT-095 through TC-SCRIPT-113.
 Tests target classify_files() directly; main() env-integration tests use
-monkeypatch to control GITHUB_EVENT_NAME, GITHUB_REF, BASE_SHA.
+monkeypatch to control GITHUB_EVENT_NAME, GITHUB_REF, BASE_REF.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from scripts.detect_relevant_changes import classify_files, main
 # TC-SCRIPT-095 — API-only test file change
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-095")
 def test_tc_script_095_api_only() -> None:
     run_api, run_ui, classification = classify_files(["test/api/test_bookings.py"])
     assert run_api is True
@@ -27,6 +28,7 @@ def test_tc_script_095_api_only() -> None:
 # TC-SCRIPT-096 — UI-only test file change
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-096")
 def test_tc_script_096_ui_only() -> None:
     run_api, run_ui, classification = classify_files(["test/ui/test_login.py"])
     assert run_api is False
@@ -38,6 +40,7 @@ def test_tc_script_096_ui_only() -> None:
 # TC-SCRIPT-097 — Pages-only change
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-097")
 def test_tc_script_097_pages_only() -> None:
     run_api, run_ui, classification = classify_files(["pages/login_page.py"])
     assert run_api is False
@@ -49,6 +52,7 @@ def test_tc_script_097_pages_only() -> None:
 # TC-SCRIPT-098 — test/scripts/ change only (Docker Test Suite layer)
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-098")
 def test_tc_script_098_test_scripts_only() -> None:
     run_api, run_ui, classification = classify_files(
         ["test/scripts/test_release_gate.py"]
@@ -62,6 +66,7 @@ def test_tc_script_098_test_scripts_only() -> None:
 # TC-SCRIPT-099 — Documentation/governance change
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-099")
 @pytest.mark.parametrize(
     "path",
     [
@@ -81,6 +86,7 @@ def test_tc_script_099_doc_only(path: str) -> None:
 # TC-SCRIPT-100 — Workflow file change
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-100")
 def test_tc_script_100_workflow_file() -> None:
     run_api, run_ui, classification = classify_files([".github/workflows/ci.yml"])
     assert run_api is True
@@ -92,6 +98,7 @@ def test_tc_script_100_workflow_file() -> None:
 # TC-SCRIPT-101 — Shared config file changes (parametrized; SHARED_EXACT)
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-101")
 @pytest.mark.parametrize("path", ["requirements.txt", "Dockerfile", "pytest.ini"])
 def test_tc_script_101_shared_config(path: str) -> None:
     run_api, run_ui, classification = classify_files([path])
@@ -104,6 +111,7 @@ def test_tc_script_101_shared_config(path: str) -> None:
 # TC-SCRIPT-102 — Shared utils/ change
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-102")
 def test_tc_script_102_utils_change() -> None:
     run_api, run_ui, classification = classify_files(["utils/helpers.py"])
     assert run_api is True
@@ -115,6 +123,7 @@ def test_tc_script_102_utils_change() -> None:
 # TC-SCRIPT-103 — conftest.py change (SHARED_EXACT)
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-103")
 def test_tc_script_103_conftest() -> None:
     run_api, run_ui, classification = classify_files(["conftest.py"])
     assert run_api is True
@@ -126,6 +135,7 @@ def test_tc_script_103_conftest() -> None:
 # TC-SCRIPT-104 — Mixed API + UI change
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-104")
 def test_tc_script_104_mixed_api_ui() -> None:
     run_api, run_ui, classification = classify_files(
         ["test/api/test_auth.py", "test/ui/test_checkout.py"]
@@ -139,6 +149,7 @@ def test_tc_script_104_mixed_api_ui() -> None:
 # TC-SCRIPT-105 — Mixed API + shared (conftest.py) — SHARED short-circuits
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-105")
 def test_tc_script_105_api_plus_shared() -> None:
     run_api, run_ui, classification = classify_files(
         ["test/api/test_auth.py", "conftest.py"]
@@ -152,6 +163,7 @@ def test_tc_script_105_api_plus_shared() -> None:
 # TC-SCRIPT-106 — Unknown/unclassified path → conservative fallback
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-106")
 def test_tc_script_106_unknown_path() -> None:
     run_api, run_ui, classification = classify_files(["some/unknown/new_file.py"])
     assert run_api is True
@@ -163,6 +175,7 @@ def test_tc_script_106_unknown_path() -> None:
 # TC-SCRIPT-107 — Empty changed file list → conservative fallback
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-107")
 def test_tc_script_107_empty_changed_files() -> None:
     run_api, run_ui, classification = classify_files([])
     assert run_api is True
@@ -171,17 +184,18 @@ def test_tc_script_107_empty_changed_files() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TC-SCRIPT-108 — First-push null SHA → conservative fallback (main() level)
+# TC-SCRIPT-108 — Missing BASE_REF → conservative fallback (main() level)
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
-def test_tc_script_108_null_sha(
+@pytest.mark.tc_id("TC-SCRIPT-108")
+def test_tc_script_108_missing_base_ref(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.Path
 ) -> None:
     output_file = tmp_path / "github_output"
     output_file.write_text("")
     monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
     monkeypatch.setenv("GITHUB_REF", "refs/heads/feature/new-thing")
-    monkeypatch.setenv("BASE_SHA", "0000000000000000000000000000000000000000")
+    monkeypatch.setenv("BASE_REF", "")
     monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
 
     with pytest.raises(SystemExit) as exc_info:
@@ -195,13 +209,14 @@ def test_tc_script_108_null_sha(
     )
     assert outputs["run_api"] == "true"
     assert outputs["run_ui"] == "true"
-    assert outputs["classification"] == "classifier_error_null_base_sha"
+    assert outputs["classification"] == "classifier_error_missing_base_ref"
 
 
 # ---------------------------------------------------------------------------
 # TC-SCRIPT-109 — Bypass events (parametrized)
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-109")
 @pytest.mark.parametrize(
     "event_name,ref",
     [
@@ -221,7 +236,7 @@ def test_tc_script_109_bypass_events(
     output_file.write_text("")
     monkeypatch.setenv("GITHUB_EVENT_NAME", event_name)
     monkeypatch.setenv("GITHUB_REF", ref)
-    monkeypatch.setenv("BASE_SHA", "abc123def456")
+    monkeypatch.setenv("BASE_REF", "abc123def456")
     monkeypatch.setenv("GITHUB_OUTPUT", str(output_file))
 
     with pytest.raises(SystemExit) as exc_info:
@@ -242,6 +257,7 @@ def test_tc_script_109_bypass_events(
 # TC-SCRIPT-110 — Named CI-control scripts → SHARED_EXACT (parametrized)
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-110")
 @pytest.mark.parametrize(
     "path",
     [
@@ -263,6 +279,7 @@ def test_tc_script_110_named_ci_scripts(path: str) -> None:
 # TC-SCRIPT-111 — Unknown scripts/ file not in SHARED_EXACT → conservative fallback
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-111")
 def test_tc_script_111_unknown_scripts_path() -> None:
     run_api, run_ui, classification = classify_files(["scripts/some_new_helper.py"])
     assert run_api is True
@@ -274,6 +291,7 @@ def test_tc_script_111_unknown_scripts_path() -> None:
 # TC-SCRIPT-112 — Non-Markdown ci/ file → conservative fallback
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-112")
 def test_tc_script_112_non_md_ci_file() -> None:
     run_api, run_ui, classification = classify_files(["ci/jenkins/Jenkinsfile"])
     assert run_api is True
@@ -285,6 +303,7 @@ def test_tc_script_112_non_md_ci_file() -> None:
 # TC-SCRIPT-113 — test/api/README.md → doc-only (Markdown rule before API-path rule)
 # ---------------------------------------------------------------------------
 @pytest.mark.scripts
+@pytest.mark.tc_id("TC-SCRIPT-113")
 def test_tc_script_113_api_readme_is_doc_only() -> None:
     run_api, run_ui, classification = classify_files(["test/api/README.md"])
     assert run_api is False

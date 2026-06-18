@@ -190,8 +190,8 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) distributes the checks 
 | --- | --- | --- | --- |
 | `Detect relevant changes` | Classifies changed files to determine whether API and UI suites are relevant; outputs `run_api` and `run_ui` flags; fail-closed (unknown paths → run both) | All triggers; bypass for push-to-main, schedule, workflow_dispatch | — |
 | `Docker Test Suite` | Docker build, Ruff format, Ruff lint, mypy type check, pip-audit, Trivy, pytest collection, script unit tests (`test/scripts/` → `artifacts/scripts-report.xml`, published as `Script Unit Test Results` via dorny/test-reporter — advisory panel, non-blocking), Docker image artifact upload | All triggers | — |
-| `API Tests` | API test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, release readiness gate (full runs only), release readiness artifact upload; skips test execution when classifier reports no API-relevant changes | All triggers | `Docker Test Suite`, `Detect relevant changes` |
-| `UI Tests` | UI test suite (smoke on PR/feature push; full on main/schedule/dispatch), CI summary, failure artifact upload; skips test execution when classifier reports no UI-relevant changes | All triggers | `Docker Test Suite`, `Detect relevant changes` |
+| `API Tests` | API test suite (smoke on PR/feature push; full on main/schedule; `workflow_dispatch` honors operator-selected full or smoke scope — never suppressed by file classification), CI summary, release readiness gate (full runs only), release readiness artifact upload; skips test execution when classifier reports no API-relevant changes | All triggers | `Docker Test Suite`, `Detect relevant changes` |
+| `UI Tests` | UI test suite (smoke on PR/feature push; full on main/schedule; `workflow_dispatch` honors operator-selected full or smoke scope — never suppressed by file classification), CI summary, failure artifact upload; skips test execution when classifier reports no UI-relevant changes | All triggers | `Docker Test Suite`, `Detect relevant changes` |
 | `Notify` | Aggregate Slack/SMTP notification with overall CI status, release readiness, and advisory job status (cloud-grid and cross-browser when scheduled) | `schedule` and `workflow_dispatch` always; `push` to `main` when any required job is not `success`; `pull_request` when any required job is not `success` AND `NOTIFY_PR_FAILURES=true` (repo variable) | `Docker Test Suite`, `API Tests`, `UI Tests`, `UI Cross-Browser`, `Cloud Grid` |
 | `UI Cross-Browser` | Cross-browser smoke suite across chromium, firefox, webkit — advisory only | `schedule` and `workflow_dispatch` only; never on PR or push | `Docker Test Suite` |
 | `Cloud Grid` | Provider-aware cloud-grid smoke execution, preflight-gated, 3-browser matrix (chromium, firefox, webkit) — advisory only; Sauce Labs and BrowserStack both support live smoke execution (ADR-036) | `schedule` and `workflow_dispatch` only; never on PR or push | `Docker Test Suite` |
@@ -217,6 +217,7 @@ Notification is report delivery, not a release gate. It does not block CI and is
 The `Notify` job runs after `Docker Test Suite`, `API Tests`, and `UI Tests` all complete. It receives each job's outcome via `needs.*.result` env vars, downloads `release-readiness.json` from the `API Tests` artifact upload, and delivers an aggregate message to Slack and email.
 
 **Overall Release Readiness** is computed from the combination of all three job outcomes and the release gate decision:
+
 - BLOCKED if any required job result is not exactly `success` (failure, cancelled, skipped, and unknown are all BLOCKED)
 - GO if all three jobs succeeded and the release gate decision is GO
 - NO_GO if all three jobs succeeded and the release gate decision is NO_GO

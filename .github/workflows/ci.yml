@@ -35,8 +35,19 @@ permissions:
   checks: write  # required by dorny/test-reporter to create check annotations
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main') }}
+  group: >-
+    ${{
+      github.event_name == 'pull_request' &&
+      format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) ||
+      (github.event_name == 'push' && github.ref != 'refs/heads/main') &&
+      format('{0}-branch-{1}', github.workflow, github.ref) ||
+      format('{0}-protected-{1}', github.workflow, github.run_id)
+    }}
+  cancel-in-progress: >-
+    ${{
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref != 'refs/heads/main')
+    }}
 
 jobs:
   changes:
@@ -57,7 +68,7 @@ jobs:
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REF: ${{ github.ref }}
-          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
         run: python scripts/detect_relevant_changes.py
 
   test:
@@ -156,7 +167,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test, changes]
-    if: always() && needs.test.result == 'success'
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
 
     steps:
       - name: Checkout code
@@ -330,7 +341,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test, changes]
-    if: always() && needs.test.result == 'success'
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
 
     steps:
       - name: Checkout code

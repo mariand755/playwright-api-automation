@@ -2974,7 +2974,7 @@ When `forced_live=True` and a channel's credentials are absent, each channel log
 
 ```text
 [CRITICAL] Slack: live-delivery override applied, but channel unavailable — SLACK_WEBHOOK_URL not configured
-[CRITICAL] Email: live-delivery override applied, but channel unavailable — SMTP_HOST not configured
+[CRITICAL] Email: live-delivery override applied, but channel unavailable — SMTP_HOST, SMTP_USER, SMTP_PASSWORD, NOTIFY_RECIPIENTS not configured
 ```
 
 No secret values, endpoint details, or recipient addresses appear in these log lines.

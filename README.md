@@ -21,7 +21,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 |---|---|---|---|
 | API | 13 | pytest + Requests | CRUD + auth + contract validation — Restful Booker |
 | UI | 9 | pytest + Playwright | Login, cart, checkout, negative paths — SauceDemo |
-| Script unit | 85 | pytest | Release gate, CI summary, notification decision logic, cloud-grid preflight, BrowserStack capability construction |
+| Script unit | 102 | pytest | Release gate, CI summary, notification decision logic, forced-live critical alert policy, cloud-grid preflight, BrowserStack capability construction |
 
 ## Target Applications
 
@@ -145,7 +145,7 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | Capability | Status | Notes |
 |---|---|---|
 | SMTP/email live delivery validation | ✅ Validated | Gmail SMTP STARTTLS on port `587` works from GitHub Actions; Gmail may place first-time automation emails in Spam |
-| Forced-live critical failure alerts | ⏳ Deferred | Needs ADR before activation |
+| Forced-live critical failure alerts | ✅ Activated | `NOTIFY_DRY_RUN=true` overridden on push-to-main or schedule + required lane failure; see ADR-039 |
 | Live observability API integration | ⏳ Deferred | Replace stub bodies when live observability stack is available |
 | pytest-xdist parallelization | ✅ Activated for API + UI | API and standard UI test jobs run with `-n auto`; script and prod-read-only suites remain serial |
 | Cross-browser UI matrix | ✅ Activated (smoke, advisory) | Nightly + `workflow_dispatch`; chromium / firefox / webkit smoke suite; advisory — not in branch protection |

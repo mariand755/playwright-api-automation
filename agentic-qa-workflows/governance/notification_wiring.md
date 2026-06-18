@@ -137,7 +137,7 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 - Temporarily pause live delivery without removing or rotating secrets
 - Re-enable live delivery by deleting the variable or setting its value to `false`
 
-**Push-to-main failure notifications:** `NOTIFY_DRY_RUN=true` applies to all trigger types, including push-to-main failure notifications. A push to main that fails a required job will cause the `Notify` job to run, but all channels will dry-run — no live Slack or email is sent. Confirm `NOTIFY_DRY_RUN` is unset or `false` before relying on live push-to-main failure alerts.
+**Push-to-main failure notifications:** `NOTIFY_DRY_RUN=true` applies to most trigger types, but the forced-live critical alert policy (ADR-039) creates a narrow exception: when a required lane (`docker_test_suite`, `api_tests`, or `ui_tests`) fails on a push to `main` or a scheduled run, `notify.py` overrides `NOTIFY_DRY_RUN=true` and attempts live delivery to each configured channel. A push to main that fails a required job will cause the `Notify` job to run **and** attempt live delivery — channels will not silently dry-run. For all other trigger types (`workflow_dispatch`, `pull_request`, feature branch pushes, advisory-only failures), `NOTIFY_DRY_RUN=true` suppresses delivery as expected. See the [Forced-Live Critical Alert Policy](#forced-live-critical-alert-policy) section for the full truth table and credential requirements.
 
 **Important:** if `NOTIFY_DRY_RUN` is added under **Secrets** instead of **Variables**, the workflow's `${{ vars.NOTIFY_DRY_RUN }}` reference reads from the wrong namespace and resolves to an empty string. The flag silently has no effect.
 
@@ -288,6 +288,99 @@ Manual CI runs (`workflow_dispatch`) support a `notification_mode` input that ov
 | `live` | Clears `NOTIFY_DRY_RUN` for this run only — live delivery if secrets are configured |
 
 The input is available only on `workflow_dispatch`. On `schedule` and `push` to `main`, `vars.NOTIFY_DRY_RUN` is always used. Missing secrets still prevent live delivery regardless of the input value — `notify.py` dry-runs per channel when required env vars are absent.
+
+---
+
+## Forced-Live Critical Alert Policy
+
+**ADR:** [ADR-039](architecture_decision_log.md#adr-039-forced-live-critical-failure-alert-policy)
+
+### Overview
+
+Setting `NOTIFY_DRY_RUN=true` suppresses all live notification delivery. This is the correct default for noise control. However, a required-lane failure on push to `main` or a scheduled run is a genuine release-blocking event — silencing it defeats the purpose of having alerts.
+
+The forced-live policy is a narrow override: when `NOTIFY_DRY_RUN=true` is active **and** a critical event is detected, `notify.py` overrides the dry-run flag and attempts live delivery to each configured channel.
+
+### What counts as a critical event
+
+All three conditions must hold simultaneously:
+
+1. Running inside GitHub Actions (`GITHUB_ACTIONS=true` — auto-set in all steps, absent on local and Jenkins)
+2. Trigger is `push` to `refs/heads/main` **or** `schedule` (nightly)
+3. At least one required lane result is not `success` — `docker_test_suite`, `api_tests`, or `ui_tests`
+
+Any non-empty value other than `"success"` qualifies: `failure`, `cancelled`, `skipped`, `timed_out`, or any other non-success string.
+
+### Critical-event truth table
+
+| Trigger | Required lane result | NOTIFY_DRY_RUN | Behavior |
+|---|---|---|---|
+| Push to `main` | Any required failure | `true` | Override → live delivery attempted |
+| Push to `main` | All required success | `true` | Dry-run — no override |
+| Scheduled run | Any required failure | `true` | Override → live delivery attempted |
+| Scheduled run | All required success | `true` | Dry-run — no override |
+| `workflow_dispatch` | Failure | `dry_run` | Dry-run — no override |
+| `workflow_dispatch` | Failure | `live` | Live through existing behavior |
+| `pull_request` | Failure | `true` | Dry-run — no override |
+| Advisory-only failure | Required lane success | `true` | Dry-run — no override |
+| Local / Jenkins | Any | `true` | Dry-run — no override (`GITHUB_ACTIONS` absent) |
+
+### Effective dry-run precedence model
+
+```
+requested_dry_run  = is_dry_run_forced()                                    # reads NOTIFY_DRY_RUN
+forced_live        = should_force_live_delivery(requested_dry_run, ci_status)
+effective_dry_run  = requested_dry_run and not forced_live
+```
+
+`forced_live` is only ever `True` when `requested_dry_run` was `True`. When `NOTIFY_DRY_RUN` is already `false`, `forced_live` stays `False` — delivery is already live through existing behavior, and the alert banner is suppressed.
+
+### Notification content when override applies
+
+The first line of the notification becomes:
+
+```
+🚨 Critical Alert Policy: Live-delivery override applied — required release lane failed on main or scheduled run.
+```
+
+This line appears only when `forced_live=True`. Ordinary live notifications, `workflow_dispatch`, and dry-run paths never include it.
+
+### Credential dependency
+
+A forced-live override attempts delivery — it does not guarantee it. Each channel still requires its own credentials:
+
+- **Slack:** `SLACK_WEBHOOK_URL` must be provisioned as a GitHub Actions secret
+- **Email:** `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `NOTIFY_RECIPIENTS` must be set
+
+When the override fires but a channel's credentials are absent, `notify.py` logs an unambiguous incident trail — all lines prefixed `[CRITICAL]` so the override is not confused with an ordinary dry-run:
+
+```text
+[CRITICAL] Slack: live-delivery override applied, but channel unavailable — SLACK_WEBHOOK_URL not configured
+[CRITICAL] Slack message preview — delivery unavailable:
+  🚨 Critical Alert Policy: Live-delivery override applied — required release lane failed on main or scheduled run.
+  Overall Release Readiness: ⚠️ BLOCKED
+  ...
+
+[CRITICAL] Email: live-delivery override applied, but channel unavailable — SMTP_HOST, SMTP_USER, SMTP_PASSWORD, NOTIFY_RECIPIENTS not configured
+[CRITICAL] Email recipients unavailable due to missing configuration
+[CRITICAL] Email body preview — delivery unavailable:
+  🚨 Critical Alert Policy: Live-delivery override applied — required release lane failed on main or scheduled run.
+  Overall Release Readiness: ⚠️ BLOCKED
+  ...
+```
+
+No credential values appear in these log lines — only variable names. The `[DRY RUN]` prefix never appears in a forced-live CRITICAL path — if you see `[DRY RUN]` in the logs, the override did not fire.
+
+### Testing without intentional main failure
+
+Unit tests in `test/scripts/test_notify_readiness.py` (TC-SCRIPT-080 through TC-SCRIPT-094) cover all policy branches using `monkeypatch.setenv` / `monkeypatch.delenv`. No intentional CI failure is needed to validate policy logic.
+
+### Disabling the override
+
+Two options:
+
+1. **Remove the dry-run:** Set `NOTIFY_DRY_RUN` to `false` or delete the repo variable — live delivery is already active for all events; no override is needed or applied.
+2. **Revert ADR-039:** Remove `is_critical_event()` and `should_force_live_delivery()` from `notify.py`, restore `is_dry_run_forced()` as the sole dry-run control — see ADR-039 rollback steps.
 
 ---
 

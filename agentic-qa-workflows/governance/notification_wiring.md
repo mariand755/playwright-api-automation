@@ -137,7 +137,7 @@ Add it under: **Settings → Secrets and variables → Actions → Variables tab
 - Temporarily pause live delivery without removing or rotating secrets
 - Re-enable live delivery by deleting the variable or setting its value to `false`
 
-**Push-to-main failure notifications:** `NOTIFY_DRY_RUN=true` applies to all trigger types, including push-to-main failure notifications. A push to main that fails a required job will cause the `Notify` job to run, but all channels will dry-run — no live Slack or email is sent. Confirm `NOTIFY_DRY_RUN` is unset or `false` before relying on live push-to-main failure alerts.
+**Push-to-main failure notifications:** `NOTIFY_DRY_RUN=true` applies to most trigger types, but the forced-live critical alert policy (ADR-039) creates a narrow exception: when a required lane (`docker_test_suite`, `api_tests`, or `ui_tests`) fails on a push to `main` or a scheduled run, `notify.py` overrides `NOTIFY_DRY_RUN=true` and attempts live delivery to each configured channel. A push to main that fails a required job will cause the `Notify` job to run **and** attempt live delivery — channels will not silently dry-run. For all other trigger types (`workflow_dispatch`, `pull_request`, feature branch pushes, advisory-only failures), `NOTIFY_DRY_RUN=true` suppresses delivery as expected. See the [Forced-Live Critical Alert Policy](#forced-live-critical-alert-policy) section for the full truth table and credential requirements.
 
 **Important:** if `NOTIFY_DRY_RUN` is added under **Secrets** instead of **Variables**, the workflow's `${{ vars.NOTIFY_DRY_RUN }}` reference reads from the wrong namespace and resolves to an empty string. The flag silently has no effect.
 

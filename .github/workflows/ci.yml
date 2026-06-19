@@ -34,7 +34,43 @@ permissions:
   contents: read
   checks: write  # required by dorny/test-reporter to create check annotations
 
+concurrency:
+  group: >-
+    ${{
+      github.event_name == 'pull_request' &&
+      format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) ||
+      (github.event_name == 'push' && github.ref != 'refs/heads/main') &&
+      format('{0}-branch-{1}', github.workflow, github.ref) ||
+      format('{0}-protected-{1}', github.workflow, github.run_id)
+    }}
+  cancel-in-progress: >-
+    ${{
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref != 'refs/heads/main')
+    }}
+
 jobs:
+  changes:
+    name: Detect relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_api: ${{ steps.classify.outputs.run_api }}
+      run_ui: ${{ steps.classify.outputs.run_ui }}
+      classification: ${{ steps.classify.outputs.classification }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Classify changed files
+        id: classify
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || format('origin/{0}', github.event.repository.default_branch) }}
+        run: python scripts/detect_relevant_changes.py
+
   test:
     name: Docker Test Suite
     runs-on: ubuntu-latest
@@ -130,19 +166,36 @@ jobs:
     name: API Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [test]
+    needs: [test, changes]
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: No API-relevant changes — skip API suite
+        if: needs.changes.outputs.run_api == 'false'
+        run: |
+          mkdir -p artifacts
+          python scripts/release_gate.py --skipped no_api_relevant_changes
+          {
+            echo "## No API-Relevant Changes Detected"
+            echo ""
+            echo "API smoke execution was intentionally not run for this feature/PR workflow."
+            echo "Required static checks and script unit tests completed in the Docker Test Suite."
+            echo "Full API coverage remains mandatory on main and scheduled runs."
+            echo "Manual validation runs honor the selected scope but are never suppressed by change detection."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Download Docker image artifact
+        if: needs.changes.outputs.run_api != 'false'
         uses: actions/download-artifact@v8
         with:
           name: playwright-api-automation-image
           path: /tmp
 
       - name: Load Docker image
+        if: needs.changes.outputs.run_api != 'false'
         run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
@@ -169,6 +222,7 @@ jobs:
           fi
 
       - name: Run API test suite
+        if: needs.changes.outputs.run_api != 'false'
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
@@ -195,7 +249,9 @@ jobs:
       - name: Write test scope to summary
         if: always()
         run: |
-          if [ "$TEST_SCOPE" = "smoke" ]; then
+          if [[ "${{ needs.changes.outputs.run_api }}" == "false" ]]; then
+            : # No API-Relevant Changes summary already written above.
+          elif [ "$TEST_SCOPE" = "smoke" ]; then
             echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\` and nightly schedule." >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -206,6 +262,8 @@ jobs:
         run: |
           if [[ -f artifacts/api-report.xml ]]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ needs.changes.outputs.run_api }}" == "false" ]]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           else
             echo "API test report not found — upstream step did not produce artifacts/api-report.xml" >> "$GITHUB_STEP_SUMMARY"
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -216,7 +274,7 @@ jobs:
         run: python scripts/ci_summary.py artifacts/api-report.xml >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run release readiness gate
-        if: always()
+        if: always() && needs.changes.outputs.run_api != 'false'
         run: |
           if [ -z "${TEST_SCOPE:-}" ]; then
             mkdir -p artifacts
@@ -253,7 +311,9 @@ jobs:
       - name: Write release gate summary
         if: always()
         run: |
-          if [ "$TEST_SCOPE" != "full" ]; then
+          if [[ "${{ needs.changes.outputs.run_api }}" == "false" ]]; then
+            : # No API-Relevant Changes summary already written above.
+          elif [ "$TEST_SCOPE" != "full" ]; then
             echo "## Release Readiness Gate" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "> **Smoke run** — release gate skipped. Full release readiness runs on push to \`main\` and nightly schedule." >> "$GITHUB_STEP_SUMMARY"
@@ -280,19 +340,34 @@ jobs:
     name: UI Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [test]
+    needs: [test, changes]
+    if: ${{ !cancelled() && needs.test.result == 'success' }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: No UI-relevant changes — skip UI suite
+        if: needs.changes.outputs.run_ui == 'false'
+        run: |
+          {
+            echo "## No UI-Relevant Changes Detected"
+            echo ""
+            echo "UI smoke execution was intentionally not run for this feature/PR workflow."
+            echo "Required static checks and script unit tests completed in the Docker Test Suite."
+            echo "Full UI coverage remains mandatory on main and scheduled runs."
+            echo "Manual validation runs honor the selected scope but are never suppressed by change detection."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Download Docker image artifact
+        if: needs.changes.outputs.run_ui != 'false'
         uses: actions/download-artifact@v8
         with:
           name: playwright-api-automation-image
           path: /tmp
 
       - name: Load Docker image
+        if: needs.changes.outputs.run_ui != 'false'
         run: gunzip -c /tmp/playwright-api-automation.tar.gz | docker load
 
       - name: Prepare artifacts directory
@@ -322,6 +397,7 @@ jobs:
           fi
 
       - name: Run UI test suite
+        if: needs.changes.outputs.run_ui != 'false'
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/artifacts:/app/artifacts \
@@ -348,7 +424,9 @@ jobs:
       - name: Write test scope to summary
         if: always()
         run: |
-          if [ "$TEST_SCOPE" = "smoke" ]; then
+          if [[ "${{ needs.changes.outputs.run_ui }}" == "false" ]]; then
+            : # No UI-Relevant Changes summary already written above.
+          elif [ "$TEST_SCOPE" = "smoke" ]; then
             echo "> **Smoke run** — smoke-tagged tests only. Full regression runs on push to \`main\` and nightly schedule." >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -359,6 +437,8 @@ jobs:
         run: |
           if [[ -f artifacts/ui-report.xml ]]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ needs.changes.outputs.run_ui }}" == "false" ]]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           else
             echo "UI test report not found — upstream step did not produce artifacts/ui-report.xml" >> "$GITHUB_STEP_SUMMARY"
             echo "exists=false" >> "$GITHUB_OUTPUT"

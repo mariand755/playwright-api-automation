@@ -21,7 +21,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 |---|---|---|---|
 | API | 13 | pytest + Requests | CRUD + auth + contract validation — Restful Booker |
 | UI | 9 | pytest + Playwright | Login, cart, checkout, negative paths — SauceDemo |
-| Script unit | 102 | pytest | Release gate, CI summary, notification decision logic, forced-live critical alert policy, cloud-grid preflight, BrowserStack capability construction |
+| Script unit | 133 | pytest | Release gate, CI summary, notification decision logic, forced-live critical alert policy, cloud-grid preflight, BrowserStack capability construction, relevant-change detection |
 
 ## Target Applications
 

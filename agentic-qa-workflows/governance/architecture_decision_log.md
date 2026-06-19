@@ -3025,18 +3025,29 @@ Feature and PR workflows run API and UI smoke suites on every push, regardless o
 2. Add a `changes` job that runs a conservative Python file classifier (`scripts/detect_relevant_changes.py`) in parallel with the `test` job.
 3. Suppress API and UI smoke execution within their jobs (not at the job level) when the classifier determines no relevant files changed. Required job names (`api`, `ui`) and branch-protection rules are unchanged.
 4. Bypass classification for push-to-main and schedule (always full coverage) and workflow_dispatch (always executes API and UI at the operator-selected full or smoke scope; file classification never suppresses that execution).
-5. Fail-closed: unknown paths, empty diffs, git errors, null SHA, and classifier errors all default to `run_api=true, run_ui=true`.
+5. Fail-closed: unknown paths, empty diffs, git errors, missing or empty BASE_REF, and classifier errors all default to `run_api=true, run_ui=true`. Pull request runs diff against the pull request base SHA. Feature-branch push runs diff against `origin/<default_branch>`, not `github.event.before`, so the classifier evaluates the cumulative branch delta. This prevents a later documentation-only commit from suppressing API or UI validation for an earlier code change whose stale run was cancelled.
 6. Preserve all required job names and branch-protection behavior. `api` and `ui` jobs always exist in the workflow graph and always produce a `success` result when tests either run-and-pass or are intentionally skipped.
 
 ### Concurrency expression
 
 ```yaml
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main') }}
+  group: >-
+    ${{
+      github.event_name == 'pull_request' &&
+      format('{0}-pr-{1}', github.workflow, github.event.pull_request.number) ||
+      (github.event_name == 'push' && github.ref != 'refs/heads/main') &&
+      format('{0}-branch-{1}', github.workflow, github.ref) ||
+      format('{0}-protected-{1}', github.workflow, github.run_id)
+    }}
+  cancel-in-progress: >-
+    ${{
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref != 'refs/heads/main')
+    }}
 ```
 
-Including `github.event_name` in the group key isolates `workflow_dispatch` runs on a feature branch from `push` runs on the same branch, preventing a push from cancelling a manually requested run.
+PR and feature-branch push runs use stable shared groups so newer commits can cancel obsolete work. Protected events — push to main, schedule, and workflow_dispatch — use a unique `run_id` group. This avoids both in-progress cancellation and replacement of a pending run in the same concurrency group. GitHub's documented default is one running plus one pending run per group, with a new pending run replacing an older pending run; `cancel-in-progress: false` does not prevent that replacement behavior.
 
 ### Bypass events
 
@@ -3075,7 +3086,7 @@ SHARED_EXACT entries: `scripts/detect_relevant_changes.py`, `scripts/release_gat
 
 1. Remove `concurrency:` block from `.github/workflows/ci.yml`.
 2. Remove `changes` job from `.github/workflows/ci.yml`.
-3. Restore `needs: [test]` on `api` and `ui` jobs; remove `if: always() && needs.test.result == 'success'`.
+3. Restore `needs: [test]` on `api` and `ui` jobs; remove `if: ${{ !cancelled() && needs.test.result == 'success' }}`.
 4. Remove conditional skip steps and `if:` guards on test-execution steps from `api` and `ui` jobs.
 5. Restore original "Write test scope to summary" and "Write release gate summary" steps (remove `run_api`/`run_ui` guards).
 6. Delete `scripts/detect_relevant_changes.py` and `test/scripts/test_detect_relevant_changes.py`.

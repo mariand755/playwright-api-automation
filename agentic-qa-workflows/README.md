@@ -42,7 +42,7 @@ agentic-qa-workflows/
 | `test_data_env_rules.md` | Test data and environment variable rules |
 | `failure_evidence.md` | Failure evidence capture expectations |
 | `agentic_workflow_rules.md` | AI-assisted workflow constraints and review rules |
-| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-043) |
+| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-044) |
 | `observability_contract.md` | Provider-neutral release-signal schema, provider mapping rules, data-status semantics, and evidence provenance rules |
 | `mcp_evaluation.md` | MCP integration evaluation — GitHub, Slack/Gmail, and observability; verdicts, security framework, and activation conditions |
 | `notification_wiring.md` | Slack/SMTP notification setup and activation guide |
@@ -66,11 +66,11 @@ This is a **governance-first, AI-assisted, human-gated** QA workflow. What that 
 **Current manual AI capabilities:**
 
 - Governance audit skill (`/governance-audit`) — introduced in ADR-043 as a manual, read-only, project-local Claude Code skill. Audits the repository against the governance framework and recommends fixes. Invoked explicitly by the engineer; does not edit files.
+- TC-ID inventory skill (`/tc-id`) — introduced in ADR-044 as a manual, read-only, project-local Claude Code skill. Reports the live TC-ID inventory from the test tree and suggests the next available ID for each suite. Invoked explicitly by the engineer; does not edit files.
 
 **What this repo does not yet provide:**
 
 - Autonomous agent orchestration (no scheduled AI agents, no CI-triggered review loops)
-- TC-ID suggestion skill — deferred pending the `qa_standards.md` AREA and suffix-notation governance decision (ADR-044)
 - MCP integrations — evaluated in ADR-042: GitHub and observability are DEFERRED (activation conditions not yet met); Slack and Gmail are REJECTED (current webhook and SMTP paths are sufficient and narrower)
 - Self-healing or remediation automation
 

@@ -25,7 +25,19 @@ Tag each test with a unique ID comment above the test’s pytest marker decorato
 def test_user_can_login(page, base_url, credentials):
 ```
 
-Pattern: `TC-<AREA>-<NNN>`, where `AREA` is `UI` or `API`.
+Pattern: `TC-<AREA>-<NNN><suffix?>`, where:
+
+- `AREA` is `API`, `UI`, or `SCRIPT`.
+- `NNN` is a three-or-more-digit numeric identifier.
+- `suffix` is optional and consists of one lowercase letter. A suffixed ID is an
+  intentional subcase and is valid only when its unsuffixed base ID exists in
+  the same AREA.
+- Duplicate full TC-IDs are prohibited.
+- Historical numeric gaps do not require backfill.
+- Suffixes do not need to begin at `a` or follow a consecutive sequence.
+- The next suggested numeric ID is the highest existing numeric base in that
+  AREA plus one, ignoring suffixes.
+
 Use pytest markers such as `smoke`, `negative`, `regression`, or `api_contract` to classify execution scope.
 All markers must be declared in `pytest.ini` before use.
 
@@ -35,6 +47,7 @@ All markers must be declared in `pytest.ini` before use.
 - `@pytest.mark.tc_id("TC-UI-001")` markers provide machine-readable traceability.
 - A `pytest_collection_modifyitems` hook in `conftest.py` reads each `tc_id` marker and appends it to JUnit XML user properties.
 - TC-ID uniqueness validation is enforced by `test/scripts/test_tc_id_uniqueness.py`, which fails the script test suite if duplicate `@pytest.mark.tc_id(...)` markers are found.
+- Use the `/tc-id` Claude Code skill to get the current live inventory and next available ID before adding a test.
 
 **Future state:**
 

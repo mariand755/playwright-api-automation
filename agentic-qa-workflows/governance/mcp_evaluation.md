@@ -34,7 +34,7 @@ Engineers retrieve PR, workflow, and artifact evidence through GitHub's native U
 
 ### Session-level value
 
-A GitHub MCP connection could allow Claude Code to read live PR diffs, workflow run logs, and issue context during Mode A/B reviews — without the engineer manually copying output into the session. This is the primary use case for the governance compliance audit skill planned in Group F.
+A GitHub MCP connection could allow Claude Code to read live PR diffs, workflow run logs, and issue context during Mode A/B reviews — without the engineer manually copying output into the session. Reading live PR and workflow evidence in this way would directly support the governance compliance audit skill planned in Group F.
 
 ### Credential scope
 
@@ -103,7 +103,7 @@ An observability MCP connection could allow Claude Code to query current error r
 
 ### Credential scope
 
-A future live-provider implementation would require provider-specific read-only credentials (Datadog API and app keys, Grafana service account token, or PagerDuty API key). The current repository does not yet call a live provider or consume provider credentials in CI. A future MCP activation must use separately provisioned scoped credentials and must never reuse the CI credentials that the ADR-017 activation slice will introduce.
+A future live-provider implementation would require provider-specific read-only credentials (Datadog API and app keys, Grafana service account token, or PagerDuty API key). The current repository does not yet call a live provider or consume provider credentials in CI. A future MCP activation must use separately provisioned scoped credentials and must never reuse any provider credentials provisioned for the ADR-017 CI activation slice.
 
 ### Configuration risk
 

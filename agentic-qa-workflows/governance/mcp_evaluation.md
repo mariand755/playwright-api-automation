@@ -38,7 +38,7 @@ A GitHub MCP connection could allow Claude Code to read live PR diffs, workflow 
 
 ### Credential scope
 
-A future activation ADR must first enumerate the exact read endpoints required by the chosen MCP server and grant only the corresponding read-only permissions. ADR-042 does not pre-approve a PAT, GitHub App token, or specific permission set.
+A future activation ADR must first enumerate the exact read endpoints required by the chosen MCP server and grant only the corresponding read-only permissions. ADR-042 does not pre-approve any specific credential type or permission set.
 
 ### Configuration risk
 
@@ -57,7 +57,7 @@ A future interactive-session connection must use separately provisioned credenti
 Value for agentic sessions is confirmed. **Activation conditions:**
 
 1. Define the minimum required read permissions for the chosen MCP server.
-2. Document the credential lifecycle: storage location, expiration or rotation cadence, and revocation procedure.
+2. Document the credential lifecycle (storage location, expiration or rotation cadence, and revocation procedure) in a dedicated activation ADR before any connection is wired.
 3. Confirm the connection exposes no write-capable repository, workflow, issue, pull-request, secret, or deployment operation.
 4. Do not activate until Claude Code skills are ready to consume it (Group F).
 
@@ -75,7 +75,7 @@ A Slack MCP connection could allow Claude Code to read recent incident threads o
 
 ### Session-level value — Gmail
 
-A Gmail MCP connection could allow Claude Code to read email for incident context. This would require an OAuth token with `gmail.readonly` or broader scope — far wider than the outbound-only SMTP path currently used.
+A Gmail MCP connection could allow Claude Code to read email for incident context. This would require an OAuth-based authorization model with the mailbox-read access required by the chosen integration — far wider than the outbound-only SMTP path currently used. The exact scope set must be evaluated in a future activation ADR.
 
 ### Credential scope
 
@@ -103,7 +103,7 @@ An observability MCP connection could allow Claude Code to query current error r
 
 ### Credential scope
 
-A future live-provider implementation would require provider-specific read-only credentials (Datadog API and app keys, Grafana service account token, or PagerDuty API key). The current repository does not yet call a live provider or consume provider credentials in CI. A future MCP activation must use separately provisioned scoped credentials and must never reuse any provider credentials provisioned for the ADR-017 CI activation slice.
+A future live-provider implementation would require provider-specific read-only credentials. The current repository does not yet call a live provider or consume provider credentials in CI. A future MCP activation must use separately provisioned scoped credentials and must never reuse any provider credentials provisioned for the ADR-017 CI activation slice.
 
 ### Configuration risk
 

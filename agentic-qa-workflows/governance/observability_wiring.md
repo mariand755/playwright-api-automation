@@ -263,7 +263,7 @@ Decide whether `pull_observability.py` writes to the tracked static file or a wo
 
 **Condition 4 — Add snapshot freshness check**
 
-Add a `snapshot_timestamp` age check in `scripts/release_gate.py` so a stale snapshot from a prior CI run cannot silently pass the gate. A run that fails to pull live data should warn or produce NO_GO rather than evaluate against hours-old values.
+Add a `snapshot_timestamp` age check in `scripts/release_gate.py` so a stale snapshot from a prior CI run cannot silently pass the gate. A run that fails to pull live data should warn or produce NO_GO rather than evaluate against hours-old values. See [`observability_contract.md` — Freshness override](observability_contract.md#freshness-override) for the required gate behaviour when the snapshot is stale or incomplete.
 
 **Condition 5 — Wire to CI**
 
@@ -345,3 +345,4 @@ For the committed credential policy and rotation guidance, see [security_and_bra
 - [`security_and_branch_protection.md`](security_and_branch_protection.md) — Observability secrets section
 - [`architecture_decision_log.md` — ADR-017](architecture_decision_log.md#adr-017-observability-snapshot-populated-via-stub-pending-live-stack-connection)
 - [`notification_wiring.md`](notification_wiring.md) — aggregate notification setup; observability dependency explained
+- [`observability_contract.md`](observability_contract.md) — canonical release-signal schema, provider mapping rules, data-status semantics, and evidence provenance rules

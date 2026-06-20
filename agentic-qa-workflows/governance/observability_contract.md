@@ -43,3 +43,69 @@ All fields in the snapshot that `scripts/release_gate.py` consumes or must consu
 |---|---|---|
 | `time_window_minutes` | int | Metric aggregation window used by the provider query. Required so the gate can assess whether the window is appropriate for the deployment cadence. |
 | `data_status` | enum | `complete` — all fields present and fresh. `partial` — one or more metric fields unavailable from this provider. `stale` — snapshot age exceeds the allowed freshness threshold. `missing` — no live data could be retrieved. Gate semantics defined in [Data-Status Semantics](#data-status-semantics). |
+
+---
+
+## Provider Mapping Rules
+
+How each provider's native signals map to the canonical schema. A field listed as "not available" must be omitted from the snapshot, and `data_status` must be set to `partial` for that run.
+
+| Canonical field | Datadog | Grafana | PagerDuty |
+|---|---|---|---|
+| `production_error_rate_pct` | `timeseries` query on error-rate metric | Panel query result | Not available from PagerDuty incidents alone; omit and set `data_status=partial` |
+| `p95_latency_ms` | `timeseries` query on p95 latency | Panel query result | Not available; omit and set `data_status=partial` |
+| `p99_latency_ms` | `timeseries` query on p99 latency | Panel query result | Not available; omit and set `data_status=partial` |
+| `recent_incident_count` | Map from a provider-specific incident or alert signal; the live implementation must document the query source and time window | Not available from the standard Grafana dashboard integration; omit and set `data_status=partial` | Map from PagerDuty `incidents` endpoint |
+
+Provider endpoint patterns are documented in [`observability_wiring.md` — Activation Checklist, Condition 1](observability_wiring.md#activation-checklist).
+
+---
+
+## Evidence and Provenance Rules
+
+### What may appear in CI artifacts
+
+The following values are safe to include in `artifacts/release-readiness.json`, step summaries, and Slack/email notifications:
+
+- Canonical metric values (`production_error_rate_pct`, `p95_latency_ms`, `p99_latency_ms`, `recent_incident_count`)
+- `data_status`, `environment`, `source` identifier
+- `snapshot_timestamp`
+- Gate decision (`GO`, `NO_GO`, `UNKNOWN`) and reason text
+
+### What must never appear in any output
+
+- API key values or partial values
+- Grafana instance URLs or dashboard UIDs
+- PagerDuty service IDs
+- Raw provider API response bodies
+- `str(exc)` or `exc.args` content from provider or file-load exceptions — only `type(exc).__name__` is permitted
+
+---
+
+## Data-Status Semantics
+
+These are requirements on any live implementation. The current gate does not enforce them.
+
+| `data_status` value | Required gate behaviour |
+|---|---|
+| `complete` | Evaluate all fields against thresholds; produce GO or NO_GO normally |
+| `partial` | Evaluate available fields; produce a warning for each missing field; GO is permitted only if all present fields pass and no missing field is a gate-failure dimension |
+| `stale` | Produce NO_GO with "stale snapshot" reason; do not evaluate metric values |
+| `missing` | Produce NO_GO; cannot evaluate without signals |
+| Absent or empty | Treat as `missing` (fail-closed) |
+
+### Freshness override
+
+The gate must derive or override stale status from `snapshot_timestamp` age at evaluation time. It must not rely solely on a provider-supplied `data_status` value — a formerly `complete` snapshot must not be treated as fresh indefinitely. If `snapshot_timestamp` age exceeds the configured threshold, the gate must set effective status to `stale` and produce NO_GO regardless of the stored `data_status` value.
+
+---
+
+## Non-Goals
+
+This document does not:
+
+- Describe live API calls, authentication, or provider-specific query construction (see `observability_wiring.md`)
+- Specify GitHub Actions secrets or environment variables
+- Change `scripts/pull_observability.py`, `scripts/release_gate.py`, or `.github/workflows/ci.yml`
+- Select a provider or define an activation timeline
+- Commit to any implementation schedule — that belongs in the activation slice ADR

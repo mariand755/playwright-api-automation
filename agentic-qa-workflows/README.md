@@ -42,7 +42,7 @@ agentic-qa-workflows/
 | `test_data_env_rules.md` | Test data and environment variable rules |
 | `failure_evidence.md` | Failure evidence capture expectations |
 | `agentic_workflow_rules.md` | AI-assisted workflow constraints and review rules |
-| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-042) |
+| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-043) |
 | `observability_contract.md` | Provider-neutral release-signal schema, provider mapping rules, data-status semantics, and evidence provenance rules |
 | `mcp_evaluation.md` | MCP integration evaluation — GitHub, Slack/Gmail, and observability; verdicts, security framework, and activation conditions |
 | `notification_wiring.md` | Slack/SMTP notification setup and activation guide |
@@ -63,11 +63,15 @@ This is a **governance-first, AI-assisted, human-gated** QA workflow. What that 
 - A human approves scope, reviews diffs, approves commits, pushes branches, and merges PRs. The AI does not take autonomous action on the repository.
 - CI, release readiness gates, and notifications are fully automated — no human trigger is required once a PR is merged.
 
+**Current manual AI capabilities:**
+
+- Governance audit skill (`/governance-audit`) — introduced in ADR-043 as a manual, read-only, project-local Claude Code skill. Audits the repository against the governance framework and recommends fixes. Invoked explicitly by the engineer; does not edit files.
+
 **What this repo does not yet provide:**
 
 - Autonomous agent orchestration (no scheduled AI agents, no CI-triggered review loops)
-- Claude Code skills (two are deferred for post-second-repo adoption; governance audit and TC-ID suggestion are the first candidates)
-- MCP integrations (deferred; evaluate after second-repo establishes which external system connections add practical value)
+- TC-ID suggestion skill — deferred pending the `qa_standards.md` AREA and suffix-notation governance decision (ADR-044)
+- MCP integrations — evaluated in ADR-042: GitHub and observability are DEFERRED (activation conditions not yet met); Slack and Gmail are REJECTED (current webhook and SMTP paths are sufficient and narrower)
 - Self-healing or remediation automation
 
-The label "agentic" describes governance-enforced, prompt-driven AI assistance — not unsupervised autonomy. Future slices may package repeated workflows as Claude Code skills once second-repo adoption identifies which workflows are reused often enough to justify it.
+The label "agentic" describes governance-enforced, prompt-driven AI assistance — not unsupervised autonomy. Claude Code skills package repeated governance workflows for consistent, human-gated execution.

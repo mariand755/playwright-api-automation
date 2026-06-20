@@ -1,3 +1,5 @@
+Preferred invocation: use the `/governance-audit` Claude Code skill. This prompt is retained as a fallback for sessions where skills are unavailable.
+
 Read governance, audit current repo for violations/gaps, recommend smallest safe fixes.
 
 Read CLAUDE.md and all files under agentic-qa-workflows/governance/.

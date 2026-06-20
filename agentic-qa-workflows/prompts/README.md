@@ -26,7 +26,7 @@ Every non-trivial implementation slice follows a four-step process. Use the corr
 | `slice_planning_prompt_template.md` | Fill-in template for Step 1: proposing an implementation plan (v2 — 2026-06-06: expanded Important section with challenge-the-premise instruction) | At the start of any non-trivial slice |
 | `qa_architect_slice_review_prompt.md` | QA Architect / Solution Architect dual-mode reviewer (Mode A and Mode B) (v2 — 2026-06-02: added validation integrity, security/secret hygiene, and bounded adjacent-risk scan to both modes; v3 — 2026-06-06: added independence preface shared across both modes) | Step 2 (Mode A) and Step 4 (Mode B) |
 | `governance_blueprint_prompt.md` | Governance enforcement review: naming, markers, POM/API client boundaries, credentials | When reviewing repo governance compliance informally |
-| `governance_compliance_audit_prompt.md` | Structured compliance audit across all governance files | When running a formal governance audit with an output report |
+| `governance_compliance_audit_prompt.md` | Structured compliance audit across all governance files | Preferred: use the `/governance-audit` Claude Code skill (ADR-043). This prompt is retained as a fallback for sessions where skills are unavailable. |
 | `first_run_prompt.md` | Initial architectural overview: current architecture, top quality risks, improvement recommendations | First session on a new repo, or after a long gap between sessions |
 
 ---

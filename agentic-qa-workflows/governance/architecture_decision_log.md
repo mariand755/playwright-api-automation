@@ -50,6 +50,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-038](#adr-038-jenkins-reference-cicd-adapter-for-qa-blueprint-portability) | Jenkins reference CI/CD adapter for QA blueprint portability | Accepted | 2026-06-16 |
 | [ADR-039](#adr-039-forced-live-critical-failure-alert-policy) | Forced-live critical failure alert policy | Accepted | 2026-06-18 |
 | [ADR-040](#adr-040-relevant-change-detection-and-stale-run-cancellation-policy) | Relevant-change detection and stale-run cancellation policy | Accepted | 2026-06-18 |
+| [ADR-041](#adr-041-provider-neutral-observability-release-signal-contract) | Provider-neutral observability release-signal contract | Accepted | 2026-06-19 |
 
 ---
 
@@ -3102,3 +3103,44 @@ No test behavior, release gate, notification, or branch protection changes requi
 - `.github/workflows/ci.yml` — concurrency block, `changes` job, `api`/`ui` conditional steps
 - `agentic-qa-workflows/governance/quality_gates.md` — CI job structure table
 - ADR-039 — forced-live critical alert policy; ADR-040 cancellation mechanism preserves the ADR-039 guarantee by never cancelling push-to-main or schedule runs
+
+---
+
+## ADR-041: Provider-neutral observability release-signal contract
+
+**Status:** Accepted
+**Date:** 2026-06-19
+
+### Context
+
+The release gate (`scripts/release_gate.py`) currently consumes a static stub snapshot (`data/release/observability_snapshot.json`). When any live observability provider is wired, `scripts/pull_observability.py` must normalize diverse provider responses — Datadog time-series queries, Grafana panel results, PagerDuty incident data — into a single schema that the gate can evaluate uniformly. Without a pre-agreed contract, the normalization layer would be defined ad-hoc during the activation slice, creating implementation risk and no auditable baseline for what the gate actually requires.
+
+ADR-017 defers live activation until five conditions are met (stub replacement, secret provisioning, path alignment, freshness check, CI wiring). This ADR specifies the schema that conditions 1 and 4 must satisfy.
+
+### Decision
+
+Define the canonical release-signal schema and provider mapping rules as a governed document before any live implementation begins. The contract (`agentic-qa-workflows/governance/observability_contract.md`) specifies:
+
+1. Mandatory fields present in the current stub that a live implementation must preserve.
+2. Activation-required fields (`time_window_minutes`, `data_status`) not yet in the stub or enforced by the gate.
+3. Provider mapping rules for Datadog, Grafana, and PagerDuty — including which canonical fields are unavailable from each provider and how to signal that via `data_status`.
+4. Data-status semantics: how the gate must respond to `complete`, `partial`, `stale`, and `missing` states.
+5. Freshness-override rule: the gate must derive or override stale status from `snapshot_timestamp` age at evaluation time, independent of any provider-supplied `data_status` value.
+6. Evidence and provenance rules: what is safe to expose in CI artifacts and what must never appear.
+
+### Consequences
+
+- Any live provider implementation must satisfy this contract before wiring to CI.
+- ADR-017 activation conditions remain the gate; this ADR specifies the schema that conditions 1 (replace stub body) and 4 (freshness check) must implement.
+- No live API calls, GitHub secrets, or CI workflow changes are introduced by this ADR.
+- The contract makes provider gaps explicit: PagerDuty cannot supply error rate or latency metrics; Grafana cannot supply incident count without OnCall. Implementations must set `data_status=partial` for unavailable fields rather than fabricating values.
+
+### Rollback
+
+Remove `agentic-qa-workflows/governance/observability_contract.md`, the ADR-041 index entry, and this section. No code, CI, or test changes are required.
+
+### Related docs
+
+- `agentic-qa-workflows/governance/observability_contract.md` — canonical schema, provider mapping, data-status semantics, evidence rules
+- `agentic-qa-workflows/governance/observability_wiring.md` — provider credentials, activation checklist, CI wiring guide
+- ADR-017 — observability stub and five-condition activation gate

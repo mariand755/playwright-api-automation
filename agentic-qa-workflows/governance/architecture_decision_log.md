@@ -52,6 +52,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-040](#adr-040-relevant-change-detection-and-stale-run-cancellation-policy) | Relevant-change detection and stale-run cancellation policy | Accepted | 2026-06-18 |
 | [ADR-041](#adr-041-provider-neutral-observability-release-signal-contract) | Provider-neutral observability release-signal contract | Accepted | 2026-06-19 |
 | [ADR-042](#adr-042-mcp-integration-evaluation--github-slackgmail-and-observability) | MCP integration evaluation — GitHub, Slack/Gmail, and observability | Accepted | 2026-06-19 |
+| [ADR-043](#adr-043-governance-audit-claude-code-skill) | Governance audit Claude Code skill — manual, read-only, project-local | Accepted | 2026-06-20 |
 
 ---
 
@@ -3185,3 +3186,50 @@ Remove `agentic-qa-workflows/governance/mcp_evaluation.md`, the ADR-042 index en
 - `agentic-qa-workflows/governance/mcp_evaluation.md` — evaluation framework, per-use-case assessments, security framework, activation conditions
 - ADR-017 — observability stub and five-condition activation gate
 - ADR-041 — provider-neutral observability release-signal contract
+
+---
+
+## ADR-043: Governance audit Claude Code skill — manual, read-only, project-local
+
+**Status:** Accepted
+**Date:** 2026-06-20
+
+### Context
+
+The governance compliance audit workflow existed as a 28-line prompt template (`agentic-qa-workflows/prompts/governance_compliance_audit_prompt.md`) requiring manual copy-paste into each session. It had no scope filtering, no automatic file loading, no structured output contract, and no enforcement of the human-approval boundary. A reusable Claude Code skill addresses all four limitations and makes the audit workflow available to blueprint adopters as a project-local slash command.
+
+MCP connections remain deferred (ADR-042). The skill works without network access, external connectors, credentials, or CI changes.
+
+### Decision
+
+Package the governance compliance audit as a project-local Claude Code skill at `.claude/skills/governance-audit/SKILL.md`, invoked via `/governance-audit`.
+
+Design constraints:
+- `disable-model-invocation: true` — manually invoked by the engineer only
+- `allowed-tools: [Read, Grep, Glob]` — pre-approves read-only inspection tools
+- `disallowed-tools: [Write, Edit, Bash, WebFetch, WebSearch]` — explicitly blocks all mutation and network tools
+- Scope argument routing: blank (top 2–3 gaps), full (all gaps), or named scope (markers, test-data, failure-evidence, quality-gates, naming)
+- Per-scope read table: each invocation reads only the files required for its declared scope and makes no compliance claims outside that scope
+- Output contract: structured sections (Compliant Areas, Gaps Found with governing rule/evidence/risk/smallest fix/validation command, Recommended Fix Order, What This Audit Does Not Do)
+- Validation commands appear in output for the engineer to run; the skill itself never executes commands
+
+The 28-line prompt is retained as a fallback; the skill becomes the preferred entry point.
+
+### Consequences
+
+- Engineers can run `/governance-audit` or `/governance-audit markers` in any Claude Code session without copying prompt text
+- Output structure is consistent across sessions
+- The skill cannot edit files, create reports, stage changes, commit, or push — enforced by `disallowed-tools`
+- Blueprint adopters get the skill as a committed asset in `.claude/skills/`
+- A future TC-ID suggestion skill (`/tc-id`, ADR-044) will follow the same layout once the `qa_standards.md` AREA and suffix-notation governance decision is made
+
+### Rollback
+
+Remove `.claude/skills/governance-audit/SKILL.md`, the ADR-043 index entry, and this section. Revert the one-line reference added to `governance_compliance_audit_prompt.md`. No code, CI, test, credential, or script changes are required.
+
+### Related docs
+
+- `.claude/skills/governance-audit/SKILL.md` — skill definition
+- `agentic-qa-workflows/prompts/governance_compliance_audit_prompt.md` — retained fallback prompt
+- `agentic-qa-workflows/outputs/governance_compliance_audit_20260518.md` — gold-standard baseline audit
+- ADR-042 — MCP evaluation (GitHub and observability DEFERRED; Slack/Gmail REJECTED)

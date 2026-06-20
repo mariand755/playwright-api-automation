@@ -51,6 +51,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-039](#adr-039-forced-live-critical-failure-alert-policy) | Forced-live critical failure alert policy | Accepted | 2026-06-18 |
 | [ADR-040](#adr-040-relevant-change-detection-and-stale-run-cancellation-policy) | Relevant-change detection and stale-run cancellation policy | Accepted | 2026-06-18 |
 | [ADR-041](#adr-041-provider-neutral-observability-release-signal-contract) | Provider-neutral observability release-signal contract | Accepted | 2026-06-19 |
+| [ADR-042](#adr-042-mcp-integration-evaluation--github-slackgmail-and-observability) | MCP integration evaluation — GitHub, Slack/Gmail, and observability | Accepted | 2026-06-19 |
 
 ---
 
@@ -3144,3 +3145,43 @@ Remove `agentic-qa-workflows/governance/observability_contract.md`, the ADR-041 
 - `agentic-qa-workflows/governance/observability_contract.md` — canonical schema, provider mapping, data-status semantics, evidence rules
 - `agentic-qa-workflows/governance/observability_wiring.md` — provider credentials, activation checklist, CI wiring guide
 - ADR-017 — observability stub and five-condition activation gate
+
+---
+
+## ADR-042: MCP integration evaluation — GitHub, Slack/Gmail, and observability
+
+**Status:** Accepted
+**Date:** 2026-06-19
+
+### Context
+
+Group F item `1i` requires evaluating MCP use cases before implementing Claude Code skills. Three integration areas were assessed: GitHub (PR and workflow evidence retrieval during agentic sessions), Slack/Gmail (notification and incident-context access), and observability (live metric retrieval in interactive Mode A/B sessions). Before any MCP connection is wired, the evaluation must establish security boundaries and activation conditions per use case.
+
+MCP value in this blueprint is session-level, not CI-level. MCP connections improve what Claude Code can do during interactive governance sessions. The CI pipeline and automation layer are unchanged by this ADR.
+
+### Decision
+
+No MCP connections are activated by this ADR.
+
+- **GitHub MCP — DEFER.** Value for agentic sessions (live PR diffs, workflow logs, issue context in Mode A/B reviews) is confirmed. Activation conditions: define minimum required read permissions; document the full credential lifecycle (storage location, rotation cadence, revocation path); confirm no write-capable operations are exposed. Do not activate until Claude Code skills are ready to consume it (Group F).
+- **Slack MCP — REJECT.** The current Slack incoming webhook is sufficient for one-way notification and has a narrower authorization scope. Reading Slack conversation or incident context is not a defined workflow requirement. No activation path is defined.
+- **Gmail MCP — REJECT.** The current outbound SMTP path is sufficient for one-way notification. Mailbox-read access would require OAuth authorization far broader than the current outbound-only path. No activation path is defined.
+- **Observability MCP — DEFER.** Value for interactive release governance sessions is real. Activation conditions: complete the ADR-017 live activation slice first; provision a separate read-only service account; never reuse CI credentials for local MCP sessions.
+
+The security framework, data minimization rules, and human-confirmation requirement for all future MCP activations are documented in `agentic-qa-workflows/governance/mcp_evaluation.md`.
+
+### Consequences
+
+- No MCP server installation, credential provisioning, CI workflow changes, or script changes are introduced by this ADR.
+- Any future MCP activation requires a dedicated ADR that satisfies the activation conditions and security framework in `mcp_evaluation.md`.
+- Claude Code skills (Group F) may proceed without MCP connections; MCP is an optional enhancement, not a prerequisite.
+
+### Rollback
+
+Remove `agentic-qa-workflows/governance/mcp_evaluation.md`, the ADR-042 index entry, and this section. No code, CI, credential, or test changes are required.
+
+### Related docs
+
+- `agentic-qa-workflows/governance/mcp_evaluation.md` — evaluation framework, per-use-case assessments, security framework, activation conditions
+- ADR-017 — observability stub and five-condition activation gate
+- ADR-041 — provider-neutral observability release-signal contract

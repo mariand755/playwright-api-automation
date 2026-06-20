@@ -42,8 +42,9 @@ agentic-qa-workflows/
 | `test_data_env_rules.md` | Test data and environment variable rules |
 | `failure_evidence.md` | Failure evidence capture expectations |
 | `agentic_workflow_rules.md` | AI-assisted workflow constraints and review rules |
-| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-041) |
+| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-042) |
 | `observability_contract.md` | Provider-neutral release-signal schema, provider mapping rules, data-status semantics, and evidence provenance rules |
+| `mcp_evaluation.md` | MCP integration evaluation — GitHub, Slack/Gmail, and observability; verdicts, security framework, and activation conditions |
 | `notification_wiring.md` | Slack/SMTP notification setup and activation guide |
 | `observability_wiring.md` | Datadog/Grafana/PagerDuty activation guide |
 | `jenkins_wiring.md` | Jenkins CI/CD adapter wiring guide — credential mapping, stage translation, cloud-grid extension |

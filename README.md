@@ -13,6 +13,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 - Multi-signal release readiness gate: test results + observability signals + defect metrics → GO/NO_GO decision
 - Notification delivery infrastructure: Slack and SMTP channels, dry-run by default, activation-gated by secrets
 - ADR-backed governance documentation layer: suite taxonomy, quality gate definitions, notification and observability activation guides
+- **Manual Claude Code skills** — `/governance-audit` and `/tc-id` are project-local, read-only commands for governance compliance review and TC-ID inventory; both are human-invoked, advisory, and ADR-backed
 - Consulting-style delivery pattern: dry-run defaults, activation-gated features with documented conditions, explicit deferral rationale
 
 ## Test Layers
@@ -97,7 +98,7 @@ See [agentic-qa-workflows/governance/notification_wiring.md](agentic-qa-workflow
 - **Quality Gates** — full gate definitions for CI and pre-commit
 - **Notification Wiring** — live activation guide for Slack and SMTP
 - **Observability Wiring** — interface definitions and provider activation guide
-- **Prompt templates and audit workflows** — for AI-assisted QA work under review
+- **Claude Code skill portfolio** — `/governance-audit` and `/tc-id` are project-local, read-only slash commands for governance compliance auditing and TC-ID inventory; prompt templates and audit workflows are retained as fallbacks
 
 See [agentic-qa-workflows/README.md](agentic-qa-workflows/README.md) for the full index.
 
@@ -153,5 +154,6 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | Sauce Labs cloud-grid execution | ✅ Activated (smoke, advisory) | Nightly + `workflow_dispatch`; 3-browser (chromium, firefox, webkit) cloud matrix; provider-aware preflight (`none`, `sauce`, `browserstack`); `continue-on-error: true` — not in branch protection |
 | BrowserStack cloud-grid execution | ✅ Activated (smoke, advisory) | Live execution active as of ADR-036 / PR #74; capability mapping, Playwright version pinning, fail-fast unsupported-browser handling, and best-effort dashboard status marking hardened in ADR-037 / PR #76. Set `CLOUD_GRID_PROVIDER=browserstack` with `BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY` secrets. BrowserStack is optional and account-dependent — dashboard integrations (Slack/GitHub) not required; CI reporting and notifications are handled by this repo. For trial accounts, validate with `workflow_dispatch` first and switch `CLOUD_GRID_PROVIDER` back to `sauce` or `none` after proof is captured to avoid consuming trial minutes unintentionally. |
 | Blueprint documentation | ✅ Refreshed | `blueprint/README.md` updated to reflect current architecture (PR #78); second-repo application remains future work |
+| Claude Code skill portfolio | ✅ Activated | `/governance-audit` (ADR-043) and `/tc-id` (ADR-044) live in `.claude/skills/`; see [agentic-qa-workflows/README.md](agentic-qa-workflows/README.md) for the full skill capability statement |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.

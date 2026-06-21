@@ -53,6 +53,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-041](#adr-041-provider-neutral-observability-release-signal-contract) | Provider-neutral observability release-signal contract | Accepted | 2026-06-19 |
 | [ADR-042](#adr-042-mcp-integration-evaluation--github-slackgmail-and-observability) | MCP integration evaluation — GitHub, Slack/Gmail, and observability | Accepted | 2026-06-19 |
 | [ADR-043](#adr-043-governance-audit-claude-code-skill) | Governance audit Claude Code skill — manual, read-only, project-local | Accepted | 2026-06-20 |
+| [ADR-044](#adr-044-tc-id-suggestion-claude-code-skill) | TC-ID suggestion Claude Code skill — manual, read-only, live grep inventory | Accepted | 2026-06-20 |
 
 ---
 
@@ -3233,3 +3234,52 @@ Remove `.claude/skills/governance-audit/SKILL.md`, the ADR-043 index entry, and 
 - `agentic-qa-workflows/prompts/governance_compliance_audit_prompt.md` — retained fallback prompt
 - `agentic-qa-workflows/outputs/governance_compliance_audit_20260518.md` — gold-standard baseline audit
 - ADR-042 — MCP evaluation (GitHub and observability DEFERRED; Slack/Gmail REJECTED)
+
+---
+
+## ADR-044: TC-ID suggestion Claude Code skill — manual, read-only, live grep inventory
+
+**Status:** Accepted
+**Date:** 2026-06-20
+
+### Context
+
+`qa_standards.md` §Test Case IDs declared the TC-ID pattern as `TC-<AREA>-<NNN>` with `AREA` restricted to `UI` or `API`. The repository's script test suite (`test/scripts/`) uses a third area prefix, `SCRIPT`, that was not within the written standard. Before packaging a TC-ID inventory skill, the standard required formal amendment.
+
+Additionally, the existing TC-SCRIPT test suite includes suffixed IDs (e.g. `TC-SCRIPT-003b`, `TC-SCRIPT-065a`) that represent intentional subcases of a base ID. These were not documented in the standard.
+
+Getting the next available TC-ID before adding a test required running a manual grep and counting. This was error-prone and inconsistent, and the machine-enforced uniqueness check (`test_tc_id_uniqueness.py`) only detected duplicates after the fact.
+
+### Decision
+
+**Option A adopted:** amend `qa_standards.md` to formally canonize `SCRIPT` as a valid AREA alongside `API` and `UI`; document suffix notation, gap tolerance, and the next-ID algorithm; and package a project-local Claude Code skill at `.claude/skills/tc-id/SKILL.md`, invoked via `/tc-id`.
+
+Design constraints:
+- `disable-model-invocation: true` — manually invoked by the engineer only
+- `allowed-tools: [Read, Grep, Glob]` — pre-approves read-only inspection tools
+- `disallowed-tools: [Write, Edit, Bash, WebFetch, WebSearch]` — explicitly blocks all mutation and network tools
+- Inventory is discovered entirely from the live test tree via Grep on `.py` source files; no ID ranges, gap lists, or suffix variants are hardcoded in the skill body
+- Suffix validity rule: a suffixed ID is valid only when its unsuffixed base exists in the same AREA; an orphaned suffix is malformed
+- Gaps in the numeric base sequence are reported as informational only and are not failures
+- Next available ID = highest existing numeric base in the AREA plus one, ignoring suffixes
+- `validate` scope renders only the Issues Found section — no suite inventory, no next-ID recommendation
+- Output is advisory only; the skill never edits test decorators, `pytest.ini`, `conftest.py`, JUnit output, or governance documents
+
+### Consequences
+
+- Engineers can run `/tc-id` or `/tc-id api` in any Claude Code session for instant next-ID lookup without manual grep
+- The TC-ID standard formally matches the live repository implementation
+- Duplicate enforcement in `test/scripts/test_tc_id_uniqueness.py` is unchanged and complementary (machine-checked, CI-gated); the skill is additive
+- Missing-marker enforcement remains deferred per `suite_taxonomy.md` §Future use
+- Blueprint adopters get the skill as a committed asset in `.claude/skills/`
+
+### Rollback
+
+Remove `.claude/skills/tc-id/SKILL.md`, the ADR-044 index entry, and this section. Revert the `qa_standards.md` pattern line to `TC-<AREA>-<NNN>, where AREA is UI or API.` and remove the `/tc-id` reference from the Current state bullets. No code, CI, test, or script changes are required.
+
+### Related docs
+
+- `.claude/skills/tc-id/SKILL.md` — skill definition
+- `agentic-qa-workflows/governance/qa_standards.md` — amended TC-ID standard
+- `test/scripts/test_tc_id_uniqueness.py` — complementary duplicate enforcement (unchanged)
+- ADR-043 — governance audit Claude Code skill (established the project-local skill pattern)

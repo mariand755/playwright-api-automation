@@ -38,7 +38,9 @@ Discover the live TC-ID state from the repository before reporting anything. Do 
 Use the Grep tool to search `test/` recursively for the pattern `@pytest\.mark\.tc_id\(` in `.py` files only. Do not include `.pyc` or binary files.
 
 **Step 2 — Extract TC-ID values:**
-From each match line, extract the TC-ID string inside `@pytest.mark.tc_id("...")`. Ignore lines beginning with `#` — those are human-readable comment copies of the ID and must not be double-counted.
+For each Grep match line, first check that `@pytest.mark.tc_id(` is the **first non-whitespace token** on the line (i.e., the stripped line starts with `@pytest.mark.tc_id(`). Lines where the pattern appears mid-sentence — inside docstrings, triple-quoted strings, or prose comments — are not decorator declarations; skip them entirely without attempting extraction. Also skip any line whose first non-whitespace content begins with `#`.
+
+From qualifying lines, extract the TC-ID string inside `@pytest.mark.tc_id("...")`.
 
 **Step 3 — Group by AREA:**
 Separate extracted IDs into three groups: `API`, `UI`, `SCRIPT`. Any ID whose AREA is not one of these three is malformed.

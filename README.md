@@ -13,7 +13,7 @@ Stack: Python, pytest, Playwright, Requests, json-schema, Docker, GitHub Actions
 - Multi-signal release readiness gate: test results + observability signals + defect metrics → GO/NO_GO decision
 - Notification delivery infrastructure: Slack and SMTP channels, dry-run by default, activation-gated by secrets
 - ADR-backed governance documentation layer: suite taxonomy, quality gate definitions, notification and observability activation guides
-- **Manual Claude Code skills** — `/governance-audit` and `/tc-id` are project-local, read-only commands for governance compliance review and TC-ID inventory; both are human-invoked, advisory, and ADR-backed
+- Claude Code skill portfolio: `/governance-audit` and `/tc-id` are project-local, read-only commands for governance compliance review and TC-ID inventory; both are human-invoked, advisory, and ADR-backed
 - Consulting-style delivery pattern: dry-run defaults, activation-gated features with documented conditions, explicit deferral rationale
 
 ## Test Layers

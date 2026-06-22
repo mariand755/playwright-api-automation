@@ -42,7 +42,7 @@ agentic-qa-workflows/
 | `test_data_env_rules.md` | Test data and environment variable rules |
 | `failure_evidence.md` | Failure evidence capture expectations |
 | `agentic_workflow_rules.md` | AI-assisted workflow constraints and review rules |
-| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-044) |
+| `architecture_decision_log.md` | ADR history for major architecture decisions (ADR-001–ADR-045) |
 | `observability_contract.md` | Provider-neutral release-signal schema, provider mapping rules, data-status semantics, and evidence provenance rules |
 | `mcp_evaluation.md` | MCP integration evaluation — GitHub, Slack/Gmail, and observability; verdicts, security framework, and activation conditions |
 | `notification_wiring.md` | Slack/SMTP notification setup and activation guide |
@@ -67,6 +67,7 @@ This is a **governance-first, AI-assisted, human-gated** QA workflow. What that 
 
 - Governance audit skill (`/governance-audit`) — introduced in ADR-043 as a manual, read-only, project-local Claude Code skill. Audits the repository against the governance framework and recommends fixes. Invoked explicitly by the engineer; does not edit files.
 - TC-ID inventory skill (`/tc-id`) — introduced in ADR-044 as a manual, read-only, project-local Claude Code skill. Reports the live TC-ID inventory from the test tree and suggests the next available ID for each suite. Invoked explicitly by the engineer; does not edit files.
+- Slice review skill (`/slice-review`) — introduced in ADR-045 as a manual, read-only, project-local Claude Code skill. Runs a QA Architect / Solution Architect review for any implementation slice: Mode A (plan review before editing) or Mode B (implementation review before committing). Invoked explicitly by the engineer; does not edit files.
 
 **What this repo does not yet provide:**
 

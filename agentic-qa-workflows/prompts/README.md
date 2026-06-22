@@ -11,9 +11,9 @@ Every non-trivial implementation slice follows a four-step process. Use the corr
 | Step | When | Prompt file |
 |---|---|---|
 | 1. Inspect and plan | Before editing any files | `slice_planning_prompt_template.md` |
-| 2. Mode A — Plan review | After plan is proposed, before editing | `qa_architect_slice_review_prompt.md` (Mode A section) |
+| 2. Mode A — Plan review | After plan is proposed, before editing | Preferred: `/slice-review a <plan-path>`. Fallback: `qa_architect_slice_review_prompt.md` (Mode A section) |
 | 3. Implement | After Mode A approval | — (implement per the approved plan) |
-| 4. Mode B — Implementation review | After implementation, before committing | `qa_architect_slice_review_prompt.md` (Mode B section) |
+| 4. Mode B — Implementation review | After implementation, before committing | Preferred: `/slice-review b <review-packet-path>`. Fallback: `qa_architect_slice_review_prompt.md` (Mode B section) |
 
 **When to skip the four-step workflow:** For small, low-risk changes — comment-only, single decorator, minor doc fix, one-line config tweak — the full workflow is optional. Produce a QA summary in chat and proceed directly to implementation. If in doubt, run Mode A.
 
@@ -24,7 +24,7 @@ Every non-trivial implementation slice follows a four-step process. Use the corr
 | File | Purpose | When to use |
 |---|---|---|
 | `slice_planning_prompt_template.md` | Fill-in template for Step 1: proposing an implementation plan (v2 — 2026-06-06: expanded Important section with challenge-the-premise instruction) | At the start of any non-trivial slice |
-| `qa_architect_slice_review_prompt.md` | QA Architect / Solution Architect dual-mode reviewer (Mode A and Mode B) (v2 — 2026-06-02: added validation integrity, security/secret hygiene, and bounded adjacent-risk scan to both modes; v3 — 2026-06-06: added independence preface shared across both modes) | Step 2 (Mode A) and Step 4 (Mode B) |
+| `qa_architect_slice_review_prompt.md` | QA Architect / Solution Architect dual-mode reviewer (Mode A and Mode B) (v2 — 2026-06-02: added validation integrity, security/secret hygiene, and bounded adjacent-risk scan to both modes; v3 — 2026-06-06: added independence preface shared across both modes) | Step 2 (Mode A) and Step 4 (Mode B). Preferred invocation: `/slice-review a <plan-path>` or `/slice-review b <review-packet-path>`. Retained as fallback for sessions where skills are unavailable. |
 | `governance_blueprint_prompt.md` | Governance enforcement review: naming, markers, POM/API client boundaries, credentials | When reviewing repo governance compliance informally |
 | `governance_compliance_audit_prompt.md` | Structured compliance audit across all governance files | Preferred: use the `/governance-audit` Claude Code skill (ADR-043). This prompt is retained as a fallback for sessions where skills are unavailable. |
 | `first_run_prompt.md` | Initial architectural overview: current architecture, top quality risks, improvement recommendations | First session on a new repo, or after a long gap between sessions |

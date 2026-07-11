@@ -15,7 +15,10 @@ RUN apt-get update \
 COPY  requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# --break-system-packages: required because the base image's OS packages now enforce
+# PEP 668 (externally-managed-environment); this container is single-purpose and ephemeral,
+# so installing into the system Python here carries no real risk.
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Copy the rest of the project to the container
 COPY . .

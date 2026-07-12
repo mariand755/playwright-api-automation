@@ -60,7 +60,7 @@ jobs:
       classification: ${{ steps.classify.outputs.classification }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Classify changed files
@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Build Docker image
         run: |
@@ -171,7 +171,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: No API-relevant changes — skip API suite
         if: needs.changes.outputs.run_api == 'false'
@@ -345,7 +345,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: No UI-relevant changes — skip UI suite
         if: needs.changes.outputs.run_ui == 'false'
@@ -481,7 +481,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download Docker image artifact
         uses: actions/download-artifact@v8
@@ -574,7 +574,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download Docker image artifact
         uses: actions/download-artifact@v8
@@ -754,7 +754,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download release readiness artifact
         uses: actions/download-artifact@v8

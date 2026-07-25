@@ -1,6 +1,9 @@
 [tool.ruff]
 line-length = 88
 target-version = "py39"
+# Markdown files hold illustrative/pseudo-code snippets, not real source —
+# never a target for ruff format/lint, regardless of tool defaults.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]

@@ -1,9 +1,9 @@
-pytest
+pytest==9.1.1
 playwright==1.60.0
-pytest-playwright
-pytest-xdist
-jsonschema
-requests
-ruff
-pip-audit
-mypy
+pytest-playwright==0.8.0
+pytest-xdist==3.8.0
+jsonschema==4.26.0
+requests==2.34.2
+ruff==0.15.15
+pip-audit==2.10.1
+mypy==2.3.0

@@ -3306,8 +3306,9 @@ Package the QA Architect / Solution Architect review as a project-local Claude C
 
 Design constraints:
 - `disable-model-invocation: true` — manually invoked by the engineer only; never triggered by CI or an autonomous agent
-- `allowed-tools: [Read, Grep, Glob]` — pre-approves read-only inspection tools only
-- `disallowed-tools: [Write, Edit, Bash, WebFetch, WebSearch]` — explicitly blocks all mutation and network tools; the skill cannot edit files or discover diffs independently
+- `allowed-tools: [Read, Grep, Glob]` — pre-approves read-only inspection tools so they run without a permission prompt; it does not restrict which tools are available
+- `disallowed-tools: [Write, Edit, Bash, WebFetch, WebSearch, NotebookEdit, Agent, Skill]` — removes the built-in file-mutation, shell, network, subagent-delegation, and skill-chaining tools for the invoking turn; this field, not `allowed-tools`, is what blocks them. Runtime testing (2026-10-04) confirmed the model may still attempt a blocked tool (e.g. Bash to list a directory) and that the call is denied even with permission prompts bypassed
+- Governance reading is routed, not exhaustive: every review reads `CLAUDE.md` and the seven core governance documents (`qa_standards.md`, `suite_taxonomy.md`, `page_object_api_rules.md`, `test_data_env_rules.md`, `failure_evidence.md`, `quality_gates.md`, `agentic_workflow_rules.md`), plus conditional documents selected by trigger (CI/Docker/dependencies → security and dependency triage; observability; notifications; MCP; parallelization; Jenkins; targeted ADR sections only). Reading all 17 governance files (~58,000 words, ~33,000 in this log) was rejected: it wastes context and, in testing, the model read only 4–6 files anyway, inconsistently. The output header records which documents were read, and an unreadable required or selected document stops the review
 - Accepted arguments: `a <plan-path>` and `b <review-packet-path>`; blank or any other first token prints the accepted values format and stops
 - Mode A: reads the plan file at the supplied path; derives slice name from plan title heading
 - Mode B: reads a review packet at the supplied path; the packet holds the changed-file list and diff; engineer creates it as a temporary `.private/` file before invoking
@@ -3322,7 +3323,7 @@ Design constraints:
 
 - Engineers invoke `/slice-review a <path>` or `/slice-review b <path>` in any Claude Code session without copying prompt text
 - Output structure is consistent across sessions: section names, dimension order, verdict vocabulary, and classification terminology are governed by the skill body
-- The skill cannot edit files, create output reports, stage changes, commit, or push — enforced by `disallowed-tools`
+- The skill cannot edit files, create output reports, stage changes, commit, or push through built-in tools — enforced by `disallowed-tools` for the invoking turn. Limitation: the field does not cover tools added by MCP servers or plugins, and the restriction clears on the engineer's next message; sessions with write-capable MCP servers must deny those tools in permission settings or disable the servers before invoking the skill
 - `agentic-qa-workflows/prompts/README.md` marks the skill as the preferred invocation for Steps 2 and 4 of the slice workflow; the prompt file is explicitly retained as fallback
 - Blueprint adopters receive the skill as a committed asset in `.claude/skills/`
 - The `agentic-qa-workflows/README.md` capability statement is updated to include `/slice-review` alongside `/governance-audit` and `/tc-id`

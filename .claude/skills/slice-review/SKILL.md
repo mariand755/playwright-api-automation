@@ -22,7 +22,7 @@ Run a read-only QA Architect / Solution Architect review for an implementation s
 
 ## Argument routing
 
-`$ARGUMENTS` must contain exactly two tokens: a mode and a path.
+`$ARGUMENTS` must contain a mode followed by a non-empty path.
 
 | Argument | Behavior |
 |---|---|

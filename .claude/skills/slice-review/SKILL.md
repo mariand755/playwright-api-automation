@@ -1,4 +1,5 @@
 ---
+name: slice-review
 description: QA Architect / Solution Architect review for any implementation slice — Mode A (plan review before editing) or Mode B (implementation review before committing).
 disable-model-invocation: true
 argument-hint: "[a|b] <path>"

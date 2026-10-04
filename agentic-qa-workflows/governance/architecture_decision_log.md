@@ -54,6 +54,7 @@ For the governance rule that applies when adding new entries, see [`agentic_work
 | [ADR-042](#adr-042-mcp-integration-evaluation--github-slackgmail-and-observability) | MCP integration evaluation — GitHub, Slack/Gmail, and observability | Accepted | 2026-06-19 |
 | [ADR-043](#adr-043-governance-audit-claude-code-skill) | Governance audit Claude Code skill — manual, read-only, project-local | Accepted | 2026-06-20 |
 | [ADR-044](#adr-044-tc-id-suggestion-claude-code-skill) | TC-ID suggestion Claude Code skill — manual, read-only, live grep inventory | Accepted | 2026-06-20 |
+| [ADR-045](#adr-045-slice-review-claude-code-skill) | `/slice-review` Claude Code skill — Mode A/B QA Architect review, manual, read-only | Accepted | 2026-06-21 |
 
 ---
 
@@ -3283,3 +3284,58 @@ Remove `.claude/skills/tc-id/SKILL.md`, the ADR-044 index entry, and this sectio
 - `agentic-qa-workflows/governance/qa_standards.md` — amended TC-ID standard
 - `test/scripts/test_tc_id_uniqueness.py` — complementary duplicate enforcement (unchanged)
 - ADR-043 — governance audit Claude Code skill (established the project-local skill pattern)
+
+---
+
+## ADR-045: `/slice-review` Claude Code skill — Mode A/B QA Architect review, manual, read-only
+
+**Status:** Accepted
+**Date:** 2026-06-21
+
+### Context
+
+Two project-local Claude Code skills already govern the repository's agentic workflow: `/governance-audit` (ADR-043) and `/tc-id` (ADR-044). Both follow the same frontmatter pattern (`disable-model-invocation: true`, `allowed-tools: [Read, Grep, Glob]`, `disallowed-tools: [Write, Edit, Bash, WebFetch, WebSearch]`).
+
+The skill portfolio extraction assessment (PR #86, merged 2026-06-20) identified `/slice-review` as the highest-priority extraction candidate: all seven scorecard factors at 5/5, the source procedure fully defined with a 9-section Mode A output contract and 11-dimension 6-section Mode B output contract, no governance decisions needed before extraction, and the same read-only safety posture already written into the source prompt.
+
+Engineers currently paste the 18.8KB source prompt (`qa_architect_slice_review_prompt.md`) into every implementation slice twice — once for Mode A (plan review before editing) and once for Mode B (implementation review before committing). This produces inconsistent framing across sessions: the independence preface is dropped, the adjacent-risk scan is omitted, and the wrong mode is selected. The engineer must carry the full prompt text through context windows on every invocation.
+
+### Decision
+
+Package the QA Architect / Solution Architect review as a project-local Claude Code skill at `.claude/skills/slice-review/SKILL.md`, invoked via `/slice-review a <plan-path>` or `/slice-review b <review-packet-path>`.
+
+Design constraints:
+- `disable-model-invocation: true` — manually invoked by the engineer only; never triggered by CI or an autonomous agent
+- `allowed-tools: [Read, Grep, Glob]` — pre-approves read-only inspection tools so they run without a permission prompt; it does not restrict which tools are available
+- `disallowed-tools: [Write, Edit, Bash, WebFetch, WebSearch, NotebookEdit, Agent, Skill]` — removes the built-in file-mutation, shell, network, subagent-delegation, and skill-chaining tools for the invoking turn; this field, not `allowed-tools`, is what blocks them. Runtime testing (2026-10-04) confirmed the model may still attempt a blocked tool (e.g. Bash to list a directory) and that the call is denied even with permission prompts bypassed
+- Governance reading is routed, not exhaustive: every review reads `CLAUDE.md` and the seven core governance documents (`qa_standards.md`, `suite_taxonomy.md`, `page_object_api_rules.md`, `test_data_env_rules.md`, `failure_evidence.md`, `quality_gates.md`, `agentic_workflow_rules.md`), plus conditional documents selected by trigger (CI/Docker/dependencies → security and dependency triage; observability; notifications; MCP; parallelization; Jenkins; targeted ADR sections only). Reading all 17 governance files (~58,000 words, ~33,000 in this log) was rejected: it wastes context and, in testing, the model read only 4–6 files anyway, inconsistently. The output header records which documents were read, and an unreadable required or selected document stops the review
+- Accepted arguments: `a <plan-path>` and `b <review-packet-path>`; blank or any other first token prints the accepted values format and stops
+- Mode A: reads the plan file at the supplied path; derives slice name from plan title heading
+- Mode B: reads a review packet at the supplied path; the packet holds the changed-file list and diff; engineer creates it as a temporary `.private/` file before invoking
+- If required fields in the packet are absent or empty, the skill stops and explains what is missing; it does not conduct a partial review
+- Mode A preserves all 9 named output sections from `qa_architect_slice_review_prompt.md`
+- Mode B preserves all 6 named output sections and evaluates all 11 dimensions
+- Adjacent-risk scan capped at 3 findings in both modes; classification vocabulary (Blocker / Recommended before commit / Follow-up slice) carried verbatim
+- Independence preface carried in distilled form: do not treat review criteria as a checklist to confirm; verify actual repo state; challenge assumptions; propose a better approach or flag a follow-up slice
+- Source prompt (`qa_architect_slice_review_prompt.md`) is NOT modified in this slice; it remains the human-readable source of truth and fallback
+
+### Consequences
+
+- Engineers invoke `/slice-review a <path>` or `/slice-review b <path>` in any Claude Code session without copying prompt text
+- Output structure is consistent across sessions: section names, dimension order, verdict vocabulary, and classification terminology are governed by the skill body
+- The skill cannot edit files, create output reports, stage changes, commit, or push through built-in tools — enforced by `disallowed-tools` for the invoking turn. Limitation: the field does not cover tools added by MCP servers or plugins, and the restriction clears on the engineer's next message; sessions with write-capable MCP servers must deny those tools in permission settings or disable the servers before invoking the skill
+- `agentic-qa-workflows/prompts/README.md` marks the skill as the preferred invocation for Steps 2 and 4 of the slice workflow; the prompt file is explicitly retained as fallback
+- Blueprint adopters receive the skill as a committed asset in `.claude/skills/`
+- The `agentic-qa-workflows/README.md` capability statement is updated to include `/slice-review` alongside `/governance-audit` and `/tc-id`
+
+### Rollback
+
+Remove `.claude/skills/slice-review/SKILL.md`, the ADR-045 index entry, and this body. Revert the `agentic-qa-workflows/prompts/README.md` preferred-invocation references in the workflow table (Steps 2 and 4) and the `qa_architect_slice_review_prompt.md` row note. Revert the `agentic-qa-workflows/README.md` capability addition and ADR range update from ADR-001–ADR-045 to ADR-001–ADR-044. No code, CI, test, credential, or script changes are required.
+
+### Related docs
+
+- `.claude/skills/slice-review/SKILL.md` — skill definition (this slice)
+- `agentic-qa-workflows/prompts/qa_architect_slice_review_prompt.md` — retained source prompt and human-readable fallback (NOT modified)
+- `agentic-qa-workflows/outputs/skill_portfolio_extraction_assessment_20260620.md` — extraction rationale and scorecard (Rank 1)
+- ADR-043 — governance audit Claude Code skill (established the project-local skill pattern)
+- ADR-044 — TC-ID suggestion Claude Code skill (second instance of the pattern; argument routing model)

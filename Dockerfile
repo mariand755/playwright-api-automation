@@ -18,7 +18,14 @@ COPY  requirements.txt .
 # --break-system-packages: required because the base image's OS packages now enforce
 # PEP 668 (externally-managed-environment); this container is single-purpose and ephemeral,
 # so installing into the system Python here carries no real risk.
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+# virtualenv ships with the base image but nothing here uses it (pip-audit uses stdlib venv);
+# remove it (and its seed-wheel cache, which bundles a scannable copy of pip) after project
+# installs so Trivy doesn't flag it (CVE-2026-102925/102930/102937).
+# pip check fails the build if a future dependency actually requires virtualenv.
+RUN python -m pip install --no-cache-dir --break-system-packages -r requirements.txt \
+    && python -m pip uninstall -y --break-system-packages virtualenv \
+    && rm -rf /root/.cache/virtualenv \
+    && python -m pip check
 
 # Copy the rest of the project to the container
 COPY . .

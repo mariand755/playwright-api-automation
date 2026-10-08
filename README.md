@@ -157,3 +157,11 @@ On any UI test failure, the framework captures a screenshot (`artifacts/failures
 | Claude Code skill portfolio | ✅ Activated | `/governance-audit` (ADR-043) and `/tc-id` (ADR-044) live in `.claude/skills/`; see [agentic-qa-workflows/README.md](agentic-qa-workflows/README.md) for the full skill capability statement |
 
 Prod-read-only CI mode is activation-ready, gated by the `PROD_ENV_ACTIVE` repository variable. See [ADR-015](agentic-qa-workflows/governance/architecture_decision_log.md#adr-015-cross-environment-selection-with-staging-default-and-prod-read-only-activation-gate) for the activation checklist.
+
+---
+
+## 📄 License
+
+Copyright (C) 2026 Marian Dadzie
+
+Licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).

@@ -22,7 +22,8 @@ COPY  requirements.txt .
 # remove it, its now-orphaned deps (distlib, python-discovery) and its seed-wheel cache
 # (which bundles a scannable copy of pip) after project installs so Trivy doesn't flag it
 # (CVE-2026-102925/102930/102937). Keep filelock and platformdirs: pip-audit needs them
-# (filelock via the CacheControl[filecache] extra, which pip check does not verify).
+# (filelock via the CacheControl[filecache] extra, which pip check does not verify;
+# it is pinned in requirements.txt so a patched version replaces the base image's copy).
 # pip check fails the build if a future dependency actually requires any removed package.
 RUN python -m pip install --no-cache-dir --break-system-packages -r requirements.txt \
     && python -m pip uninstall -y --break-system-packages \

@@ -4,7 +4,7 @@ pytest-playwright==0.9.0
 pytest-xdist==3.8.0
 jsonschema==4.26.0
 requests==2.34.2
-ruff==0.16.10
+ruff==0.17.3
 pip-audit==2.10.1
 mypy==2.4.0
 # Transitive pip-audit dependency (CacheControl[filecache]); >=4.2.1 fixes CVE-2026-112940.

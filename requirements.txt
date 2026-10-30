@@ -9,3 +9,5 @@ pip-audit==2.10.1
 mypy==2.4.0
 # Transitive pip-audit dependency (CacheControl[filecache]); >=4.2.1 fixes CVE-2026-112940.
 filelock==4.2.4
+# Base-image pip 26.1.1 has PYSEC-2026-196/3721 (surfaced by installed-env pip-audit); fixed in 26.2.
+pip==26.2

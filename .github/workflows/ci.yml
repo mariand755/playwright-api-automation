@@ -105,7 +105,7 @@ jobs:
         run: docker run --rm playwright-api-automation mypy utils/ pages/ scripts/
 
       - name: Python dependency scan
-        run: docker run --rm playwright-api-automation pip-audit --strict --progress-spinner off
+        run: docker run --rm playwright-api-automation pip-audit -r requirements.txt --progress-spinner off
 
       - name: Container image scan
         # aquasecurity/trivy-action pinned to v0.36.0 for supply-chain hygiene

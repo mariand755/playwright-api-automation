@@ -143,7 +143,7 @@ jobs:
       - name: Publish Script Unit Test Results
         if: always() && steps.script_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a
         with:
           name: Script Unit Test Results
           path: artifacts/scripts-report.xml
@@ -328,7 +328,7 @@ jobs:
       - name: Publish API test report
         if: always() && steps.api_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a
         with:
           name: API Test Results
           path: artifacts/api-report.xml
@@ -451,7 +451,7 @@ jobs:
       - name: Publish UI test report
         if: always() && steps.ui_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a
         with:
           name: UI Test Results
           path: artifacts/ui-report.xml
@@ -524,7 +524,7 @@ jobs:
       - name: Publish cross-browser test report
         if: always() && steps.cb_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a
         with:
           name: UI Cross-Browser Results (${{ matrix.browser }})
           path: artifacts/ui-${{ matrix.browser }}-report.xml
@@ -711,7 +711,7 @@ jobs:
       - name: Publish cloud-grid test report
         if: always() && steps.cg_report.outputs.exists == 'true'
         # dorny/test-reporter pinned to v3.0.0 for third-party action supply-chain hygiene
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a
         with:
           name: Cloud Grid Test Results (Sauce Labs ${{ matrix.browser }})
           path: artifacts/cloud-grid-${{ matrix.browser }}-report.xml
